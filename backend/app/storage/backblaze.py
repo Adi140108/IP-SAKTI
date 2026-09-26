@@ -93,3 +93,4 @@ class BackblazeB2Service:
         }
 
 backblaze_service = BackblazeB2Service()
+BackblazeService = BackblazeB2Service
