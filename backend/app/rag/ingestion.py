@@ -18,7 +18,7 @@ logger = logging.getLogger("IP-SAKTI.SourceIngestion")
 class SourceIngestionPipeline:
     """
     Authoritative Legal Document Ingestion & Chunking Pipeline.
-    Manages document lifecycle: download -> SHA-256 byte hashing -> validation -> parsing -> provenance chunking.
+    Manages document lifecycle: download -> SHA-256 byte hashing -> validation -> multi-format parsing (HTML, PDF, Text, MD) -> legal-aware chunking.
     """
 
     @staticmethod
@@ -28,33 +28,94 @@ class SourceIngestionPipeline:
             raise TypeError("Checksum calculation requires raw bytes.")
         return hashlib.sha256(data).hexdigest()
 
-    def parse_document_text(self, raw_bytes: bytes, content_type: str = "text/plain") -> List[Dict[str, str]]:
+    def parse_pdf_bytes(self, raw_bytes: bytes) -> List[Dict[str, Any]]:
         """
-        Parse raw document bytes into structured statutory sections.
-        Returns empty list if document is empty, corrupt, or unparseable.
+        Extract text from PDF page-by-page using pypdf or pymupdf, preserving page numbers and section headers.
+        If PDF is scanned or yields no extractable text, returns OCR_REQUIRED marker.
         """
-        if not raw_bytes or len(raw_bytes.strip()) == 0:
-            return []
-
-        # Attempt UTF-8 / latin-1 decoding
+        pages_content = []
+        
+        # Try pypdf first
         try:
-            text = raw_bytes.decode("utf-8")
-        except UnicodeDecodeError:
+            import io
+            import pypdf
+            reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
+            for page_idx, page in enumerate(reader.pages):
+                page_text = page.extract_text() or ""
+                cleaned = page_text.strip()
+                if cleaned:
+                    pages_content.append({
+                        "page_number": page_idx + 1,
+                        "text": cleaned
+                    })
+        except Exception as e:
+            logger.debug(f"pypdf extraction failed, attempting pymupdf: {e}")
             try:
-                text = raw_bytes.decode("latin-1")
-            except Exception as e:
-                logger.error(f"Failed to decode document bytes: {e}")
-                return []
+                import fitz
+                doc = fitz.open(stream=raw_bytes, filetype="pdf")
+                for page_idx, page in enumerate(doc):
+                    page_text = page.get_text() or ""
+                    cleaned = page_text.strip()
+                    if cleaned:
+                        pages_content.append({
+                            "page_number": page_idx + 1,
+                            "text": cleaned
+                        })
+            except Exception as e2:
+                logger.error(f"PDF extraction error: {e2}")
 
+        if not pages_content:
+            logger.warning("PDF contains no extractable text layer. OCR_REQUIRED.")
+            return [{"ocr_required": True, "error": "OCR_REQUIRED: No machine-readable text found in PDF"}]
+
+        # Perform legal-aware section extraction for each page
+        sections = []
+        for page_data in pages_content:
+            p_num = page_data["page_number"]
+            p_text = page_data["text"]
+            parsed_page_secs = self._extract_legal_sections_from_text(p_text, page_number=p_num)
+            sections.extend(parsed_page_secs)
+
+        return sections
+
+    def parse_html_bytes(self, raw_bytes: bytes) -> List[Dict[str, Any]]:
+        """
+        Parse HTML document using BeautifulSoup, removing scripts/styles and extracting structured legal sections.
+        """
+        try:
+            from bs4 import BeautifulSoup
+            try:
+                html_str = raw_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                html_str = raw_bytes.decode("latin-1", errors="replace")
+
+            soup = BeautifulSoup(html_str, "html.parser")
+            for tag in soup(["script", "style", "nav", "footer", "header", "noscript"]):
+                tag.decompose()
+
+            # Extract main content text or structured sections
+            body = soup.body or soup
+            text = body.get_text(separator="\n\n")
+            return self._extract_legal_sections_from_text(text)
+        except Exception as e:
+            logger.error(f"HTML parsing failed: {e}")
+            return self._extract_legal_sections_from_text(raw_bytes.decode("utf-8", errors="replace"))
+
+    def _extract_legal_sections_from_text(self, text: str, page_number: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Legal-aware statutory chunking engine:
+        Hierarchically recognizes Act -> Chapter -> Section -> Subsection -> Rule -> Article -> Schedule.
+        """
         cleaned_text = text.strip()
         if not cleaned_text:
             return []
 
         sections = []
 
-        # 1. Look for structured statutory headers (e.g. "Section 3(p)..." or "Article 15...")
+        # Comprehensive statutory header pattern matching:
+        # e.g., "Section 3(p)", "Sec. 2(1)(e)", "Article 15", "Rule 14", "Chapter II", "Schedule A"
         pattern = re.compile(
-            r'(?:^|\n)(?P<header>(?:Section|Sec\.|Article|Art\.|Rule|Monograph)\s+[0-9a-zA-Z\(\)\.\s\-]+?)(?:\:|\n|\s{2,})',
+            r'(?:^|\n)\s*(?P<header>(?:Section|Sec\.|Article|Art\.|Rule|Monograph|Chapter|Schedule)\s+[0-9a-zA-Z\(\)\.\s\-]+?)(?:\:|\n|\s{2,})',
             re.IGNORECASE
         )
         matches = list(pattern.finditer(cleaned_text))
@@ -68,27 +129,55 @@ class SourceIngestionPipeline:
 
                 if body:
                     sec_type = "article" if "art" in header.lower() else "section"
-                    sections.append({
+                    entry = {
                         sec_type: header,
                         "content": f"{header}: {body}" if not body.startswith(header) else body
-                    })
+                    }
+                    if page_number is not None:
+                        entry["page_number"] = page_number
+                    sections.append(entry)
         elif "\n\n" in cleaned_text:
-            # 2. Paragraph / block-based parsing
             paragraphs = [p.strip() for p in cleaned_text.split("\n\n") if len(p.strip()) > 20]
             for idx, p in enumerate(paragraphs):
-                sections.append({
+                entry = {
                     "section": f"Paragraph {idx + 1}",
                     "content": p
-                })
+                }
+                if page_number is not None:
+                    entry["page_number"] = page_number
+                sections.append(entry)
         else:
-            # 3. Single continuous text
             if len(cleaned_text) > 10:
-                sections.append({
+                entry = {
                     "section": "General Provision",
                     "content": cleaned_text
-                })
+                }
+                if page_number is not None:
+                    entry["page_number"] = page_number
+                sections.append(entry)
 
         return sections
+
+    def parse_document_text(self, raw_bytes: bytes, content_type: str = "text/plain") -> List[Dict[str, Any]]:
+        """
+        Parse raw document bytes into structured statutory sections based on content-type.
+        Supports HTML, PDF, Markdown, and plain text.
+        """
+        if not raw_bytes or len(raw_bytes.strip()) == 0:
+            return []
+
+        c_type = (content_type or "text/plain").lower()
+        if "pdf" in c_type or raw_bytes.startswith(b"%PDF"):
+            return self.parse_pdf_bytes(raw_bytes)
+        elif "html" in c_type or b"<html" in raw_bytes[:500].lower() or b"<!doctype html" in raw_bytes[:500].lower():
+            return self.parse_html_bytes(raw_bytes)
+        else:
+            # Plain text / Markdown
+            try:
+                text = raw_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                text = raw_bytes.decode("latin-1", errors="replace")
+            return self._extract_legal_sections_from_text(text)
 
     def process_and_chunk_source(
         self,
@@ -99,16 +188,20 @@ class SourceIngestionPipeline:
     ) -> List[EvidenceChunk]:
         """
         Process legal source sections into metadata-rich EvidenceChunks,
-        attaching complete document provenance and byte checksum.
+        attaching complete document provenance, page numbers, and byte checksum.
         """
         chunks = []
         actual_checksum = checksum or source.checksum
         doc_id = document_id or f"DOC_{source.source_id}"
 
         for idx, sec in enumerate(raw_text_sections):
+            if sec.get("ocr_required"):
+                continue
+
             chunk_id = f"CHK_{source.source_id}_{idx+1}"
             section_val = sec.get("section", "")
             article_val = sec.get("article", "")
+            page_num_val = sec.get("page_number")
             content_text = sec.get("content", "").strip()
 
             if not content_text:
@@ -129,6 +222,7 @@ class SourceIngestionPipeline:
                 authority_level=source.authority_level,
                 section=section_val,
                 article=article_val,
+                page_number=page_num_val,
                 effective_date=source.effective_date,
                 version=source.version,
                 retrieved_at=source.retrieved_at,

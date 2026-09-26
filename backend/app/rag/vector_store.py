@@ -27,6 +27,7 @@ class VectorStoreInterface:
         self.chunks: List[EvidenceChunk] = []
         self.chunk_embeddings: List[List[float]] = []
         self.indexed_chunk_keys: Set[str] = set() # (chunk_id:checksum) for idempotency
+        self.corpus_status: str = "DEV_SEED_CORPUS"
 
         self.initialize_store()
 
@@ -37,13 +38,20 @@ class VectorStoreInterface:
         return os.path.abspath(os.path.join(self.persist_path, "vector_index.json"))
 
     def initialize_store(self):
-        """Initialize vector store in either persistent or in-memory mode."""
-        if self.db_type in ["persistent", "disk"]:
+        """Initialize vector store in either persistent or in-memory mode with strict production safeguards."""
+        is_production = settings.APP_ENV == "production"
+
+        if is_production:
+            # Production requirement: MUST use persistent vector store
+            if self.db_type not in ["persistent", "disk"]:
+                err = "PRODUCTION_VECTOR_STORE_CONFIG_ERROR: Production environment requires VECTOR_DB_TYPE=persistent and VECTOR_DB_PERSIST_PATH."
+                logger.error(err)
+                raise RuntimeError(err)
+
             file_path = self._get_index_file_path()
             dir_name = os.path.dirname(file_path)
             try:
                 os.makedirs(dir_name, exist_ok=True)
-                # Check write permissions explicitly
                 test_file = os.path.join(dir_name, ".write_test")
                 with open(test_file, "w") as f:
                     f.write("ok")
@@ -56,18 +64,52 @@ class VectorStoreInterface:
 
             if os.path.exists(file_path):
                 self.load_from_disk(file_path)
-                logger.info(f"Loaded {len(self.chunks)} persistent chunks from {file_path}")
+                if len(self.chunks) == 0:
+                    self.corpus_status = "PRODUCTION_RAG_CORPUS_EMPTY"
+                    logger.warning("PRODUCTION_RAG_CORPUS_EMPTY: Production persistent vector index exists but contains 0 chunks.")
+                else:
+                    self.corpus_status = "OFFICIAL_PRODUCTION_CORPUS"
+                    logger.info(f"Loaded {len(self.chunks)} official production chunks from {file_path}")
             else:
-                # Initialize empty persistent index
                 self.chunks = []
                 self.chunk_embeddings = []
                 self.indexed_chunk_keys = set()
                 self.persist(file_path)
-                logger.info(f"Initialized new empty persistent vector index at {file_path}")
+                self.corpus_status = "PRODUCTION_RAG_CORPUS_EMPTY"
+                logger.warning(f"PRODUCTION_RAG_CORPUS_EMPTY: Initialized new empty persistent vector index at {file_path}. Ingest official corpus before serving queries.")
         else:
-            # In-memory development mode
-            self.load_registered_statutory_chunks()
-            logger.info(f"Initialized in-memory vector store with {len(self.chunks)} baseline statutory chunks.")
+            # Development / Test mode
+            if self.db_type in ["persistent", "disk"]:
+                file_path = self._get_index_file_path()
+                dir_name = os.path.dirname(file_path)
+                try:
+                    os.makedirs(dir_name, exist_ok=True)
+                    test_file = os.path.join(dir_name, ".write_test")
+                    with open(test_file, "w") as f:
+                        f.write("ok")
+                    if os.path.exists(test_file):
+                        os.remove(test_file)
+                except Exception as e:
+                    err = f"PERSISTENT_VECTOR_INIT_FAILURE: Cannot create/access persistent directory {dir_name}: {e}"
+                    logger.error(err)
+                    raise RuntimeError(err)
+
+                if os.path.exists(file_path):
+                    self.load_from_disk(file_path)
+                    self.corpus_status = "PERSISTENT_CORPUS" if len(self.chunks) > 0 else "PERSISTENT_CORPUS_EMPTY"
+                    logger.info(f"Loaded {len(self.chunks)} persistent chunks from {file_path}")
+                else:
+                    self.chunks = []
+                    self.chunk_embeddings = []
+                    self.indexed_chunk_keys = set()
+                    self.persist(file_path)
+                    self.corpus_status = "PERSISTENT_CORPUS_EMPTY"
+                    logger.info(f"Initialized new empty persistent vector index at {file_path}")
+            else:
+                # In-memory development mode: load baseline seed corpus
+                self.load_dev_seed_corpus()
+                self.corpus_status = "DEV_SEED_CORPUS"
+                logger.info(f"Initialized in-memory vector store with {len(self.chunks)} baseline development seed statutory chunks.")
 
     def persist(self, path: Optional[str] = None):
         """Persist current chunks, embeddings, and metadata to disk."""
@@ -229,8 +271,13 @@ class VectorStoreInterface:
         self.add_chunks(chunks)
         return res
 
-    def load_registered_statutory_chunks(self):
-        """Loads and ingests authoritative baseline legal chunks from SourceRegistry."""
+    def load_dev_seed_corpus(self):
+        """Loads and ingests baseline development seed legal chunks. STRICTLY FORBIDDEN IN PRODUCTION."""
+        if settings.APP_ENV == "production":
+            err = "FORBIDDEN_DEV_SEED_IN_PRODUCTION: Cannot load hardcoded dev seed corpus in production environment."
+            logger.error(err)
+            raise RuntimeError(err)
+
         self.chunks.clear()
         self.chunk_embeddings.clear()
         self.indexed_chunk_keys.clear()
@@ -395,7 +442,45 @@ class VectorStoreInterface:
                     self.chunk_embeddings.append(vec)
                     self.indexed_chunk_keys.add(f"{chunk.chunk_id}:{chunk.checksum or ''}")
 
-        logger.info(f"Loaded {len(self.chunks)} metadata-rich chunks into VectorStore.")
+        self.corpus_status = "DEV_SEED_CORPUS"
+        logger.info(f"Loaded {len(self.chunks)} development seed chunks into VectorStore.")
+
+    def load_registered_statutory_chunks(self):
+        """Backward-compatible alias for load_dev_seed_corpus. Marked DEV ONLY."""
+        return self.load_dev_seed_corpus()
+
+    def get_corpus_inspection_summary(self) -> Dict[str, Any]:
+        """
+        Inspectable corpus summary for diagnostics and sources UI.
+        Distinguishes OFFICIAL_PRODUCTION_CORPUS vs DEV_SEED_CORPUS.
+        """
+        source_ids = sorted(list({c.source_id for c in self.chunks if c.source_id}))
+        doc_ids = sorted(list({c.document_id for c in self.chunks if c.document_id}))
+        countries = sorted(list({c.country for c in self.chunks if c.country}))
+        jurisdictions = sorted(list({c.jurisdiction for c in self.chunks if c.jurisdiction}))
+        checksums = sorted(list({c.checksum for c in self.chunks if c.checksum}))
+        versions = sorted(list({c.version for c in self.chunks if c.version}))
+        source_titles = sorted(list({c.title for c in self.chunks if c.title}))
+        retrieved_dates = sorted(list({c.retrieved_at for c in self.chunks if c.retrieved_at}))
+
+        mode = getattr(self, "corpus_status", "DEV_SEED_CORPUS")
+        return {
+            "corpus_mode": mode,
+            "is_production": settings.APP_ENV == "production",
+            "db_type": self.db_type,
+            "persist_path": self.persist_path if self.db_type in ["persistent", "disk"] else None,
+            "total_chunks": len(self.chunks),
+            "total_documents": len(doc_ids),
+            "source_count": len(source_ids),
+            "source_ids": source_ids,
+            "source_titles": source_titles,
+            "jurisdictions": jurisdictions,
+            "countries": countries,
+            "versions": versions,
+            "checksums": checksums,
+            "retrieved_at": retrieved_dates,
+            "status": "READY" if len(self.chunks) > 0 else "EMPTY"
+        }
 
     def is_source_applicable(
         self,

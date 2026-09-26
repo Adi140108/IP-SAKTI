@@ -44,7 +44,10 @@ async def list_legal_sources(jurisdiction: str = None):
             "ip_domain": domain,
             "sections": raw_sections if raw_sections else [src.amendment_status or "Full Statutory Instrument"],
             "effective_date": src.effective_date,
-            "sample_content": sample
+            "version": src.version,
+            "checksum": src.checksum,
+            "sample_content": sample,
+            "chunks_count": len(matching_chunks)
         })
 
     return result

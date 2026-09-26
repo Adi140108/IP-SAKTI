@@ -16,6 +16,7 @@ class EvidenceChunk(BaseModel):
     authority_level: str = "statutory"
     section: Optional[str] = ""
     article: Optional[str] = ""
+    page_number: Optional[int] = None
     effective_date: Optional[str] = ""
     version: Optional[str] = ""
     retrieved_at: str = "2026-09-24"

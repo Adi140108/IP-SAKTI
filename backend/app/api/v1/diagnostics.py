@@ -23,10 +23,18 @@ async def system_diagnostics():
     backblaze_status = ServiceStatus(**backblaze_service.get_status())
     bhashini_status = ServiceStatus(**await bhashini_service.get_status())
     
+    from app.rag.vector_store import vector_store
+    summary = vector_store.get_corpus_inspection_summary()
+    mode = summary.get("corpus_mode", "DEV_SEED_CORPUS")
+    chunk_count = summary.get("total_chunks", 0)
+    source_count = summary.get("source_count", 0)
+    status_str = "CONNECTED" if chunk_count > 0 else ("EMPTY" if mode == "PRODUCTION_RAG_CORPUS_EMPTY" else "INITIALIZED")
+    details_str = f"Mode: {mode} | Chunks: {chunk_count} | Sources: {source_count} ({summary.get('db_type', 'persistent')})"
+
     vector_db_status = ServiceStatus(
         name="Authoritative Vector DB",
-        status="CONNECTED",
-        details="In-Memory Hybrid BM25/Cosine Index Active (8 Core Legal Statutes Seeded)"
+        status=status_str,
+        details=details_str
     )
 
     backend_status = ServiceStatus(
