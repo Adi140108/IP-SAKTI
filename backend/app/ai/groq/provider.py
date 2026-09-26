@@ -3,10 +3,11 @@ import logging
 from typing import Dict, Any, Optional
 import httpx
 from app.config import settings
+from app.ai.base import LLMProvider
 
 logger = logging.getLogger("IP-SAKTI.Groq")
 
-class GroqProvider:
+class GroqProvider(LLMProvider):
     """
     Primary LLM Provider using Groq API (High-performance inference).
     Model: openai/gpt-oss-120b (Primary) with fallback to qwen/qwen3.8-27b.

@@ -3,11 +3,12 @@ import logging
 from typing import Dict, Any, List, Optional
 import httpx
 from app.config import settings
+from app.ai.base import LLMProvider
 from app.ai.groq.provider import groq_provider
 
 logger = logging.getLogger("IP-SAKTI.LLMProvider")
 
-class GemmaProvider:
+class GemmaProvider(LLMProvider):
     """
     Unified Hybrid Provider for IP-SAKTI.
     PRIMARY: Groq API (openai/gpt-oss-120b / qwen/qwen3.8-27b) for lightning-fast, highly authoritative reasoning.
