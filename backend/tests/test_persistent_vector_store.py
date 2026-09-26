@@ -403,10 +403,12 @@ def test_13_empty_index_returns_no_evidence_instead_of_fabricated_evidence():
     )
     assert len(results) == 0
 
-def test_14_persistent_mode_failure_produces_explicit_error():
+def test_14_persistent_mode_failure_produces_explicit_error(tmp_path):
     """TEST 14: Persistent mode failure produces an explicit error and does not silently fall back to memory."""
-    # Attempt to initialize in an invalid path that cannot be created as a directory
-    invalid_path = "Z:\\non_existent_drive_999\\forbidden\\vector_index"
+    # Create a regular file so attempting to create a directory under it fails on all OSes (Linux & Windows)
+    dummy_file = tmp_path / "dummy_file.txt"
+    dummy_file.write_text("not a dir")
+    invalid_path = str(dummy_file / "invalid_sub_dir" / "vector_index")
     
     with pytest.raises(RuntimeError) as exc_info:
         VectorStoreInterface(db_type="persistent", persist_path=invalid_path)
