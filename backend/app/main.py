@@ -19,10 +19,14 @@ app = FastAPI(
 )
 
 # Configure CORS for Next.js frontend
+raw_origins = getattr(settings, "CORS_ORIGINS", "*")
+cors_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+is_wildcard = cors_origins == ["*"] or "*" in cors_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["*"] if is_wildcard else cors_origins,
+    allow_credentials=not is_wildcard,
     allow_methods=["*"],
     allow_headers=["*"],
 )

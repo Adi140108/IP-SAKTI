@@ -30,9 +30,13 @@ class Settings(BaseSettings):
     BHASHINI_BASE_URL: str = "https://dhruva-api.bhashini.gov.in/services/inference"
     BHASHINI_PIPELINE_ID: Optional[str] = None
 
+    # CORS configuration
+    CORS_ORIGINS: str = "*"
+
     # Firebase Firestore
     FIREBASE_PROJECT_ID: Optional[str] = None
     FIREBASE_CREDENTIALS_PATH: Optional[str] = None
+    FIREBASE_CREDENTIALS_JSON: Optional[str] = None
 
     # Backblaze B2
     B2_APPLICATION_KEY_ID: Optional[str] = None

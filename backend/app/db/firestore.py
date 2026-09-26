@@ -22,15 +22,36 @@ class FirestoreService:
     def initialize_firestore(self):
         """Initialize Firebase Admin SDK based on DATABASE_MODE."""
         cred_path = settings.FIREBASE_CREDENTIALS_PATH
+        cred_json = settings.FIREBASE_CREDENTIALS_JSON
         is_firestore_mode = settings.DATABASE_MODE == "firestore"
 
-        if cred_path and os.path.exists(cred_path):
+        cred_obj = None
+        if cred_json:
             try:
                 import firebase_admin
-                from firebase_admin import credentials, firestore
+                from firebase_admin import credentials
+                cred_dict = json.loads(cred_json) if isinstance(cred_json, str) else cred_json
+                cred_obj = credentials.Certificate(cred_dict)
+            except Exception as e:
+                logger.error(f"Failed to parse FIREBASE_CREDENTIALS_JSON: {e}")
+                if is_firestore_mode:
+                    raise RuntimeError(f"PRODUCTION DATABASE FAILURE: Invalid FIREBASE_CREDENTIALS_JSON: {e}")
+        elif cred_path and os.path.exists(cred_path):
+            try:
+                import firebase_admin
+                from firebase_admin import credentials
+                cred_obj = credentials.Certificate(cred_path)
+            except Exception as e:
+                logger.error(f"Failed to load credentials from {cred_path}: {e}")
+                if is_firestore_mode:
+                    raise RuntimeError(f"PRODUCTION DATABASE FAILURE: Could not load {cred_path}: {e}")
+
+        if cred_obj:
+            try:
+                import firebase_admin
+                from firebase_admin import firestore
                 if not firebase_admin._apps:
-                    cred = credentials.Certificate(cred_path)
-                    firebase_admin.initialize_app(cred, {'projectId': settings.FIREBASE_PROJECT_ID})
+                    firebase_admin.initialize_app(cred_obj, {'projectId': settings.FIREBASE_PROJECT_ID} if settings.FIREBASE_PROJECT_ID else {})
                 self.db = firestore.client()
                 logger.info("Successfully connected to Firebase Firestore")
             except Exception as e:
@@ -40,7 +61,7 @@ class FirestoreService:
                 self.db = None
         else:
             if is_firestore_mode:
-                raise RuntimeError("PRODUCTION DATABASE FAILURE: FIREBASE_CREDENTIALS_PATH missing in production mode.")
+                raise RuntimeError("PRODUCTION DATABASE FAILURE: Neither FIREBASE_CREDENTIALS_PATH nor FIREBASE_CREDENTIALS_JSON provided when DATABASE_MODE=firestore.")
             logger.info("DATABASE_MODE=mock active. Operating using development local DB storage adapter.")
 
     def is_cloud_connected(self) -> bool:
