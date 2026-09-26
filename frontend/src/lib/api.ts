@@ -1,6 +1,17 @@
 import { ChatResponse, CaseState, DocumentMetadata, DiagnosticsStatus, EscalationDossier } from '@/types';
 
-function getApiBaseUrl(): string {
+export function getApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const custom = localStorage.getItem('ip_sakti_api_url');
+    if (custom && custom.trim()) {
+      let cleaned = custom.trim().replace(/\/+$/, '');
+      if (!cleaned.endsWith('/api/v1')) {
+        cleaned = `${cleaned}/api/v1`;
+      }
+      return cleaned;
+    }
+  }
+
   const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (!envUrl) return 'http://localhost:8000/api/v1';
   let cleaned = envUrl.replace(/\/+$/, '');
@@ -10,20 +21,31 @@ function getApiBaseUrl(): string {
   return cleaned;
 }
 
-const API_BASE_URL = getApiBaseUrl();
+export function setCustomApiUrl(url: string) {
+  if (typeof window !== 'undefined') {
+    if (!url || !url.trim()) {
+      localStorage.removeItem('ip_sakti_api_url');
+    } else {
+      localStorage.setItem('ip_sakti_api_url', url.trim());
+    }
+  }
+}
 
 export async function fetchHealth(): Promise<{ status: string }> {
-  const res = await fetch(`${API_BASE_URL}/health`);
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/health`);
   return res.json();
 }
 
 export async function fetchDiagnostics(): Promise<DiagnosticsStatus> {
-  const res = await fetch(`${API_BASE_URL}/system/diagnostics`);
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/system/diagnostics`);
   return res.json();
 }
 
 export async function createCase(initialData: Partial<CaseState>): Promise<CaseState> {
-  const res = await fetch(`${API_BASE_URL}/cases`, {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/cases`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(initialData)
@@ -32,12 +54,14 @@ export async function createCase(initialData: Partial<CaseState>): Promise<CaseS
 }
 
 export async function getCase(caseId: string): Promise<CaseState> {
-  const res = await fetch(`${API_BASE_URL}/cases/${caseId}`);
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/cases/${caseId}`);
   return res.json();
 }
 
 export async function updateCase(caseId: string, updates: Partial<CaseState>): Promise<CaseState> {
-  const res = await fetch(`${API_BASE_URL}/cases/${caseId}`, {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/cases/${caseId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates)
@@ -53,7 +77,8 @@ export async function sendChatMessage(params: {
   country?: string;
   audio_base64?: string;
 }): Promise<ChatResponse> {
-  const res = await fetch(`${API_BASE_URL}/chat/message`, {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/chat/message`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params)
@@ -62,11 +87,12 @@ export async function sendChatMessage(params: {
 }
 
 export async function uploadDocument(file: File, caseId: string): Promise<DocumentMetadata> {
+  const baseUrl = getApiBaseUrl();
   const formData = new FormData();
   formData.append('file', file);
   formData.append('case_id', caseId);
 
-  const res = await fetch(`${API_BASE_URL}/documents/upload`, {
+  const res = await fetch(`${baseUrl}/documents/upload`, {
     method: 'POST',
     body: formData
   });
@@ -74,14 +100,17 @@ export async function uploadDocument(file: File, caseId: string): Promise<Docume
 }
 
 export async function fetchLegalSources(jurisdiction?: string): Promise<any[]> {
-  const url = jurisdiction ? `${API_BASE_URL}/sources?jurisdiction=${jurisdiction}` : `${API_BASE_URL}/sources`;
+  const baseUrl = getApiBaseUrl();
+  const url = jurisdiction ? `${baseUrl}/sources?jurisdiction=${jurisdiction}` : `${baseUrl}/sources`;
   const res = await fetch(url);
   return res.json();
 }
 
 export async function fetchEscalationDossier(caseId: string, reason: string = 'User request'): Promise<EscalationDossier> {
-  const res = await fetch(`${API_BASE_URL}/escalation/dossier?case_id=${caseId}&reason=${encodeURIComponent(reason)}`, {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/escalation/dossier?case_id=${caseId}&reason=${encodeURIComponent(reason)}`, {
     method: 'POST'
   });
   return res.json();
 }
+
