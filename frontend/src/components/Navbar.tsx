@@ -13,10 +13,24 @@ export default function Navbar() {
   const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
-    fetchHealth()
-      .then(() => setIsHealthy(true))
-      .catch(() => setIsHealthy(false));
-  }, []);
+    let isMounted = true;
+    const checkHealth = () => {
+      fetchHealth()
+        .then(() => {
+          if (isMounted) setIsHealthy(true);
+        })
+        .catch(() => {
+          if (isMounted) setIsHealthy(false);
+        });
+    };
+
+    checkHealth();
+    const interval = setInterval(checkHealth, isHealthy ? 30000 : 6000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [isHealthy]);
 
   const navItems = [
     { href: '/', label: 'Overview' },

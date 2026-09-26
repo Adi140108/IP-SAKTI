@@ -33,6 +33,10 @@ app.add_middleware(
 
 app.include_router(api_v1_router, prefix="/api/v1")
 
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "service": "IP-SAKTI API Gateway"}
+
 @app.get("/")
 async def root():
     return {

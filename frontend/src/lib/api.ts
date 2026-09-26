@@ -1,6 +1,16 @@
 import { ChatResponse, CaseState, DocumentMetadata, DiagnosticsStatus, EscalationDossier } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+function getApiBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (!envUrl) return 'http://localhost:8000/api/v1';
+  let cleaned = envUrl.replace(/\/+$/, '');
+  if (!cleaned.endsWith('/api/v1')) {
+    cleaned = `${cleaned}/api/v1`;
+  }
+  return cleaned;
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 export async function fetchHealth(): Promise<{ status: string }> {
   const res = await fetch(`${API_BASE_URL}/health`);
