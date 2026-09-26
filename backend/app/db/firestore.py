@@ -36,6 +36,16 @@ class FirestoreService:
                 logger.error(f"Failed to parse FIREBASE_CREDENTIALS_JSON: {e}")
                 if is_firestore_mode:
                     raise RuntimeError(f"PRODUCTION DATABASE FAILURE: Invalid FIREBASE_CREDENTIALS_JSON: {e}")
+        elif cred_path and (cred_path.strip().startswith("{") or "service_account" in cred_path):
+            try:
+                import firebase_admin
+                from firebase_admin import credentials
+                cred_dict = json.loads(cred_path.strip())
+                cred_obj = credentials.Certificate(cred_dict)
+            except Exception as e:
+                logger.error(f"Failed to parse JSON string in FIREBASE_CREDENTIALS_PATH: {e}")
+                if is_firestore_mode:
+                    raise RuntimeError(f"PRODUCTION DATABASE FAILURE: Invalid JSON in FIREBASE_CREDENTIALS_PATH: {e}")
         elif cred_path and os.path.exists(cred_path):
             try:
                 import firebase_admin
