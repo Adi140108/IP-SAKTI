@@ -58,6 +58,16 @@ export default function ChatPage() {
   const [showFormsModal, setShowFormsModal] = useState<boolean>(false);
   const [showDossierModal, setShowDossierModal] = useState<boolean>(false);
 
+  // Actions dropdown & Mobile sidebar toggle
+  const [actionsDropdownOpen, setActionsDropdownOpen] = useState<boolean>(false);
+  const [showMobileSidebar, setShowMobileSidebar] = useState<boolean>(false);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
+
+  // Sidebar Accordions State
+  const [isParamsOpen, setIsParamsOpen] = useState<boolean>(false);
+  const [isIpDomainsOpen, setIsIpDomainsOpen] = useState<boolean>(false);
+  const [isSourcesOpen, setIsSourcesOpen] = useState<boolean>(true);
+
   // Document Upload State
   const [isUploadingDoc, setIsUploadingDoc] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -100,7 +110,7 @@ export default function ChatPage() {
       const state = await getCase(id);
       setCaseState(state);
     } catch (e) {
-      console.error(e);
+      console.error('Failed to refresh case state:', e);
     }
   }, []);
 
@@ -148,6 +158,17 @@ export default function ChatPage() {
     return () => clearTimeout(timer);
   }, [refreshCaseState, startNewConsultation]);
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
+        setActionsDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Save Chat History to LocalStorage on updates
   useEffect(() => {
     if (chatHistory.length > 0) {
@@ -189,7 +210,7 @@ export default function ChatPage() {
     if (!voices || voices.length === 0) return null;
 
     const femaleKeywords = [
-      'female', 'zira', 'samantha', 'google us english', 'victoria', 'karen', 
+      'female', 'zira', 'samantha', 'google us english', 'victoria', 'karen',
       'veena', 'swara', 'kalpana', 'hazel', 'susan', 'aria', 'jenny', 'heera', 'anita'
     ];
 
@@ -259,7 +280,7 @@ export default function ChatPage() {
 
     const cleanedText = text.replace(/[*#`>_-]/g, ' ').replace(/\s+/g, ' ').trim();
     const utterance = new SpeechSynthesisUtterance(cleanedText.slice(0, 350));
-    
+
     utterance.rate = 0.85;
     utterance.pitch = 1.05;
 
@@ -299,10 +320,15 @@ export default function ChatPage() {
       setLatestResponse(res);
       if (caseId) refreshCaseState(caseId);
 
+      // Auto-open sources if citations returned
+      if (res.citations && res.citations.length > 0) {
+        setIsSourcesOpen(true);
+      }
+
       // Auto-speak in Female Voice if Sound ON is enabled
       if (soundEnabled && res.answer) {
         speakText(
-          res.next_question ? `${res.answer.slice(0, 140)}. Next question: ${res.next_question}` : res.answer, 
+          res.next_question ? `${res.answer.slice(0, 140)}. Next question: ${res.next_question}` : res.answer,
           newIdx
         );
       }
@@ -341,9 +367,9 @@ export default function ChatPage() {
     try {
       const docRes = await uploadDocument(file, caseId);
       const extractedText = docRes.ocr_result?.extracted_text || '';
-      
+
       const docPrompt = `[Uploaded Document Attached: ${file.name}]\nExtracted Document Text:\n"${extractedText.slice(0, 800)}"\n\nPlease analyze this document for active biological ingredients, classical references, and IP statutory compliance.`;
-      
+
       await handleSendMessage(docPrompt);
     } catch (err) {
       console.error('Document upload error:', err);
@@ -355,112 +381,169 @@ export default function ChatPage() {
     }
   };
 
-  // Compute parameter completion percentage
+  // Parameters count
   const knownCount = caseState?.known_information?.length || 0;
   const missingCount = caseState?.missing_information?.length || 0;
   const totalParams = knownCount + missingCount || 7;
   const completionPct = Math.round((knownCount / totalParams) * 100);
 
   const activeTier = getTierFromClassification(caseState?.formulation_classification || caseState?.product_type);
+  const activeDomainsCount = latestResponse?.relevant_ip_domains?.length || 0;
+  const citationsCount = latestResponse?.citations?.length || 0;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-5.5rem)] overflow-hidden space-y-3 pb-2">
-      
-      {/* COMPACT TOP CONTROL BAR */}
-      <div className="glass-panel p-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 shadow-sm transition-colors">
-        
-        {/* Jurisdiction & New Case Session Button */}
-        <div className="flex items-center gap-2.5">
+    <div className="flex flex-col h-[calc(100vh-6.5rem)] overflow-hidden space-y-2.5">
+
+      {/* ========================================================================= */}
+      {/* 1. COMPACT CASE CONTEXT BAR */}
+      {/* ========================================================================= */}
+      <div className="glass-panel px-3.5 py-2 rounded-xl flex flex-wrap items-center justify-between gap-2.5 border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 shadow-xs transition-colors shrink-0">
+
+        {/* Left: Regime, Case ID, Formulation Type, Jurisdiction */}
+        <div className="flex items-center flex-wrap gap-2">
+          {/* New Case Button */}
           <button
             onClick={startNewConsultation}
-            className="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-slate-950 border border-emerald-500/40 text-emerald-700 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-500 dark:hover:text-slate-950 transition-all flex items-center gap-1 shadow-xs cursor-pointer"
+            className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-slate-950 border border-emerald-500/40 text-emerald-700 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-500 dark:hover:text-slate-950 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
             title="Start New Case Session"
           >
-            <span>➕ New Case</span>
+            <span>➕</span>
+            <span className="hidden sm:inline">New Case</span>
           </button>
 
-          <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">Regime:</span>
-          <div className="inline-flex p-0.5 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+          {/* Regime Switcher */}
+          <div className="inline-flex p-0.5 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs">
             <button
               onClick={() => setJurisdiction('India')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-2.5 py-0.5 rounded-md font-bold transition-all cursor-pointer ${
                 jurisdiction === 'India'
                   ? 'bg-emerald-500 text-white dark:text-slate-950 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
-              🇮🇳 INDIA
+              🇮🇳 India
             </button>
             <button
               onClick={() => setJurisdiction('International')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-2.5 py-0.5 rounded-md font-bold transition-all cursor-pointer ${
                 jurisdiction === 'International'
                   ? 'bg-cyan-500 text-white dark:text-slate-950 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
-              🌐 INTERNATIONAL
+              🌐 International
             </button>
           </div>
 
+          {/* International Country Input */}
           {jurisdiction === 'International' && (
             <input
               type="text"
-              placeholder="Country (e.g. Germany, USA, Japan)"
+              placeholder="Country (e.g. USA, Germany)"
               value={country}
               onChange={(e) => setCountry(e.target.value)}
-              className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-cyan-500"
+              className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-md px-2 py-0.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-cyan-500 w-32"
             />
           )}
-        </div>
 
-        {/* Feature Actions: Official Forms & Dossier Export */}
-        <div className="flex items-center gap-2">
+          {/* Case ID Badge */}
+          {caseId && (
+            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 text-[11px] font-mono font-bold">
+              Case #{caseId.slice(0, 8)}
+            </span>
+          )}
+
+          {/* Formulation Badge with Quick Change Modal Trigger */}
           <button
             onClick={() => setShowPathwayModal(true)}
-            className="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
-            title="View 6-Tier Formulation Legal Classification Roadmap"
+            className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/60 text-[11px] font-semibold hover:border-emerald-500 transition-colors flex items-center gap-1 cursor-pointer"
+            title="Click to change 6-Tier formulation classification"
           >
-            <span>⚖️ 6-Tier Pathway</span>
-          </button>
-
-          <button
-            onClick={() => setShowFormsModal(true)}
-            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/40 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
-            title="Official Registry Forms & Portals (IPO, NBA, FSSAI, AYUSH)"
-          >
-            <span>🏛️ Official Forms</span>
-          </button>
-
-          <button
-            onClick={() => setShowDossierModal(true)}
-            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white dark:text-slate-950 text-xs font-extrabold hover:from-emerald-400 hover:to-teal-500 transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
-            title="Export Diagnostic Dossier (PDF / Markdown)"
-          >
-            <span>📄 Export Dossier</span>
+            <span>🏛️ {activeTier.shortLabel || activeTier.label}</span>
+            <span className="text-[9px] text-emerald-600 dark:text-emerald-400">✎</span>
           </button>
         </div>
 
-        {/* Engine Status, Sound Toggle & Language Selector */}
-        <div className="flex items-center gap-2.5">
-          {/* Sound ON / OFF Toggle */}
+        {/* Right: Actions Dropdown, Sound, Language & Mobile Sidebar Trigger */}
+        <div className="flex items-center gap-2">
+
+          {/* Actions Dropdown Menu (6-Tier Pathway, Official Forms, Export Dossier) */}
+          <div className="relative" ref={actionsMenuRef}>
+            <button
+              onClick={() => setActionsDropdownOpen(!actionsDropdownOpen)}
+              className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <span>⚙️ Actions</span>
+              <span className="text-[9px]">▼</span>
+            </button>
+
+            {actionsDropdownOpen && (
+              <div className="absolute right-0 mt-1.5 w-52 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl z-50 py-1.5 text-xs">
+                <button
+                  onClick={() => {
+                    setShowPathwayModal(true);
+                    setActionsDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-700 dark:hover:text-emerald-400 flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <span>⚖️</span>
+                  <div>
+                    <div className="font-bold">6-Tier Legal Pathway</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">Formulation roadmap & ABS</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowFormsModal(true);
+                    setActionsDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-700 dark:hover:text-emerald-400 flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <span>🏛️</span>
+                  <div>
+                    <div className="font-bold">Official Forms & Portals</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">IPO, NBA, FSSAI, AYUSH</div>
+                  </div>
+                </button>
+
+                <div className="border-t border-slate-200 dark:border-slate-800 my-1" />
+
+                <button
+                  onClick={() => {
+                    setShowDossierModal(true);
+                    setActionsDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-700 dark:hover:text-emerald-400 flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <span>📄</span>
+                  <div>
+                    <div className="font-bold text-emerald-700 dark:text-emerald-400">Export Legal Dossier</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">Download diagnostic report</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Sound ON/OFF Toggle */}
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+            className={`px-2 py-1 rounded-lg border text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
               soundEnabled
                 ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-400 dark:border-emerald-500/40 shadow-xs'
                 : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
+            title="Toggle Text-to-Speech audio response"
           >
             <span>{soundEnabled ? '🔊' : '🔇'}</span>
-            <span className="hidden sm:inline">Sound {soundEnabled ? 'ON' : 'OFF'}</span>
           </button>
 
           {/* Language Selector */}
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
-            className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500 font-medium"
+            className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-md px-2 py-1 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500 font-medium"
           >
             {languages.map((l) => (
               <option key={l.code} value={l.code}>
@@ -469,167 +552,43 @@ export default function ChatPage() {
             ))}
           </select>
 
-          {caseId && (
-            <span className="px-2 py-0.5 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 text-[11px] font-mono font-bold">
-              #{caseId}
-            </span>
-          )}
+          {/* Mobile Case Context Toggle Button */}
+          <button
+            onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+            className="lg:hidden px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-400 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-1 cursor-pointer"
+          >
+            <span>📋 Context</span>
+          </button>
         </div>
       </div>
 
-      {/* THREE-PANE IMMERSIVE WORKSPACE */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 overflow-hidden">
-        
-        {/* LEFT PANEL (Col 3): Compact Parameter Tracker & 6-Tier Classification */}
-        <div className="lg:col-span-3 glass-panel p-3.5 rounded-2xl overflow-y-auto space-y-3 text-xs border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 flex flex-col justify-between shadow-xs">
-          <div className="space-y-2.5">
-            <div className="border-b border-slate-200 dark:border-slate-800 pb-2 flex items-center justify-between">
-              <h3 className="font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                <span>📋</span> Parameter Tracker
-              </h3>
-              <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 text-[10px] font-mono font-bold border border-emerald-300 dark:border-emerald-800">
-                {completionPct}%
-              </span>
+      {/* ========================================================================= */}
+      {/* 2. MAIN 2-PANE WORKSPACE (CHAT ~72% | COMPACT SIDEBAR ~28%) */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1 overflow-hidden min-h-0">
+
+        {/* ===================================================================== */}
+        {/* DOMINANT CHAT AREA (Col 8 / ~72% on desktop) */}
+        {/* ===================================================================== */}
+        <div className="lg:col-span-8 xl:col-span-9 flex flex-col glass-panel p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 overflow-hidden shadow-xs relative">
+
+          {/* Chat Card Header */}
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800 shrink-0">
+            <div>
+              <h2 className="text-sm font-extrabold text-slate-900 dark:text-slate-100 tracking-tight flex items-center gap-1.5">
+                <span>⚖️</span>
+                <span>AI Consultation</span>
+              </h2>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Source-cited IP & regulatory guidance under Indian statutory frameworks
+              </p>
             </div>
-
-            {/* Progress Bar */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
-                <span>Gathered Parameters</span>
-                <span>{knownCount} / {totalParams}</span>
-              </div>
-              <div className="w-full bg-slate-100 dark:bg-slate-950 rounded-full h-1.5 overflow-hidden p-0.5 border border-slate-200 dark:border-slate-800">
-                <div
-                  className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-300"
-                  style={{ width: `${completionPct}%` }}
-                />
-              </div>
-            </div>
-
-            {/* 6-TIER FORMULATION CLASSIFICATION CARD */}
-            <div className="p-2.5 rounded-xl border border-emerald-300 dark:border-emerald-800/60 bg-emerald-50/70 dark:bg-emerald-950/30 space-y-2 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 flex items-center gap-1">
-                  <span>🏛️</span> Formulation Legal Tier
-                </span>
-                <button
-                  onClick={() => setShowPathwayModal(true)}
-                  className="text-[9px] font-bold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
-                >
-                  Change ➔
-                </button>
-              </div>
-
-              <div className="font-bold text-slate-900 dark:text-white text-[11px]">
-                {activeTier.label}
-              </div>
-
-              <div className="text-[10px] text-slate-600 dark:text-slate-300 leading-snug line-clamp-2">
-                {activeTier.ipPosture}
-              </div>
-
-              <button
-                onClick={() => setShowPathwayModal(true)}
-                className="w-full py-1 rounded-lg bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-800 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-500 dark:hover:text-slate-950 transition-all flex items-center justify-center gap-1 cursor-pointer"
-              >
-                <span>View Full Legal & ABS Roadmap</span>
-                <span>➔</span>
-              </button>
-            </div>
-
-            {/* Unified Checklist */}
-            <div className="space-y-1.5 text-[10px]">
-              {/* 1. Jurisdiction */}
-              <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                <div>
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold text-[8px] block">Jurisdiction</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200">{jurisdiction} {country ? `(${country})` : ''}</span>
-                </div>
-                <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 text-[8px] font-bold">✓ GATHERED</span>
-              </div>
-
-              {/* 2. Classical Basis */}
-              <div className={`p-2 rounded-xl border flex items-center justify-between ${
-                caseState?.classical_reference ? 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800' : 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800/40'
-              }`}>
-                <div>
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold text-[8px] block">Classical Basis (TK)</span>
-                  <span className={`font-bold ${caseState?.classical_reference ? 'text-slate-800 dark:text-slate-200' : 'text-amber-800 dark:text-amber-300 font-semibold'}`}>
-                    {caseState?.classical_reference || 'Unspecified'}
-                  </span>
-                </div>
-                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
-                  caseState?.classical_reference ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800' : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
-                }`}>
-                  {caseState?.classical_reference ? '✓ GATHERED' : '○ NEEDED'}
-                </span>
-              </div>
-
-              {/* 3. Active Herbs */}
-              <div className={`p-2 rounded-xl border flex items-center justify-between ${
-                caseState?.ingredients && caseState.ingredients.length > 0 ? 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800' : 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800/40'
-              }`}>
-                <div className="truncate pr-1">
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold text-[8px] block">Active Herbs</span>
-                  <span className={`font-bold truncate block ${caseState?.ingredients && caseState.ingredients.length > 0 ? 'text-slate-800 dark:text-slate-200' : 'text-amber-800 dark:text-amber-300 font-semibold'}`}>
-                    {caseState?.ingredients && caseState.ingredients.length > 0 ? caseState.ingredients.join(', ') : 'Not specified'}
-                  </span>
-                </div>
-                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold shrink-0 ${
-                  caseState?.ingredients && caseState.ingredients.length > 0 ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800' : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
-                }`}>
-                  {caseState?.ingredients && caseState.ingredients.length > 0 ? '✓ GATHERED' : '○ NEEDED'}
-                </span>
-              </div>
-
-              {/* 4. Traditional Knowledge */}
-              <div className={`p-2 rounded-xl border flex items-center justify-between ${
-                caseState?.traditional_knowledge_involved !== null && caseState?.traditional_knowledge_involved !== undefined ? 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800' : 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800/40'
-              }`}>
-                <div>
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold text-[8px] block">TK Involved</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200">
-                    {caseState?.traditional_knowledge_involved === true
-                      ? 'Yes (Prior Art)'
-                      : caseState?.traditional_knowledge_involved === false
-                      ? 'No (Novel Formula)'
-                      : 'Uncertain'}
-                  </span>
-                </div>
-                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
-                  caseState?.traditional_knowledge_involved !== null && caseState?.traditional_knowledge_involved !== undefined ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800' : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
-                }`}>
-                  {caseState?.traditional_knowledge_involved !== null && caseState?.traditional_knowledge_involved !== undefined ? '✓ GATHERED' : '○ NEEDED'}
-                </span>
-              </div>
-
-              {/* 5. Indian Bio-Resources */}
-              <div className={`p-2 rounded-xl border flex items-center justify-between ${
-                caseState?.biological_resources_involved !== null && caseState?.biological_resources_involved !== undefined ? 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800' : 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800/40'
-              }`}>
-                <div>
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold text-[8px] block">Indian Bio-Resources (ABS)</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200">
-                    {caseState?.biological_resources_involved === true
-                      ? 'Yes (NBA Clearance)'
-                      : caseState?.biological_resources_involved === false
-                      ? 'No Indian Bio'
-                      : 'Uncertain'}
-                  </span>
-                </div>
-                <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${
-                  caseState?.biological_resources_involved !== null && caseState?.biological_resources_involved !== undefined ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800' : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
-                }`}>
-                  {caseState?.biological_resources_involved !== null && caseState?.biological_resources_involved !== undefined ? '✓ GATHERED' : '○ NEEDED'}
-                </span>
-              </div>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>RAG Sources Ready</span>
             </div>
           </div>
-        </div>
 
-        {/* CENTER PANEL (Col 6): Conversational Stream with Guidance & Question Box */}
-        <div className="lg:col-span-6 flex flex-col glass-panel p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 overflow-hidden relative shadow-xs">
-          
           {/* Hidden File Input for Document Upload */}
           <input
             type="file"
@@ -639,51 +598,64 @@ export default function ChatPage() {
             className="hidden"
           />
 
-          {/* Scrollable Messages Stream */}
-          <div className="flex-1 overflow-y-auto space-y-3.5 pr-2">
+          {/* Scrollable Message History Area */}
+          <div className="flex-1 overflow-y-auto space-y-3.5 pr-2 py-3 min-h-0">
+
+            {/* Clean Minimal Empty State */}
             {chatHistory.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 text-slate-500 dark:text-slate-400">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-2xl">
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-4 text-slate-500 dark:text-slate-400 my-auto">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-2xl shadow-xs">
                   ⚖️
                 </div>
-                <div className="space-y-1">
-                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-slate-200">Ayurvedic IP Consultation Assistant</h3>
-                  <p className="text-xs max-w-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Ask about patents under Section 3(p), traditional knowledge prior art, National Biodiversity Authority (NBA) ABS clearance, or FSSAI Ayurveda-Aahar classification.
+                <div className="space-y-1.5 max-w-md">
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
+                    AI Consultation
+                  </h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                    Ask about patents, traditional knowledge, ABS, GI, trademarks, regulatory classification, or international IP requirements.
                   </p>
                 </div>
-                <div className="flex flex-wrap justify-center gap-2 pt-1">
+
+                {/* 3 Compact Suggested Prompts */}
+                <div className="flex flex-wrap justify-center gap-2 pt-2 max-w-lg">
                   <button
-                    onClick={() => handleSendMessage('I want to patent a novel Ayurvedic herbal formulation containing Ashwagandha and Ginger.')}
-                    className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-700 dark:text-slate-300 hover:border-emerald-500/50 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all cursor-pointer"
+                    onClick={() => handleSendMessage('Can I patent this Ayurvedic formulation?')}
+                    className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 hover:border-emerald-500/60 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50/30 transition-all cursor-pointer shadow-2xs"
                   >
-                    💡 Patent Ashwagandha Formula →
+                    💡 &ldquo;Can I patent this Ayurvedic formulation?&rdquo;
                   </button>
                   <button
-                    onClick={() => handleSendMessage('What are the NBA Access and Benefit Sharing (ABS) compliance steps for exporting Brahmi extract?')}
-                    className="px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-700 dark:text-slate-300 hover:border-cyan-500/50 hover:text-cyan-600 dark:hover:text-cyan-400 transition-all cursor-pointer"
+                    onClick={() => handleSendMessage('Does this formulation require ABS clearance from NBA?')}
+                    className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 hover:border-cyan-500/60 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-50/30 transition-all cursor-pointer shadow-2xs"
                   >
-                    🌿 Biological Resource Export (ABS) →
+                    🌿 &ldquo;Does this require ABS clearance?&rdquo;
+                  </button>
+                  <button
+                    onClick={() => handleSendMessage('What IP protection is available for our Ayurvedic product?')}
+                    className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 hover:border-amber-500/60 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50/30 transition-all cursor-pointer shadow-2xs"
+                  >
+                    📜 &ldquo;What IP protection is available?&rdquo;
                   </button>
                 </div>
               </div>
             )}
 
+            {/* Chat Messages */}
             {chatHistory.map((item, idx) => (
               <div key={idx} className={`flex ${item.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {item.sender === 'user' ? (
-                  <div className="max-w-md bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl px-3.5 py-2.5 shadow-sm text-xs font-medium leading-relaxed">
+                  <div className="max-w-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl px-4 py-2.5 shadow-sm text-xs font-medium leading-relaxed">
                     {item.text}
                   </div>
                 ) : item.data ? (
-                  <div className="w-full glass-panel p-3.5 rounded-2xl space-y-3 border border-slate-200 dark:border-slate-800/80 border-l-4 border-l-emerald-500 bg-white/95 dark:bg-slate-950/90 shadow-sm text-xs">
-                    
-                    {/* Header Bar with Voice Button */}
-                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-1.5">
+                  <div className="w-full glass-panel p-4 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800/80 border-l-4 border-l-emerald-500 bg-white/95 dark:bg-slate-950/90 shadow-sm text-xs">
+
+                    {/* Message Header Bar with Voice Button */}
+                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-2">
                       <div className="flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-emerald-500" />
                         <span className="font-extrabold text-slate-900 dark:text-slate-200 uppercase tracking-wider text-[10px]">
-                          Concise Legal Guidance
+                          IP-SAKTI Legal Guidance
                         </span>
                       </div>
                       <button
@@ -694,13 +666,13 @@ export default function ChatPage() {
                             : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-800 hover:border-emerald-500/50 hover:text-emerald-600 dark:hover:text-emerald-400'
                         }`}
                       >
-                        <span>{speakingIdx === idx ? '⏹ Stop' : '🔊 Read Aloud (Female)'}</span>
+                        <span>{speakingIdx === idx ? '⏹ Stop' : '🔊 Listen (TTS)'}</span>
                       </button>
                     </div>
 
                     {/* Safe Abstention Warning */}
                     {item.data.safe_abstention && (
-                      <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800/60 text-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
+                      <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800/60 text-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
                         <span>⚠️</span>
                         <div>{item.data.confidence_explanation}</div>
                       </div>
@@ -708,17 +680,16 @@ export default function ChatPage() {
 
                     {/* Human Escalation Warning */}
                     {item.data.requires_human_escalation && (
-                      <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between gap-2">
+                      <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-base">⚖️</span>
+                          <span>⚖️</span>
                           <div>
-                            <strong className="block font-bold">Human Legal Review Required</strong>
-                            <span className="text-[11px] leading-tight">This matter involves cross-border statutory considerations or novel biological formulation claims.</span>
+                            <strong className="font-bold">Human Legal Review Recommended:</strong> Novel biological claims or cross-border statutory considerations.
                           </div>
                         </div>
                         <button
                           onClick={() => setShowDossierModal(true)}
-                          className="px-2.5 py-1 rounded-lg bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 font-bold text-[10px] hover:bg-amber-300 transition-all cursor-pointer whitespace-nowrap"
+                          className="px-2 py-1 rounded bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 font-bold text-[10px] hover:bg-amber-300 transition-all cursor-pointer whitespace-nowrap"
                         >
                           Export Dossier ➔
                         </button>
@@ -730,16 +701,16 @@ export default function ChatPage() {
                       {item.data.answer}
                     </div>
 
-                    {/* PROMINENT DYNAMIC QUESTION BOX WITH 1-CLICK OPTION CHIPS */}
+                    {/* Prominent Dynamic Question Box with 1-Click Option Chips */}
                     {item.data.next_question && (
-                      <div className="p-3.5 rounded-xl bg-emerald-50/90 dark:bg-gradient-to-r dark:from-emerald-950/70 dark:via-teal-950/50 dark:to-slate-950 border-2 border-emerald-500/50 space-y-2.5 shadow-sm">
+                      <div className="p-3 rounded-xl bg-emerald-50/90 dark:bg-gradient-to-r dark:from-emerald-950/70 dark:via-teal-950/50 dark:to-slate-950 border border-emerald-500/40 space-y-2 shadow-2xs">
                         <div className="flex items-center justify-between">
                           <div className="text-[10px] font-extrabold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                            <span>⚡ Required Case Clarification</span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                            <span>⚡ Case Clarification</span>
                           </div>
                           <span className="text-[9px] text-amber-800 dark:text-amber-400 font-mono font-bold bg-amber-100 dark:bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-300 dark:border-amber-800/50">
-                            Answer to advance
+                            Select to proceed
                           </span>
                         </div>
 
@@ -747,14 +718,14 @@ export default function ChatPage() {
                           {item.data.next_question}
                         </p>
 
-                        {/* Clickable Options Chips */}
+                        {/* Clickable Option Chips */}
                         {item.data.suggested_options && item.data.suggested_options.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 pt-1">
+                          <div className="flex flex-wrap gap-1.5 pt-0.5">
                             {item.data.suggested_options.map((option, optIdx) => (
                               <button
                                 key={optIdx}
                                 onClick={() => handleSendMessage(option)}
-                                className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-emerald-500/50 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-500 dark:hover:text-slate-950 transition-all shadow-xs active:scale-95 flex items-center gap-1 cursor-pointer"
+                                className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-500 dark:hover:text-slate-950 transition-all shadow-2xs active:scale-95 flex items-center gap-1 cursor-pointer"
                               >
                                 <span>👉</span>
                                 <span>{option}</span>
@@ -779,20 +750,22 @@ export default function ChatPage() {
                 <span className="font-semibold">
                   {isUploadingDoc
                     ? 'Extracting document text via OCR and updating case state...'
-                    : 'Retrieving statutory RAG context & running Groq 120B reasoning...'}
+                    : 'Retrieving statutory RAG context & running Groq reasoning...'}
                 </span>
               </div>
             )}
             <div ref={chatBottomRef} />
           </div>
 
-          {/* INPUT BAR WITH MIC, UPLOAD DOCUMENT & FOOTNOTE DISCLAIMER */}
-          <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 space-y-1.5">
+          {/* =================================================================== */}
+          {/* STICKY CHAT INPUT BAR */}
+          {/* =================================================================== */}
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 space-y-1.5 shrink-0">
             {isListening && (
               <div className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-950/60 border border-rose-400 dark:border-rose-500/50 text-rose-800 dark:text-rose-300 text-[11px] flex items-center justify-between animate-pulse">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                  <span>Listening... Speak clearly.</span>
+                  <span>Listening... Speak your query clearly.</span>
                 </div>
                 <span className="font-mono text-[10px] text-rose-700 dark:text-rose-400">{transcript}</span>
               </div>
@@ -803,15 +776,16 @@ export default function ChatPage() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploadingDoc}
-                className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/40 transition-all text-sm flex items-center justify-center cursor-pointer"
+                className="p-2 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/40 transition-all text-sm flex items-center justify-center cursor-pointer shrink-0"
                 title="Upload Document / PDF / Image (Inline OCR)"
               >
                 📎
               </button>
 
+              {/* Speech-to-Text Microphone Button */}
               <button
                 onClick={toggleListening}
-                className={`p-2.5 rounded-xl border transition-all text-sm flex items-center justify-center cursor-pointer ${
+                className={`p-2 rounded-xl border transition-all text-sm flex items-center justify-center cursor-pointer shrink-0 ${
                   isListening
                     ? 'bg-rose-500 text-white border-rose-400 shadow-md animate-bounce'
                     : 'bg-slate-100 dark:bg-slate-950 border-slate-300 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/40'
@@ -821,6 +795,7 @@ export default function ChatPage() {
                 🎙️
               </button>
 
+              {/* Query Text Input */}
               <input
                 type="text"
                 placeholder="Ask an Ayurvedic IP question or upload a document..."
@@ -830,30 +805,50 @@ export default function ChatPage() {
                 className="flex-1 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-medium"
               />
 
+              {/* Send Button */}
               <button
                 onClick={() => handleSendMessage()}
                 disabled={loading || !inputMessage.trim()}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white dark:text-slate-950 font-bold text-xs hover:from-emerald-400 hover:to-teal-500 disabled:opacity-50 transition-all shadow-sm cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white dark:text-slate-950 font-bold text-xs hover:from-emerald-400 hover:to-teal-500 disabled:opacity-50 transition-all shadow-xs cursor-pointer shrink-0"
               >
                 Send ➔
               </button>
             </div>
 
-            {/* INTEGRATED CLEAN DISCLAIMER FOOTNOTE */}
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center truncate pt-0.5">
-              <strong className="text-slate-600 dark:text-slate-300">Legal Informational Disclaimer:</strong> IP-SAKTI Sahayak provides source-cited guidance under SIH PS-26045. It does not provide binding legal advice.
+            {/* Clean Disclaimer Footnote */}
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center truncate">
+              <strong className="text-slate-600 dark:text-slate-300">Disclaimer:</strong> IP-SAKTI Sahayak provides statutory information under SIH PS-26045. It does not replace professional legal counsel.
             </p>
           </div>
         </div>
 
-        {/* RIGHT PANEL (Col 3): Evidence Coverage & Verified Citations */}
-        <div className="lg:col-span-3 glass-panel p-3.5 rounded-2xl overflow-y-auto space-y-3 text-xs border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 shadow-xs">
-          
-          {/* Evidence Coverage Confidence */}
-          <div className="border-b border-slate-200 dark:border-slate-800 pb-2.5 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="font-extrabold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[9px]">Coverage Confidence</span>
-              <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold font-mono ${
+        {/* ===================================================================== */}
+        {/* COMPACT CASE CONTEXT SIDEBAR (Col 4 / ~28% on desktop) */}
+        {/* ===================================================================== */}
+        <div className={`lg:col-span-4 xl:col-span-3 flex-col glass-panel p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 overflow-y-auto space-y-3 shadow-xs text-xs ${
+          showMobileSidebar ? 'flex fixed inset-x-4 top-20 bottom-4 z-40 bg-white dark:bg-slate-900' : 'hidden lg:flex'
+        }`}>
+
+          {/* Sidebar Header with Coverage Confidence */}
+          <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800 shrink-0">
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px]">
+                Case Context
+              </span>
+              {showMobileSidebar && (
+                <button
+                  onClick={() => setShowMobileSidebar(false)}
+                  className="lg:hidden ml-2 px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-[10px] font-bold"
+                >
+                  ✕ Close
+                </button>
+              )}
+            </div>
+
+            {/* Coverage Confidence Badge */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Coverage:</span>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
                 latestResponse?.confidence_score && latestResponse.confidence_score >= 0.5
                   ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800'
                   : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
@@ -861,87 +856,250 @@ export default function ChatPage() {
                 {latestResponse ? `${Math.round(latestResponse.confidence_score * 100)}%` : 'N/A'}
               </span>
             </div>
-            <p className="text-[10px] text-slate-600 dark:text-slate-400 leading-snug italic">
-              {latestResponse?.confidence_explanation || 'Confidence reflects statutory section coverage.'}
-            </p>
           </div>
 
-          {/* Relevant IP Domains */}
-          <div className="space-y-1.5">
-            <h4 className="font-extrabold text-amber-600 dark:text-amber-400 uppercase text-[9px] tracking-wider flex items-center gap-1">
-              <span>📊</span> IP Domains
-            </h4>
-            <div className="space-y-1">
-              {allIpDomains.map((dom) => {
-                const isRelevant = latestResponse?.relevant_ip_domains.includes(dom.id);
-                return (
-                  <div key={dom.id} className={`p-1.5 rounded-lg border transition-all flex items-center justify-between ${
-                    isRelevant
-                      ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-800/60 shadow-xs'
-                      : 'bg-slate-50/70 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800/60 opacity-60'
-                  }`}>
-                    <span className="text-[10px] text-slate-800 dark:text-slate-200 font-medium flex items-center gap-1">
-                      <span>{dom.icon}</span>
-                      <span>{dom.label}</span>
-                    </span>
-                    <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold ${
-                      isRelevant ? 'bg-emerald-500 text-white dark:text-slate-950 font-black' : 'text-slate-400 dark:text-slate-500'
-                    }`}>
-                      {isRelevant ? 'ON' : 'Off'}
-                    </span>
-                  </div>
-                );
-              })}
+          {/* SECTION 1: COMPACT CASE CONTEXT ROWS */}
+          <div className="space-y-1.5 bg-slate-50/70 dark:bg-slate-950/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80">
+            {/* Jurisdiction */}
+            <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Jurisdiction</span>
+              <span className="font-bold text-slate-800 dark:text-slate-200">
+                {jurisdiction} {country ? `(${country})` : ''}
+              </span>
+            </div>
+
+            {/* Formulation Tier */}
+            <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Formulation</span>
+              <button
+                onClick={() => setShowPathwayModal(true)}
+                className="font-bold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer truncate max-w-[140px]"
+                title="Change formulation tier"
+              >
+                <span className="truncate">{activeTier.shortLabel || activeTier.label}</span>
+                <span className="text-[9px]">✎</span>
+              </button>
+            </div>
+
+            {/* Classical Basis */}
+            <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Classical Basis</span>
+              <span className={`font-medium ${caseState?.classical_reference ? 'text-slate-800 dark:text-slate-200' : 'text-amber-700 dark:text-amber-400'}`}>
+                {caseState?.classical_reference || 'Unspecified'}
+              </span>
+            </div>
+
+            {/* Active Herbs */}
+            <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Active Herbs</span>
+              <span className={`font-medium truncate max-w-[130px] ${caseState?.ingredients && caseState.ingredients.length > 0 ? 'text-slate-800 dark:text-slate-200' : 'text-amber-700 dark:text-amber-400'}`}>
+                {caseState?.ingredients && caseState.ingredients.length > 0 ? caseState.ingredients.join(', ') : 'Not specified'}
+              </span>
+            </div>
+
+            {/* TK Involved */}
+            <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
+              <span className="text-slate-500 dark:text-slate-400 font-medium">TK Involved</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">
+                {caseState?.traditional_knowledge_involved === true
+                  ? 'Yes (Prior Art)'
+                  : caseState?.traditional_knowledge_involved === false
+                  ? 'No (Novel)'
+                  : 'Uncertain'}
+              </span>
+            </div>
+
+            {/* Biological Resources */}
+            <div className="flex items-center justify-between py-1 text-[11px]">
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Bio Resources (ABS)</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">
+                {caseState?.biological_resources_involved === true
+                  ? 'Yes (NBA Clearance)'
+                  : caseState?.biological_resources_involved === false
+                  ? 'No Indian Bio'
+                  : 'Uncertain'}
+              </span>
             </div>
           </div>
 
-          {/* Verified Citations List */}
-          <div className="border-t border-slate-200 dark:border-slate-800 pt-3 space-y-1.5">
-            <h4 className="font-extrabold text-slate-800 dark:text-slate-200 uppercase text-[10px] tracking-wider flex items-center gap-1">
-              <span>📖</span> Verified Citations ({latestResponse?.citations?.length || 0}):
-            </h4>
-            {latestResponse?.citations && latestResponse.citations.length > 0 ? (
-              latestResponse.citations.map((c, cIdx) => (
-                <div key={cIdx} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5 text-[10px]">
-                  <div className="flex items-start justify-between gap-1">
-                    <span className="font-bold text-slate-900 dark:text-slate-200">{c.source}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase shrink-0 ${
-                      c.is_authoritative
-                        ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800'
-                        : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
-                    }`}>
-                      {c.is_authoritative ? '✓ Authoritative' : 'Reference'}
-                    </span>
+          {/* SECTION 2: COLLAPSIBLE CASE PARAMETERS ACCORDION */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 overflow-hidden">
+            <button
+              onClick={() => setIsParamsOpen(!isParamsOpen)}
+              className="w-full px-3 py-2 bg-slate-50/90 dark:bg-slate-950/80 flex items-center justify-between text-left hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors cursor-pointer"
+            >
+              <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] flex items-center gap-1.5">
+                <span>{isParamsOpen ? '▾' : '▸'}</span>
+                <span>Case Parameters</span>
+              </span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                {isParamsOpen ? `${knownCount}/${totalParams} gathered` : `${missingCount} needed`}
+              </span>
+            </button>
+
+            {isParamsOpen && (
+              <div className="p-2.5 space-y-2 bg-white dark:bg-slate-900/40 text-[10px] border-t border-slate-200 dark:border-slate-800">
+                {/* Progress bar */}
+                <div className="space-y-1 pb-1">
+                  <div className="flex justify-between text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+                    <span>Progress</span>
+                    <span>{completionPct}%</span>
                   </div>
-                  <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400 font-mono text-[9px]">
-                    <span>{c.section_or_rule || 'Statute Section'}</span>
-                    {c.support_status && (
-                      <span className={`text-[8px] font-bold px-1 rounded ${
-                        c.support_status === 'SUPPORTED'
-                          ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/80'
-                          : 'text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/80'
-                      }`}>
-                        {c.support_status}
-                      </span>
-                    )}
+                  <div className="w-full bg-slate-100 dark:bg-slate-950 rounded-full h-1 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${completionPct}%` }}
+                    />
                   </div>
-                  {c.snippet && (
-                    <div className="text-slate-600 dark:text-slate-400 text-[9px] line-clamp-3 italic bg-white dark:bg-slate-900/60 p-1.5 rounded border border-slate-200 dark:border-slate-800/60 leading-relaxed">
-                      &ldquo;{c.snippet}&rdquo;
-                    </div>
-                  )}
                 </div>
-              ))
-            ) : (
-              <div className="text-slate-500 text-[10px] italic p-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-center">
-                Citations will appear upon submitting a query.
+
+                {/* Known items */}
+                {caseState?.known_information && caseState.known_information.length > 0 && (
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                      Gathered:
+                    </span>
+                    {caseState.known_information.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-1 text-slate-700 dark:text-slate-300">
+                        <span className="text-emerald-500">✓</span>
+                        <span className="truncate">{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Missing items */}
+                {caseState?.missing_information && caseState.missing_information.length > 0 && (
+                  <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                      Pending Clarification:
+                    </span>
+                    {caseState.missing_information.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
+                        <span className="text-amber-500">○</span>
+                        <span className="truncate">{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
+
+          {/* SECTION 3: COLLAPSIBLE IP DOMAINS ACCORDION */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 overflow-hidden">
+            <button
+              onClick={() => setIsIpDomainsOpen(!isIpDomainsOpen)}
+              className="w-full px-3 py-2 bg-slate-50/90 dark:bg-slate-950/80 flex items-center justify-between text-left hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors cursor-pointer"
+            >
+              <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] flex items-center gap-1.5">
+                <span>{isIpDomainsOpen ? '▾' : '▸'}</span>
+                <span>IP Domains</span>
+              </span>
+              <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                activeDomainsCount > 0
+                  ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400'
+                  : 'text-slate-400 dark:text-slate-500'
+              }`}>
+                {activeDomainsCount} active
+              </span>
+            </button>
+
+            {isIpDomainsOpen && (
+              <div className="p-2 space-y-1 bg-white dark:bg-slate-900/40 border-t border-slate-200 dark:border-slate-800">
+                {allIpDomains.map((dom) => {
+                  const isRelevant = latestResponse?.relevant_ip_domains.includes(dom.id);
+                  return (
+                    <div
+                      key={dom.id}
+                      className={`px-2 py-1 rounded-md flex items-center justify-between text-[10px] transition-all ${
+                        isRelevant
+                          ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-200 font-semibold'
+                          : 'text-slate-500 dark:text-slate-400 opacity-70'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span>{dom.icon}</span>
+                        <span>{dom.label}</span>
+                      </span>
+                      <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold ${
+                        isRelevant
+                          ? 'bg-emerald-500 text-white dark:text-slate-950 font-black'
+                          : 'text-slate-400 dark:text-slate-500'
+                      }`}>
+                        {isRelevant ? 'ON' : 'Off'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* SECTION 4: COLLAPSIBLE VERIFIED CITATIONS ACCORDION */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 overflow-hidden">
+            <button
+              onClick={() => setIsSourcesOpen(!isSourcesOpen)}
+              className="w-full px-3 py-2 bg-slate-50/90 dark:bg-slate-950/80 flex items-center justify-between text-left hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors cursor-pointer"
+            >
+              <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] flex items-center gap-1.5">
+                <span>{isSourcesOpen ? '▾' : '▸'}</span>
+                <span>Verified Sources</span>
+              </span>
+              <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                citationsCount > 0
+                  ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400'
+                  : 'text-slate-400 dark:text-slate-500'
+              }`}>
+                {citationsCount}
+              </span>
+            </button>
+
+            {isSourcesOpen && (
+              <div className="p-2 space-y-2 bg-white dark:bg-slate-900/40 text-[10px] border-t border-slate-200 dark:border-slate-800 max-h-60 overflow-y-auto">
+                {latestResponse?.citations && latestResponse.citations.length > 0 ? (
+                  latestResponse.citations.map((c, cIdx) => (
+                    <div key={cIdx} className="p-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1">
+                      <div className="flex items-start justify-between gap-1">
+                        <span className="font-bold text-slate-900 dark:text-slate-200 truncate">{c.source}</span>
+                        <span className={`px-1 py-0.2 rounded text-[8px] font-extrabold uppercase shrink-0 ${
+                          c.is_authoritative
+                            ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400'
+                            : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                        }`}>
+                          {c.is_authoritative ? '✓ Auth' : 'Ref'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400 font-mono text-[9px]">
+                        <span className="truncate">{c.section_or_rule || 'Statutory Section'}</span>
+                        {c.support_status && (
+                          <span className="text-[8px] font-bold text-emerald-700 dark:text-emerald-400">
+                            {c.support_status}
+                          </span>
+                        )}
+                      </div>
+                      {c.snippet && (
+                        <div className="text-slate-600 dark:text-slate-400 text-[9px] line-clamp-2 italic bg-white dark:bg-slate-900/60 p-1 rounded border border-slate-200/60 dark:border-slate-800/60">
+                          &ldquo;{c.snippet}&rdquo;
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-slate-500 text-[10px] italic p-2 text-center">
+                    Citations appear when a query is submitted.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
 
-      {/* POPUP MODALS */}
+      {/* ========================================================================= */}
+      {/* 3. POPUP MODALS (Preserved) */}
+      {/* ========================================================================= */}
       <FormulationPathwayModal
         isOpen={showPathwayModal}
         onClose={() => setShowPathwayModal(false)}
