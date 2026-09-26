@@ -20,8 +20,8 @@ class BackblazeB2Service:
         self.initialize_b2()
 
     def initialize_b2(self):
-        """Initialize B2 SDK if credentials present."""
-        is_prod = settings.APP_ENV == "production" or settings.STORAGE_MODE == "backblaze"
+        """Initialize B2 SDK based on STORAGE_MODE."""
+        is_b2_mode = settings.STORAGE_MODE == "backblaze"
         if settings.B2_APPLICATION_KEY_ID and settings.B2_APPLICATION_KEY:
             try:
                 from b2sdk.v2 import InMemoryAccountInfo, B2Api
@@ -32,12 +32,12 @@ class BackblazeB2Service:
                 logger.info(f"Connected to Backblaze B2 bucket: {settings.B2_BUCKET_NAME}")
             except Exception as e:
                 logger.error(f"Failed to initialize Backblaze B2: {e}")
-                if is_prod:
+                if is_b2_mode:
                     raise RuntimeError(f"PRODUCTION STORAGE FAILURE: Backblaze B2 initialization failed: {e}")
                 self.b2_api = None
                 self.bucket = None
         else:
-            if is_prod:
+            if is_b2_mode:
                 raise RuntimeError("PRODUCTION STORAGE FAILURE: B2_APPLICATION_KEY_ID/KEY missing in production mode.")
             logger.info("STORAGE_MODE=mock active. Operating using development local storage adapter.")
 

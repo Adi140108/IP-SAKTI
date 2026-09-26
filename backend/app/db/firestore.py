@@ -20,9 +20,9 @@ class FirestoreService:
         self.initialize_firestore()
 
     def initialize_firestore(self):
-        """Initialize Firebase Admin SDK based on DATABASE_MODE & APP_ENV."""
+        """Initialize Firebase Admin SDK based on DATABASE_MODE."""
         cred_path = settings.FIREBASE_CREDENTIALS_PATH
-        is_prod = settings.APP_ENV == "production" or settings.DATABASE_MODE == "firestore"
+        is_firestore_mode = settings.DATABASE_MODE == "firestore"
 
         if cred_path and os.path.exists(cred_path):
             try:
@@ -35,11 +35,11 @@ class FirestoreService:
                 logger.info("Successfully connected to Firebase Firestore")
             except Exception as e:
                 logger.error(f"Firestore connection failure: {e}")
-                if is_prod:
+                if is_firestore_mode:
                     raise RuntimeError(f"PRODUCTION DATABASE FAILURE: Firestore initialization failed: {e}")
                 self.db = None
         else:
-            if is_prod:
+            if is_firestore_mode:
                 raise RuntimeError("PRODUCTION DATABASE FAILURE: FIREBASE_CREDENTIALS_PATH missing in production mode.")
             logger.info("DATABASE_MODE=mock active. Operating using development local DB storage adapter.")
 
