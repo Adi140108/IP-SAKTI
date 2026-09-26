@@ -1,20 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { fetchDiagnostics, getApiBaseUrl, setCustomApiUrl } from '@/lib/api';
+import { fetchDiagnostics } from '@/lib/api';
 import { DiagnosticsStatus, ServiceStatus } from '@/types';
 
 export default function DiagnosticsPage() {
   const [diag, setDiag] = useState<DiagnosticsStatus | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [currentUrl, setCurrentUrl] = useState<string>('');
-  const [inputUrl, setInputUrl] = useState<string>('');
-  const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
 
   const loadDiagnostics = () => {
     setLoading(true);
-    const activeUrl = getApiBaseUrl();
-    setCurrentUrl(activeUrl);
     fetchDiagnostics()
       .then((res) => setDiag(res))
       .catch((err) => {
@@ -27,22 +22,6 @@ export default function DiagnosticsPage() {
   useEffect(() => {
     loadDiagnostics();
   }, []);
-
-  const handleApplyCustomUrl = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (inputUrl.trim()) {
-      setCustomApiUrl(inputUrl.trim());
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-      loadDiagnostics();
-    }
-  };
-
-  const handleResetDefaultUrl = () => {
-    setCustomApiUrl('');
-    setInputUrl('');
-    loadDiagnostics();
-  };
 
   const renderStatusBadge = (status: ServiceStatus['status']) => {
     switch (status) {
