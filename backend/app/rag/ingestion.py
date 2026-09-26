@@ -80,15 +80,16 @@ class SourceIngestionPipeline:
 
     def parse_html_bytes(self, raw_bytes: bytes) -> List[Dict[str, Any]]:
         """
-        Parse HTML document using BeautifulSoup, removing scripts/styles and extracting structured legal sections.
+        Parse HTML document, stripping scripts/styles/tags and extracting structured legal sections.
+        Uses BeautifulSoup if available, or standard library HTML parsing as fallback.
         """
         try:
-            from bs4 import BeautifulSoup
-            try:
-                html_str = raw_bytes.decode("utf-8")
-            except UnicodeDecodeError:
-                html_str = raw_bytes.decode("latin-1", errors="replace")
+            html_str = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            html_str = raw_bytes.decode("latin-1", errors="replace")
 
+        try:
+            from bs4 import BeautifulSoup
             soup = BeautifulSoup(html_str, "html.parser")
             for tag in soup(["script", "style", "nav", "footer", "header", "noscript"]):
                 tag.decompose()
@@ -97,9 +98,17 @@ class SourceIngestionPipeline:
             body = soup.body or soup
             text = body.get_text(separator="\n\n")
             return self._extract_legal_sections_from_text(text)
+        except ImportError:
+            # Fallback when bs4 is not installed: clean HTML using regex and paragraph markers
+            clean_html = re.sub(r'<(script|style|nav|footer|header|noscript)[^>]*>.*?</\1>', '', html_str, flags=re.DOTALL | re.IGNORECASE)
+            clean_html = re.sub(r'</(h[1-6]|p|div|li|tr)>', '\n\n', clean_html, flags=re.IGNORECASE)
+            text = re.sub(r'<[^>]+>', ' ', clean_html)
+            text = re.sub(r'[ \t]+', ' ', text)
+            return self._extract_legal_sections_from_text(text)
         except Exception as e:
             logger.error(f"HTML parsing failed: {e}")
-            return self._extract_legal_sections_from_text(raw_bytes.decode("utf-8", errors="replace"))
+            clean_html = re.sub(r'<[^>]+>', ' ', html_str)
+            return self._extract_legal_sections_from_text(clean_html)
 
     def _extract_legal_sections_from_text(self, text: str, page_number: Optional[int] = None) -> List[Dict[str, Any]]:
         """
