@@ -5,6 +5,7 @@ from app.storage.backblaze import backblaze_service
 from app.db.firestore import firestore_service
 from app.modules.ocr.service import ocr_pipeline
 from app.schemas.document import DocumentMetadata
+from app.config import settings
 
 router = APIRouter(tags=["Documents"])
 
@@ -18,6 +19,13 @@ async def upload_document(
     
     if not content_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+    if len(content_bytes) > settings.MAX_UPLOAD_SIZE_BYTES:
+        max_mb = settings.MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)
+        raise HTTPException(
+            status_code=413,
+            detail=f"Uploaded file exceeds maximum allowed limit ({max_mb} MB)."
+        )
 
     # 1. Upload to Storage (B2 or Local Fallback)
     storage_res = await backblaze_service.upload_file(

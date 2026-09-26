@@ -1,8 +1,12 @@
+import os
+import json
 import math
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
+from datetime import datetime
+from app.config import settings
 from app.rag.evidence import EvidenceChunk
-from app.rag.source_registry import source_registry
+from app.rag.source_registry import source_registry, LegalSourceMetadata, IngestionResult
 from app.rag.ingestion import ingestion_pipeline
 from app.rag.embeddings import embeddings_provider
 
@@ -10,20 +14,228 @@ logger = logging.getLogger("IP-SAKTI.VectorStore")
 
 class VectorStoreInterface:
     """
-    Abstract Vector Store Interface supporting Hybrid Search (BM25 + Cosine Similarity)
-    and strict metadata filtering by Jurisdiction, IP domains, and Source types.
+    Persistent & Memory-capable Hybrid Vector Store for Legal & Statutory Evidence.
+    Supports persistent disk storage (JSON/Vector index), idempotent ingestion,
+    document replacement, BM25 + Cosine similarity, and deterministic country filtering.
     """
 
-    def __init__(self):
+    def __init__(self, db_type: Optional[str] = None, persist_path: Optional[str] = None):
+        self.db_type = (db_type or settings.VECTOR_DB_TYPE or "memory").strip().lower()
+        self.persist_path = persist_path or settings.VECTOR_DB_PERSIST_PATH or "./data/vector_index"
+        
+        # In-memory indices
         self.chunks: List[EvidenceChunk] = []
         self.chunk_embeddings: List[List[float]] = []
-        self.load_registered_statutory_chunks()
+        self.indexed_chunk_keys: Set[str] = set() # (chunk_id:checksum) for idempotency
+
+        self.initialize_store()
+
+    def _get_index_file_path(self) -> str:
+        """Resolve full index json file path."""
+        if self.persist_path.endswith(".json"):
+            return os.path.abspath(self.persist_path)
+        return os.path.abspath(os.path.join(self.persist_path, "vector_index.json"))
+
+    def initialize_store(self):
+        """Initialize vector store in either persistent or in-memory mode."""
+        if self.db_type in ["persistent", "disk"]:
+            file_path = self._get_index_file_path()
+            dir_name = os.path.dirname(file_path)
+            try:
+                os.makedirs(dir_name, exist_ok=True)
+                # Check write permissions explicitly
+                test_file = os.path.join(dir_name, ".write_test")
+                with open(test_file, "w") as f:
+                    f.write("ok")
+                if os.path.exists(test_file):
+                    os.remove(test_file)
+            except Exception as e:
+                err = f"PERSISTENT_VECTOR_INIT_FAILURE: Cannot create/access persistent directory {dir_name}: {e}"
+                logger.error(err)
+                raise RuntimeError(err)
+
+            if os.path.exists(file_path):
+                self.load_from_disk(file_path)
+                logger.info(f"Loaded {len(self.chunks)} persistent chunks from {file_path}")
+            else:
+                # Initialize empty persistent index
+                self.chunks = []
+                self.chunk_embeddings = []
+                self.indexed_chunk_keys = set()
+                self.persist(file_path)
+                logger.info(f"Initialized new empty persistent vector index at {file_path}")
+        else:
+            # In-memory development mode
+            self.load_registered_statutory_chunks()
+            logger.info(f"Initialized in-memory vector store with {len(self.chunks)} baseline statutory chunks.")
+
+    def persist(self, path: Optional[str] = None):
+        """Persist current chunks, embeddings, and metadata to disk."""
+        target_file = path or self._get_index_file_path()
+        os.makedirs(os.path.dirname(target_file), exist_ok=True)
+
+        payload = {
+            "version": "1.0",
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "total_chunks": len(self.chunks),
+            "chunks": [c.model_dump() for c in self.chunks],
+            "embeddings": self.chunk_embeddings
+        }
+
+        temp_file = target_file + ".tmp"
+        try:
+            with open(temp_file, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            if os.path.exists(target_file):
+                os.remove(target_file)
+            os.rename(temp_file, target_file)
+            logger.info(f"Persisted {len(self.chunks)} chunks to {target_file}")
+        except Exception as e:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+            err = f"VECTOR_PERSIST_ERROR: Failed to persist vector index to {target_file}: {e}"
+            logger.error(err)
+            raise RuntimeError(err)
+
+    def load_from_disk(self, path: Optional[str] = None):
+        """Load chunks and embeddings from persistent disk file."""
+        target_file = path or self._get_index_file_path()
+        if not os.path.exists(target_file):
+            return
+
+        try:
+            with open(target_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            raw_chunks = data.get("chunks", [])
+            raw_embeddings = data.get("embeddings", [])
+
+            self.chunks = [EvidenceChunk(**c) for c in raw_chunks]
+            self.chunk_embeddings = raw_embeddings
+            self.indexed_chunk_keys = {
+                f"{c.chunk_id}:{c.checksum or ''}" for c in self.chunks
+            }
+        except Exception as e:
+            err = f"VECTOR_LOAD_ERROR: Could not load vector index from {target_file}: {e}"
+            logger.error(err)
+            raise RuntimeError(err)
+
+    def add_chunks(self, chunks: List[EvidenceChunk]) -> int:
+        """
+        Idempotently add new chunks to the vector store.
+        Calculates embeddings and persists to disk if persistent mode is active.
+        """
+        added_count = 0
+        for chunk in chunks:
+            key = f"{chunk.chunk_id}:{chunk.checksum or ''}"
+            if key in self.indexed_chunk_keys:
+                # Already indexed with same checksum (idempotent)
+                continue
+
+            vec = embeddings_provider.generate_embedding(chunk.text)
+            self.chunks.append(chunk)
+            self.chunk_embeddings.append(vec)
+            self.indexed_chunk_keys.add(key)
+            added_count += 1
+
+        if added_count > 0 and self.db_type in ["persistent", "disk"]:
+            self.persist()
+
+        return added_count
+        
+    def ingest_source_chunks(self, chunks: List[EvidenceChunk]) -> int:
+        """Alias for add_chunks."""
+        return self.add_chunks(chunks)
+
+    def delete_by_document_id(self, document_id: str) -> int:
+        """Delete all indexed chunks associated with a specific document_id."""
+        if not document_id:
+            return 0
+
+        initial_len = len(self.chunks)
+        keep_indices = [
+            i for i, c in enumerate(self.chunks) if c.document_id != document_id
+        ]
+
+        self.chunks = [self.chunks[i] for i in keep_indices]
+        self.chunk_embeddings = [self.chunk_embeddings[i] for i in keep_indices]
+        self.indexed_chunk_keys = {
+            f"{c.chunk_id}:{c.checksum or ''}" for c in self.chunks
+        }
+
+        deleted_count = initial_len - len(self.chunks)
+        if deleted_count > 0 and self.db_type in ["persistent", "disk"]:
+            self.persist()
+
+        logger.info(f"Deleted {deleted_count} chunks for document_id '{document_id}'")
+        return deleted_count
+
+    def delete_by_source_id(self, source_id: str) -> int:
+        """Delete all indexed chunks associated with a source_id."""
+        if not source_id:
+            return 0
+
+        initial_len = len(self.chunks)
+        keep_indices = [
+            i for i, c in enumerate(self.chunks) if c.source_id != source_id
+        ]
+
+        self.chunks = [self.chunks[i] for i in keep_indices]
+        self.chunk_embeddings = [self.chunk_embeddings[i] for i in keep_indices]
+        self.indexed_chunk_keys = {
+            f"{c.chunk_id}:{c.checksum or ''}" for c in self.chunks
+        }
+
+        deleted_count = initial_len - len(self.chunks)
+        if deleted_count > 0 and self.db_type in ["persistent", "disk"]:
+            self.persist()
+
+        logger.info(f"Deleted {deleted_count} chunks for source_id '{source_id}'")
+        return deleted_count
+
+    def ingest_document(
+        self,
+        source: LegalSourceMetadata,
+        raw_bytes: bytes,
+        content_type: str = "text/plain",
+        storage_ref: Optional[str] = None
+    ) -> IngestionResult:
+        """
+        Complete lifecycle: Ingest raw bytes -> compute SHA-256 -> chunk -> index embeddings -> persist.
+        """
+        res = ingestion_pipeline.ingest_document_bytes(
+            source=source,
+            raw_bytes=raw_bytes,
+            content_type=content_type,
+            storage_ref=storage_ref
+        )
+
+        if not res.success:
+            return res
+
+        if res.is_duplicate:
+            # Already indexed and identical
+            return res
+
+        # Generate fresh chunks from parsed sections
+        parsed_sections = ingestion_pipeline.parse_document_text(raw_bytes, content_type=content_type)
+        chunks = ingestion_pipeline.process_and_chunk_source(
+            source=source,
+            raw_text_sections=parsed_sections,
+            document_id=res.document_id,
+            checksum=res.checksum
+        )
+
+        self.add_chunks(chunks)
+        return res
 
     def load_registered_statutory_chunks(self):
-        """Loads and ingests authoritative legal chunks from SourceRegistry."""
+        """Loads and ingests authoritative baseline legal chunks from SourceRegistry."""
         self.chunks.clear()
         self.chunk_embeddings.clear()
-        # Raw statutory text sections mapped to registered source IDs
+        self.indexed_chunk_keys.clear()
+
+        # Baseline seed corpora
         statutory_corpus = {
             "SRC_IN_PATENTS_ACT_1970": [
                 {
@@ -98,19 +310,19 @@ class VectorStoreInterface:
             "SRC_IN_IPINDIA_TK_GUIDELINES": [
                 {
                     "section": "CGPDTM Examination Manual",
-                    "content": "IP India Guidelines for Examination of Patent Applications relating to Traditional Knowledge require patent examiners to search TKDL databases and enforce strict non-patentability under Section 3(p) unless unexpected synergistic efficacy is proven with comparative experimental data under Section 3(e)."
+                    "content": "IP India Guidelines for Examination of Patent Applications relating to Traditional Knowledge mandate that combinations of known plants with known therapeutic effects are non-patentable under Section 3(e) and 3(p) unless synergistic quantitative efficacy is demonstrated via pharmacological assay data."
                 }
             ],
             "SRC_IN_NBA_ABS_GUIDELINES": [
                 {
-                    "section": "ABS Regulations & Benefit Sharing Slabs",
-                    "content": "National Biodiversity Authority (NBA) Access and Benefit Sharing Guidelines mandate Form I approval for access and Form III approval for IP filing. Benefit sharing is calculated at 0.1% to 0.5% of annual gross ex-factory sale of the commercialized biological product."
+                    "section": "Regulation 2 & 3",
+                    "content": "Regulation 2 & 3 of NBA ABS Guidelines define benefit-sharing percentages for commercial utilization of biological resources: 0.1% to 0.5% of ex-factory sale price, or 3.0% to 5.0% of upfront fee received for transfer of IP rights."
                 }
             ],
             "SRC_IN_FSSAI_AYURVEDA_AAHAR_2022": [
                 {
-                    "section": "Regulation 3 & 4",
-                    "content": "Food Safety and Standards (Ayurveda Aahar) Regulations 2022 mandate that Ayurveda Aahar food products must be prepared in accordance with Schedule A authoritative books and display the mandatory Ayurveda Aahar logo and disclaimer."
+                    "section": "Regulation 3 & Schedule A",
+                    "content": "Regulation 3 of FSSAI (Ayurveda Aahar) Regulations 2022 defines Ayurveda Aahar as food prepared in accordance with recipes or processes described in the authoritative books of Ayurveda listed in Schedule A. Formulations must display the official Ayurveda Aahar logo and cannot claim synthetic medicinal drug efficacy."
                 }
             ],
             "SRC_INT_NAGOYA_PROTOCOL_2014": [
@@ -155,6 +367,16 @@ class VectorStoreInterface:
                     "content": "Article 52(2)(a) of the European Patent Convention excludes mere discoveries of natural substances from patentability. Article 54 defines state of the art as anything made available to the public by means of written or oral description anywhere in the world before European filing date."
                 }
             ],
+            "SRC_DE_PATENT_ACT_PATG": [
+                {
+                    "section": "Section 1 & 1a PatG",
+                    "content": "Section 1 of the German Patent Act (Patentgesetz - PatG) grants patents for inventions in all fields of technology that are new, involve an inventive step, and are susceptible of industrial application. Section 1a provides that the human body and simple discoveries of natural elements or substances are not patentable, whereas an element isolated from its natural environment or technically produced may constitute a patentable invention."
+                },
+                {
+                    "section": "Section 2a PatG",
+                    "content": "Section 2a of the German Patent Act excludes plant and animal varieties and essentially biological processes from patentability, while allowing biotechnological inventions concerning biological material if technical feasibility is not confined to a specific variety, subject to EU Directive 98/44/EC and prior art disclosures."
+                }
+            ],
             "SRC_IN_AYURVEDIC_PHARMACOPOEIA": [
                 {
                     "section": "Monographs & Quality Standards",
@@ -171,25 +393,107 @@ class VectorStoreInterface:
                     self.chunks.append(chunk)
                     vec = embeddings_provider.generate_embedding(chunk.text)
                     self.chunk_embeddings.append(vec)
+                    self.indexed_chunk_keys.add(f"{chunk.chunk_id}:{chunk.checksum or ''}")
 
         logger.info(f"Loaded {len(self.chunks)} metadata-rich chunks into VectorStore.")
+
+    def is_source_applicable(
+        self,
+        chunk: EvidenceChunk,
+        target_jurisdiction: str = "India",
+        target_country: Optional[str] = None
+    ) -> bool:
+        """
+        Determines whether a legal source chunk is legally applicable to the target jurisdiction and country.
+        """
+        norm_jur = (target_jurisdiction or "India").strip().lower()
+        norm_country = (target_country or "").strip().lower() if target_country else None
+        if norm_country in ["", "none", "null", "global", "unknown", "unspecified"]:
+            norm_country = None
+
+        chunk_jur = (chunk.jurisdiction or "").strip().lower()
+        chunk_country = (chunk.country or "").strip().lower() if chunk.country else None
+        chunk_region = (chunk.region or "").strip().lower() if chunk.region else None
+        chunk_applicable = [c.lower() for c in (chunk.applicable_countries or [])]
+        chunk_type = (chunk.source_type or "").strip().lower()
+
+        # 1. India Domestic Jurisdiction
+        if norm_jur == "india":
+            # Allow India-specific statutory sources
+            if chunk_jur == "india" or chunk_country == "india":
+                return True
+            # Allow international treaties applicable to India
+            if chunk_type == "treaty" or chunk_region in ["international", "global"]:
+                return True
+            # Disallow foreign country domestic statutes (e.g. US 35 USC or German PatG)
+            return False
+
+        # 2. International Jurisdiction
+        if norm_jur == "international":
+            # Disallow pure Indian domestic statutes/guidelines unless international treaty
+            if chunk_jur == "india" and chunk_type not in ["treaty"]:
+                return False
+
+            # If specific target country is given (e.g., Germany, USA, UK)
+            if norm_country:
+                # Direct country match
+                if chunk_country and chunk_country == norm_country:
+                    return True
+
+                # Direct list of applicable countries (e.g. Germany in EPC)
+                if norm_country in chunk_applicable:
+                    return True
+
+                # Regional applicability (e.g. Germany in EU/Europe)
+                eu_countries = [
+                    "germany", "france", "uk", "italy", "spain", "netherlands", "switzerland",
+                    "austria", "sweden", "belgium", "denmark", "poland", "ireland", "portugal",
+                    "finland", "greece", "czech republic", "hungary", "romania", "bulgaria",
+                    "slovakia", "croatia", "slovenia", "eu", "europe"
+                ]
+                if norm_country in eu_countries and chunk_region in ["eu", "europe", "european union"]:
+                    return True
+
+                # Genuinely International Treaties & Global Regimes (WIPO PCT, Nagoya Protocol, TRIPS, CBD, etc.)
+                if chunk_type == "treaty" or chunk_region in ["international", "global"]:
+                    return True
+
+                # Mismatched foreign domestic law (e.g. US 35 USC for Germany, or German PatG for USA)
+                if chunk_country and chunk_country != norm_country:
+                    return False
+
+                return False
+
+            # If target country is unknown / unspecified
+            else:
+                # Allow genuinely international treaties and global regimes
+                if chunk_type == "treaty" or chunk_region in ["international", "global"]:
+                    return True
+                # Disallow country-specific domestic statutes when no country is specified
+                return False
+
+        return True
 
     def search_chunks(
         self,
         query: str,
         jurisdiction: str = "India",
+        country: Optional[str] = None,
         ip_domains: List[str] = None,
         source_types: List[str] = None,
         top_k: int = 4
     ) -> List[EvidenceChunk]:
-        """Execute hybrid search (BM25 keyword + cosine similarity) filtered by jurisdiction."""
+        """Execute hybrid search (BM25 keyword + cosine similarity) filtered by jurisdiction and country."""
+        if not self.chunks:
+            return []
+
         query_vec = embeddings_provider.generate_embedding(query)
         query_words = set(query.lower().split())
         scored_results = []
 
         for idx, chunk in enumerate(self.chunks):
-            # 1. Jurisdiction Filter (Isolate India vs International strictly)
-            if jurisdiction and chunk.jurisdiction.lower() != jurisdiction.lower():
+            # 1. Jurisdiction & Country Metadata Applicability Filter
+            if not self.is_source_applicable(chunk, target_jurisdiction=jurisdiction, target_country=country):
                 continue
 
             # Calculate BM25 keyword score
@@ -200,12 +504,26 @@ class VectorStoreInterface:
             # Calculate Cosine Vector score
             cosine_score = embeddings_provider.compute_cosine_similarity(query_vec, self.chunk_embeddings[idx])
 
-            # Section boost
+            # Section, article, and title boost
             boost = 0.0
             if any(w in chunk.title.lower() for w in query_words):
-                boost += 0.2
+                boost += 0.3
             if chunk.section and any(w in chunk.section.lower() for w in query_words):
                 boost += 0.3
+            if chunk.article and any(w in chunk.article.lower() for w in query_words):
+                boost += 0.3
+
+            # Country-specific relevance boost
+            norm_country = (country or "").strip().lower()
+            if norm_country and norm_country not in ["", "none", "null", "global", "unknown"]:
+                if chunk.country and chunk.country.lower() == norm_country:
+                    boost += 0.25
+                elif norm_country in [c.lower() for c in (chunk.applicable_countries or [])]:
+                    boost += 0.20
+                elif chunk.source_type == "treaty" or (chunk.region and chunk.region.lower() in ["international", "global"]):
+                    boost += 0.18
+            elif jurisdiction.lower() == "international" and (chunk.source_type == "treaty" or (chunk.region and chunk.region.lower() in ["international", "global"])):
+                boost += 0.20
 
             final_score = (0.5 * bm25_score) + (0.3 * cosine_score) + boost
 

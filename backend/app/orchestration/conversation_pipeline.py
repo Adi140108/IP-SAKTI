@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 from app.schemas.chat import ChatRequest, ChatResponse, Citation
 from app.case.models import CaseState
 from app.db.firestore import firestore_service
-from app.ai.gemma.provider import gemma_provider
+from app.ai.groq.provider import groq_provider
 from app.ai.bhashini.service import bhashini_service
 from app.orchestration.case_orchestrator import case_orchestrator
 from app.modules.classification.engine import classification_engine
@@ -41,6 +41,23 @@ class ConversationPipeline:
             if asr_text:
                 user_text = asr_text
                 jur_norm = jurisdiction_engine.detect_from_text(user_text, request.jurisdiction, request.country)
+            elif not user_text:
+                logger.error("Bhashini ASR transcription failed for voice input.")
+                return ChatResponse(
+                    case_id=case_id,
+                    message_id=str(uuid.uuid4())[:8],
+                    answer="**Voice Recognition Notice**: Unable to transcribe your voice message using Bhashini ASR. Please check your audio input or type your message.",
+                    jurisdiction=request.jurisdiction,
+                    country=request.country,
+                    relevant_ip_domains=[],
+                    product_classification="unknown",
+                    citations=[],
+                    confidence_score=0.0,
+                    confidence_explanation="ASR failure: Audio payload could not be transcribed by Bhashini.",
+                    next_question="Please type your question directly.",
+                    requires_human_escalation=False,
+                    safe_abstention=True
+                )
 
         # 2. Retrieve or Initialize CaseState
         existing_data = await firestore_service.get_case_state(case_id)
@@ -133,14 +150,14 @@ Return JSON:
         raw_citations = []
 
         try:
-            gemma_res = await gemma_provider.generate_structured_json(user_prompt, system_prompt)
-            answer_val = gemma_res.get("answer", "")
+            groq_res = await groq_provider.generate_structured_json(user_prompt, system_prompt)
+            answer_val = groq_res.get("answer", "")
             if isinstance(answer_val, list):
                 raw_answer = "\n".join([f"- {str(item)}" for item in answer_val])
             else:
                 raw_answer = str(answer_val or "")
 
-            for c in gemma_res.get("citations", []):
+            for c in groq_res.get("citations", []):
                 raw_citations.append(Citation(
                     source=c.get("source", "Authoritative Source"),
                     section_or_rule=c.get("section_or_rule"),
@@ -149,7 +166,7 @@ Return JSON:
                     is_authoritative=True
                 ))
         except Exception as e:
-            logger.warning(f"Gemma generation error: {e}. Assembling fallback guidance directly from statutory evidence context.")
+            logger.warning(f"Groq generation error: {e}. Assembling fallback guidance directly from statutory evidence context.")
 
         if not raw_answer and not evidence_context.is_empty():
             sections_summary = []
@@ -187,7 +204,9 @@ Return JSON:
         validated_cits, is_valid_cit, unsupported = citation_validator.validate_claims_and_citations(
             raw_citations=raw_citations,
             evidence_context=evidence_context,
-            target_jurisdiction=case_state.jurisdiction
+            target_jurisdiction=case_state.jurisdiction,
+            target_country=case_state.country,
+            extracted_claims=extracted_claims
         )
 
         # 8. Evidence Confidence & Safe Abstention Check
@@ -223,11 +242,15 @@ Return JSON:
 
         # 10. Multilingual Translation & TTS Audio
         if lang != "en":
-            final_answer = await bhashini_service.translate_text(final_answer, source_lang="en", target_lang=lang)
-            if next_question:
-                next_question = await bhashini_service.translate_text(next_question, source_lang="en", target_lang=lang)
+            try:
+                final_answer = await bhashini_service.translate_text(final_answer, source_lang="en", target_lang=lang)
+                if next_question:
+                    next_question = await bhashini_service.translate_text(next_question, source_lang="en", target_lang=lang)
+            except Exception as e:
+                logger.error(f"Response translation failed (en -> {lang}): {e}")
 
-        audio_output = await bhashini_service.text_to_speech(final_answer[:200], target_lang=lang) if request.audio_base64 else None
+        wants_audio = bool(request.audio_base64 or getattr(request, "enable_audio_output", False))
+        audio_output = await bhashini_service.text_to_speech(final_answer[:200], target_lang=lang) if wants_audio else None
 
         # Save updated state
         await firestore_service.save_case_state(case_id, case_state.model_dump())

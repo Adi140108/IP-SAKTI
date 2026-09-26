@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any, List, Optional
-from app.ai.gemma.provider import gemma_provider
+from app.ai.groq.provider import groq_provider
 from app.case.models import CaseState, ExtractionResult
 
 logger = logging.getLogger("IP-SAKTI.CaseExtractor")
@@ -67,14 +67,49 @@ Return ONLY a JSON object:
         # 0. Deterministic Rule Matching for Option Chips & Explicit Keywords
         lower_msg = latest_message.lower().strip()
         deterministic_updates: Dict[str, Any] = {}
+        detected_contradictions: List[str] = []
+
+        # Handle 'I don't know' / 'Not sure' / 'Skip'
+        is_unknown_response = lower_msg in [
+            "i don't know", "i dont know", "dont know", "not sure", "unknown", "n/a", "na",
+            "not applicable", "skip", "prefer not to say", "no idea", "unspecified", "pass"
+        ]
+
+        if is_unknown_response:
+            # Check what was previously asked
+            prev_q = ""
+            if current_state.conversation_history:
+                last_turn = current_state.conversation_history[-1]
+                if isinstance(last_turn, dict):
+                    prev_q = str(last_turn.get("question") or last_turn.get("next_question") or "").lower()
+
+            if "classical" in prev_q or "text" in prev_q or "traditional knowledge" in prev_q or "3(p)" in prev_q:
+                deterministic_updates["classical_reference"] = "Unknown / Not Disclosed"
+                deterministic_updates["traditional_knowledge_involved"] = False
+            elif "biological" in prev_q or "abs" in prev_q or "nba" in prev_q or "pic" in prev_q or "mat" in prev_q:
+                deterministic_updates["biological_resources_involved"] = False
+            elif "country" in prev_q or "foreign" in prev_q or "market" in prev_q or "pct" in prev_q:
+                deterministic_updates["country"] = "General International Market"
+            elif "ingredient" in prev_q or "herb" in prev_q:
+                deterministic_updates["ingredients"] = ["Botanical Formulation (Ingredients Unspecified)"]
+            elif "dosage" in prev_q or "form" in prev_q or "product" in prev_q:
+                deterministic_updates["product_type"] = "Ayurvedic Product (Unspecified Form)"
+            elif "objective" in prev_q or "protection" in prev_q:
+                deterministic_updates["intellectual_property_objective"] = ["General Legal / IP Guidance"]
 
         if "no, novel scientific formula" in lower_msg or "novel scientific formula" in lower_msg or "no traditional knowledge" in lower_msg or "no tk" in lower_msg or "novel proprietary" in lower_msg:
             deterministic_updates["traditional_knowledge_involved"] = False
             deterministic_updates["classical_reference"] = "Novel Proprietary Formula"
+            # Check for contradiction with existing classical reference
+            if current_state.classical_reference and "classical" in current_state.classical_reference.lower():
+                detected_contradictions.append("Contradiction: User previously stated classical Ayurvedic text basis, but now stated it is a novel proprietary formula.")
 
         elif "yes, traditional knowledge involved" in lower_msg or "traditional knowledge involved" in lower_msg or "classical text reference" in lower_msg:
             deterministic_updates["traditional_knowledge_involved"] = True
             deterministic_updates["classical_reference"] = "Classical Ayurvedic Text Reference"
+            # Check for contradiction with existing proprietary reference
+            if current_state.classical_reference and "novel" in current_state.classical_reference.lower():
+                detected_contradictions.append("Contradiction: User previously stated a novel proprietary formula, but now stated classical Ayurvedic traditional knowledge basis.")
 
         if "yes, indian biological resources" in lower_msg or "indian biological resources used" in lower_msg or "sourcing from india" in lower_msg:
             deterministic_updates["biological_resources_involved"] = True
@@ -97,7 +132,7 @@ Return ONLY a JSON object:
             deterministic_updates["jurisdiction"] = "International"
 
         try:
-            res = await gemma_provider.generate_structured_json(prompt, system_prompt)
+            res = await groq_provider.generate_structured_json(prompt, system_prompt)
             updates = res.get("extracted_updates", {})
             if not isinstance(updates, dict):
                 updates = {}
@@ -106,10 +141,15 @@ Return ONLY a JSON object:
             for k, v in deterministic_updates.items():
                 updates[k] = v
 
+            contradictions = res.get("contradictions", [])
+            for c in detected_contradictions:
+                if c not in contradictions:
+                    contradictions.append(c)
+
             return ExtractionResult(
                 extracted_updates=updates,
                 uncertain_fields=res.get("uncertain_fields", []),
-                contradictions=res.get("contradictions", [])
+                contradictions=contradictions
             )
         except Exception as e:
             logger.warning(f"Structured extraction error: {e}. Using rule-based parameter extraction.")

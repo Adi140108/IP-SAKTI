@@ -2,19 +2,38 @@
 
 import { useState, useEffect } from 'react';
 import { fetchLegalSources } from '@/lib/api';
+import { LegalSourceItem } from '@/types';
 
 export default function SourcesPage() {
-  const [sources, setSources] = useState<any[]>([]);
+  const [sources, setSources] = useState<LegalSourceItem[]>([]);
   const [jurisdiction, setJurisdiction] = useState<string>('India');
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    setLoading(true);
+    let isMounted = true;
     fetchLegalSources(jurisdiction)
-      .then((res) => setSources(res))
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
+      .then((res) => {
+        if (isMounted) setSources(res);
+      })
+      .catch((err) => {
+        console.error(err);
+        if (isMounted) setSources([]);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [jurisdiction]);
+
+  const handleSwitchJurisdiction = (newJurisdiction: string) => {
+    if (newJurisdiction !== jurisdiction) {
+      setLoading(true);
+      setJurisdiction(newJurisdiction);
+    }
+  };
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto pb-10">
@@ -28,7 +47,7 @@ export default function SourcesPage() {
 
         <div className="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
           <button
-            onClick={() => setJurisdiction('India')}
+            onClick={() => handleSwitchJurisdiction('India')}
             className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               jurisdiction === 'India'
                 ? 'bg-amber-500 text-white dark:text-slate-950 shadow-md shadow-amber-500/20'
@@ -38,7 +57,7 @@ export default function SourcesPage() {
             🇮🇳 INDIA LAW
           </button>
           <button
-            onClick={() => setJurisdiction('International')}
+            onClick={() => handleSwitchJurisdiction('International')}
             className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               jurisdiction === 'International'
                 ? 'bg-cyan-500 text-white dark:text-slate-950 shadow-md shadow-cyan-500/20'
@@ -77,7 +96,7 @@ export default function SourcesPage() {
               </div>
 
               <p className="text-xs text-slate-700 dark:text-slate-300 italic bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 leading-relaxed">
-                "{src.sample_content}"
+                &ldquo;{src.sample_content}&rdquo;
               </p>
             </div>
           ))}

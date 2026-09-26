@@ -284,7 +284,7 @@ ${
                       <span className="text-slate-900 dark:text-white">{c.source}</span>
                       <span className="text-emerald-700 dark:text-emerald-400 font-mono text-[10px]">{c.section_or_rule || 'Statute Section'}</span>
                     </div>
-                    {c.snippet && <div className="text-slate-600 dark:text-slate-400 italic">"{c.snippet}"</div>}
+                    {c.snippet && <div className="text-slate-600 dark:text-slate-400 italic">&ldquo;{c.snippet}&rdquo;</div>}
                   </div>
                 ))
               ) : (

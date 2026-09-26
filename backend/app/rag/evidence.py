@@ -4,9 +4,16 @@ from pydantic import BaseModel, Field
 class EvidenceChunk(BaseModel):
     chunk_id: str
     source_id: str
+    document_id: Optional[str] = None
+    checksum: Optional[str] = None
     title: str
     authority: str
     jurisdiction: str
+    country: Optional[str] = None
+    region: Optional[str] = None
+    applicable_countries: List[str] = Field(default_factory=list)
+    source_type: str = "statute"
+    authority_level: str = "statutory"
     section: Optional[str] = ""
     article: Optional[str] = ""
     effective_date: Optional[str] = ""

@@ -4,15 +4,14 @@ from typing import Dict, Any, List, Optional
 import httpx
 from app.config import settings
 from app.ai.base import LLMProvider
-from app.ai.groq.provider import groq_provider
 
-logger = logging.getLogger("IP-SAKTI.LLMProvider")
+logger = logging.getLogger("IP-SAKTI.GemmaVision")
 
 class GemmaProvider(LLMProvider):
     """
-    Unified Hybrid Provider for IP-SAKTI.
-    PRIMARY: Groq API (openai/gpt-oss-120b / qwen/qwen3.8-27b) for lightning-fast, highly authoritative reasoning.
-    FALLBACK: Gemma 4 12B via local Ollama API.
+    Local Gemma / Ollama Multimodal Provider.
+    Retained EXCLUSIVELY for local multimodal vision and OCR fallback capabilities.
+    Normal text and structured legal reasoning is handled directly by GroqProvider.
     """
 
     def __init__(self):
@@ -21,10 +20,7 @@ class GemmaProvider(LLMProvider):
         self.timeout = settings.OLLAMA_TIMEOUT_SECONDS
 
     async def check_availability(self) -> Dict[str, Any]:
-        """Check availability of both primary Groq API and fallback Gemma/Ollama service."""
-        groq_status = await groq_provider.check_availability()
-        ollama_status = {"available": False}
-        
+        """Check availability of local Ollama vision service."""
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 res = await client.get(f"{self.base_url}/api/tags")
@@ -32,29 +28,19 @@ class GemmaProvider(LLMProvider):
                     models_info = res.json().get("models", [])
                     available_models = [m.get("name") for m in models_info]
                     model_found = any(self.model.split(':')[0] in m for m in available_models)
-                    ollama_status = {
+                    return {
                         "available": True,
                         "model": self.model,
                         "model_present": model_found,
                         "all_models": available_models
                     }
                 else:
-                    ollama_status = {"available": False, "error": f"Ollama HTTP {res.status_code}"}
+                    return {"available": False, "error": f"Ollama HTTP {res.status_code}"}
         except Exception as e:
-            ollama_status = {"available": False, "error": str(e)}
-
-        primary_available = groq_status.get("available", False)
-        active_provider = "groq" if primary_available else ("ollama" if ollama_status.get("available") else "none")
-
-        return {
-            "available": primary_available or ollama_status.get("available", False),
-            "active_provider": active_provider,
-            "groq": groq_status,
-            "ollama": ollama_status
-        }
+            return {"available": False, "error": str(e)}
 
     async def supports_vision(self) -> bool:
-        """Check if vision is supported via local Gemma Vision fallback."""
+        """Check if vision is supported via local Gemma Vision."""
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 res = await client.get(f"{self.base_url}/api/tags")
@@ -66,24 +52,7 @@ class GemmaProvider(LLMProvider):
         return False
 
     async def generate_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        """
-        Generate raw text response.
-        Attempts Groq API primary first; falls back to Gemma/Ollama on error.
-        """
-        # 1. Primary Attempt: Groq API
-        if settings.GROQ_API_KEY:
-            try:
-                text = await groq_provider.generate_text(prompt=prompt, system_prompt=system_prompt)
-                logger.info("Successfully generated text via Groq API (Primary LLM Provider)")
-                return text
-            except Exception as e:
-                logger.warning(f"Groq API primary provider failed ({e}). Falling back to Gemma 4 12B via Ollama.")
-
-        # 2. Secondary Fallback: Gemma 4 12B via Ollama
-        return await self._generate_text_ollama(prompt=prompt, system_prompt=system_prompt)
-
-    async def _generate_text_ollama(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        """Generate text using local Ollama instance."""
+        """Generate text using local Ollama instance (retained for standalone local tests)."""
         url = f"{self.base_url}/api/generate"
         payload = {
             "model": self.model,
@@ -103,32 +72,17 @@ class GemmaProvider(LLMProvider):
                 res = await client.post(url, json=payload)
                 if res.status_code == 200:
                     data = res.json()
-                    logger.info("Successfully generated text via Gemma/Ollama (Fallback LLM Provider)")
                     return data.get("response", "").strip()
                 else:
-                    logger.error(f"Ollama returned status {res.status_code}: {res.text}")
                     raise RuntimeError(f"Ollama API Error: HTTP {res.status_code}")
         except Exception as e:
             logger.error(f"Gemma/Ollama call failed ({type(e).__name__}): {e or repr(e)}")
             raise e
 
     async def generate_structured_json(self, prompt: str, system_prompt: str) -> Dict[str, Any]:
-        """
-        Generate structured JSON response.
-        Attempts Groq API primary first; falls back to Gemma/Ollama on error.
-        """
-        # 1. Primary Attempt: Groq API
-        if settings.GROQ_API_KEY:
-            try:
-                structured_data = await groq_provider.generate_structured_json(prompt=prompt, system_prompt=system_prompt)
-                logger.info("Successfully generated structured JSON via Groq API")
-                return structured_data
-            except Exception as e:
-                logger.warning(f"Groq API structured JSON failed ({e}). Falling back to Gemma/Ollama.")
-
-        # 2. Secondary Fallback: Gemma 4 12B via Ollama
+        """Generate structured JSON via local Ollama instance (retained for standalone local tests)."""
         full_system_prompt = system_prompt + "\n\nCRITICAL: Respond ONLY with valid JSON. Do not include markdown codeblocks, explanations, or prose."
-        raw_output = await self._generate_text_ollama(prompt=prompt, system_prompt=full_system_prompt)
+        raw_output = await self.generate_text(prompt=prompt, system_prompt=full_system_prompt)
         
         cleaned_output = raw_output.strip()
         if cleaned_output.startswith("```json"):
@@ -142,7 +96,6 @@ class GemmaProvider(LLMProvider):
         try:
             return json.loads(cleaned_output)
         except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse Gemma JSON directly. Output snippet: {cleaned_output[:200]}")
             first_brace = cleaned_output.find('{')
             last_brace = cleaned_output.rfind('}')
             if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
@@ -180,3 +133,4 @@ class GemmaProvider(LLMProvider):
             raise e
 
 gemma_provider = GemmaProvider()
+

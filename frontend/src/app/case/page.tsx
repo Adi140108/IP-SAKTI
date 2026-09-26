@@ -2,41 +2,30 @@
 
 import { useState, useEffect } from 'react';
 import { getCase, updateCase } from '@/lib/api';
-import { CaseState } from '@/types';
+import { CaseState, ConversationHistoryItem } from '@/types';
 import { FORMULATION_TIERS, getTierFromClassification } from '@/lib/formulationTaxonomy';
 import FormulationPathwayModal from '@/components/FormulationPathwayModal';
 import OfficialFormsModal from '@/components/OfficialFormsModal';
 import DossierExportModal from '@/components/DossierExportModal';
+
+interface ExtendedHistoryItem extends ConversationHistoryItem {
+  user_message?: string;
+  assistant_answer?: string;
+  question?: string;
+  next_question?: string;
+}
 
 export default function CaseWorkspacePage() {
   const [caseIdInput, setCaseIdInput] = useState<string>('');
   const [caseState, setCaseState] = useState<CaseState | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [localHistory, setLocalHistory] = useState<any[]>([]);
+  const [localHistory, setLocalHistory] = useState<ExtendedHistoryItem[]>([]);
 
   // Modals state
   const [showPathwayModal, setShowPathwayModal] = useState<boolean>(false);
   const [showFormsModal, setShowFormsModal] = useState<boolean>(false);
   const [showDossierModal, setShowDossierModal] = useState<boolean>(false);
-
-  useEffect(() => {
-    const savedCaseId = localStorage.getItem('ip_sakti_active_case_id');
-    const savedHistory = localStorage.getItem('ip_sakti_chat_history');
-
-    if (savedHistory) {
-      try {
-        setLocalHistory(JSON.parse(savedHistory));
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    if (savedCaseId) {
-      setCaseIdInput(savedCaseId);
-      handleFetchCase(savedCaseId);
-    }
-  }, []);
 
   const handleFetchCase = async (id: string) => {
     if (!id.trim()) return;
@@ -45,13 +34,35 @@ export default function CaseWorkspacePage() {
     try {
       const data = await getCase(id);
       setCaseState(data);
-    } catch (err) {
+    } catch {
       setError('Case ID not found in Firestore / Local DB repository.');
       setCaseState(null);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const savedCaseId = localStorage.getItem('ip_sakti_active_case_id');
+      const savedHistory = localStorage.getItem('ip_sakti_chat_history');
+
+      if (savedHistory) {
+        try {
+          setLocalHistory(JSON.parse(savedHistory));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      if (savedCaseId) {
+        setCaseIdInput(savedCaseId);
+        handleFetchCase(savedCaseId);
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleUpdateClassification = async (tierId: string) => {
     if (!caseState?.case_id) return;
@@ -66,12 +77,12 @@ export default function CaseWorkspacePage() {
     }
   };
 
-  const getEffectiveRecords = () => {
+  const getEffectiveRecords = (): ExtendedHistoryItem[] => {
     if (localHistory && localHistory.length > 0) {
       return localHistory;
     }
     if (caseState && caseState.conversation_history && caseState.conversation_history.length > 0) {
-      return caseState.conversation_history;
+      return caseState.conversation_history as ExtendedHistoryItem[];
     }
     return [];
   };
@@ -148,104 +159,90 @@ export default function CaseWorkspacePage() {
 
       {caseState && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            {/* Main Context Card */}
-            <div className="md:col-span-2 glass-panel p-6 space-y-6 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
-                <div>
-                  <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">Case ID</span>
-                  <div className="text-xl font-mono font-bold text-emerald-700 dark:text-emerald-400">{caseState.case_id}</div>
-                </div>
-                <span className="px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 text-xs font-bold uppercase">
-                  Stage: {caseState.conversation_stage}
+            {/* Case Parameters Card */}
+            <div className="glass-panel p-6 space-y-4 lg:col-span-2 border-t-4 border-emerald-500 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                <span className="text-xs font-mono text-emerald-800 dark:text-emerald-400 font-bold">
+                  CASE ID: #{caseState.case_id}
+                </span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                  {caseState.updated_at || 'Active Session'}
                 </span>
               </div>
 
-              {/* 6-Tier Formulation Card */}
-              <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800/60 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5">
-                    <span>🏛️</span> 6-Tier Legal Formulation Category
-                  </span>
-                  <button
-                    onClick={() => setShowPathwayModal(true)}
-                    className="text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
-                  >
-                    Change Category ➔
-                  </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div className="space-y-1">
+                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Jurisdiction:</span>
+                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.jurisdiction} {caseState.country ? `(${caseState.country})` : ''}</p>
                 </div>
-
-                <div className="flex items-center justify-between">
-                  <h4 className="font-extrabold text-base text-slate-900 dark:text-white">
-                    {activeTier.label}
-                  </h4>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-                    {activeTier.badge}
-                  </span>
+                <div className="space-y-1">
+                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Language:</span>
+                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.language.toUpperCase()}</p>
                 </div>
-
-                <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                  <strong>IP Posture:</strong> {activeTier.ipPosture}
-                </p>
-
-                <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-                  <strong>ABS & Regulatory:</strong> {activeTier.absPosture} • {activeTier.regulatoryPathway}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold text-[10px]">Jurisdiction</span>
-                  <div className="font-bold text-slate-800 dark:text-slate-200">{caseState.jurisdiction} {caseState.country ? `(${caseState.country})` : ''}</div>
+                <div className="space-y-1">
+                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Product Type:</span>
+                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.product_type || 'Unspecified'}</p>
                 </div>
-
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold text-[10px]">Active Herbal Ingredients</span>
-                  <div className="font-bold text-emerald-700 dark:text-emerald-400 truncate">
-                    {caseState.ingredients && caseState.ingredients.length > 0 ? caseState.ingredients.join(', ') : 'Not specified'}
-                  </div>
+                <div className="space-y-1">
+                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Classical Basis (TK):</span>
+                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.classical_reference || 'None specified'}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Traditional Knowledge:</span>
+                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.traditional_knowledge_involved ? 'Yes' : 'No / Uncertain'}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Indian Bio-Resources (ABS):</span>
+                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.biological_resources_involved ? 'Yes (NBA Clearance)' : 'No / Exempt'}</p>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-400">Known Case Parameters:</h4>
-                <div className="space-y-1.5">
-                  {caseState.known_information && caseState.known_information.length > 0 ? (
-                    caseState.known_information.map((item, idx) => (
-                      <div key={idx} className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-950 text-xs text-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-800/80">
-                        ✓ {item}
-                      </div>
+              {/* Active Herbs */}
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold">Active Herbs & Biological Ingredients:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {caseState.ingredients && caseState.ingredients.length > 0 ? (
+                    caseState.ingredients.map((ing, i) => (
+                      <span key={i} className="px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/60 text-xs font-semibold">
+                        🌿 {ing}
+                      </span>
                     ))
                   ) : (
-                    <div className="text-xs text-slate-500 dark:text-slate-400 italic">No specific known information parameters recorded yet.</div>
+                    <span className="text-xs text-slate-500 italic">No specific herbs extracted yet.</span>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Missing Information Tracker Card */}
-            <div className="glass-panel p-6 space-y-4 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-2">
-                <span>📋</span> Parameter Tracking
-              </h3>
-              <p className="text-xs text-slate-600 dark:text-slate-400">
-                Current parameter status tracked across questioning turns:
-              </p>
+            {/* Classification & Pathway Summary Sidebar */}
+            <div className="glass-panel p-6 space-y-4 border-t-4 border-amber-500 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-amber-700 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>🏛️</span> Classification
+                  </span>
+                  <button
+                    onClick={() => setShowPathwayModal(true)}
+                    className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                  >
+                    Modify ➔
+                  </button>
+                </div>
 
-              <div className="space-y-2 pt-2">
-                {caseState.missing_information && caseState.missing_information.length > 0 ? (
-                  caseState.missing_information.map((field) => (
-                    <div key={field} className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/40 text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
-                      <span className="font-semibold uppercase text-[11px]">• {field.replace(/_/g, ' ')}</span>
-                      <span className="text-[10px] text-amber-800 dark:text-amber-400 font-bold uppercase px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950">Needed</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800/40 text-xs text-emerald-800 dark:text-emerald-300 font-bold">
-                    ✓ All core case parameters fully satisfied!
-                  </div>
-                )}
+                <div className="font-black text-slate-900 dark:text-white text-base">
+                  {activeTier.label}
+                </div>
+
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {activeTier.ipPosture}
+                </p>
+
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
+                  <div className="font-bold text-slate-700 dark:text-slate-300">Statutory Authority:</div>
+                  <div className="text-[11px] font-mono text-emerald-700 dark:text-emerald-400">{activeTier.statutoryBasis}</div>
+                </div>
               </div>
 
               {/* One-Click Action in Sidebar */}
@@ -274,9 +271,9 @@ export default function CaseWorkspacePage() {
 
             {effectiveRecords.length > 0 ? (
               <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                {effectiveRecords.map((item: any, idx: number) => {
-                  const isUser = item.sender === 'user' || item.user_message;
-                  const textContent = item.text || item.user_message || item.data?.answer || item.assistant_answer || item.question;
+                {effectiveRecords.map((item, idx: number) => {
+                  const isUser = item.sender === 'user' || Boolean(item.user_message);
+                  const textContent = item.text || item.user_message || item.data?.answer || item.assistant_answer || item.question || item.content;
                   const questionAsked = item.data?.next_question || item.next_question || item.question;
 
                   return (

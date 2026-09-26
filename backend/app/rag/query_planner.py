@@ -1,7 +1,7 @@
 import logging
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
-from app.ai.gemma.provider import gemma_provider
+from app.ai.groq.provider import groq_provider
 from app.case.models import CaseState
 
 logger = logging.getLogger("IP-SAKTI.QueryPlanner")
@@ -28,18 +28,19 @@ Analyze the legal RAG query in the context of an Ayurvedic IP consultation.
 
 User Query: "{user_query}"
 Current Case State:
-- Jurisdiction: {case_state.jurisdiction} ({case_state.country or 'India'})
+- Jurisdiction: {case_state.jurisdiction} ({case_state.country or 'Unspecified'})
 - Product Type: {case_state.product_type or 'Unknown'}
 - Formulation Category: {case_state.formulation_classification}
 - Stated IP Objectives: {', '.join(case_state.intellectual_property_objective) if case_state.intellectual_property_objective else 'Unspecified'}
 
 Task:
 Formulate an optimized statutory retrieval Query Plan.
+The country/region is legally significant. Do not generate a generic international query when a specific country is known.
 Determine:
 1. jurisdiction: "India" or "International"
-2. country: Specific target country (e.g., "Germany", "USA") if International, else null
+2. country: Specific target country (e.g., "Germany", "USA", "EU") if International, else null
 3. ip_domains: List from ["patent", "trademark", "gi", "copyright", "design", "plant_variety", "trade_secret", "tkdl_prior_art", "abs", "regulatory"]
-4. search_terms: List of specific key terms (e.g. "Section 3(p)", "admixture", "prior approval", "Ayurveda Aahar")
+4. search_terms: List of specific key terms (e.g. "Section 3(p)", "admixture", "prior approval", "Ayurveda Aahar", "novelty", "traditional knowledge")
 5. source_types: List from ["statute", "treaty", "regulation", "tkdl_public"]
 
 Return ONLY JSON:
@@ -52,10 +53,10 @@ Return ONLY JSON:
   "source_types": ["statute", "regulation"]
 }}
 """
-        system_prompt = "You are a legal RAG query planning engine specializing in IP law and Ayurvedic regulation."
+        system_prompt = "You are a legal RAG query planning engine specializing in IP law and Ayurvedic regulation. The country/region is legally significant. Do not generate a generic international query when a specific country is known."
 
         try:
-            res = await gemma_provider.generate_structured_json(prompt, system_prompt)
+            res = await groq_provider.generate_structured_json(prompt, system_prompt)
             return QueryPlan(
                 jurisdiction=res.get("jurisdiction", case_state.jurisdiction),
                 country=res.get("country", case_state.country),

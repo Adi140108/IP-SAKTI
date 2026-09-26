@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { fetchDiagnostics } from '@/lib/api';
 import { DiagnosticsStatus, ServiceStatus } from '@/types';
 
@@ -8,7 +8,7 @@ export default function DiagnosticsPage() {
   const [diag, setDiag] = useState<DiagnosticsStatus | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const loadDiagnostics = () => {
+  const loadDiagnostics = useCallback(() => {
     setLoading(true);
     fetchDiagnostics()
       .then((res) => setDiag(res))
@@ -17,10 +17,25 @@ export default function DiagnosticsPage() {
         setDiag(null);
       })
       .finally(() => setLoading(false));
-  };
+  }, []);
 
   useEffect(() => {
-    loadDiagnostics();
+    let isMounted = true;
+    fetchDiagnostics()
+      .then((res) => {
+        if (isMounted) setDiag(res);
+      })
+      .catch((err) => {
+        console.error(err);
+        if (isMounted) setDiag(null);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const renderStatusBadge = (status: ServiceStatus['status']) => {
@@ -88,5 +103,3 @@ export default function DiagnosticsPage() {
     </div>
   );
 }
-
-

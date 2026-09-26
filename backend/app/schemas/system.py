@@ -1,10 +1,15 @@
 from typing import Dict, Any, List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 class ServiceStatus(BaseModel):
     name: str
-    status: str  # "CONNECTED", "DISCONNECTED", "NOT_CONFIGURED", "ERROR"
+    status: str  # "CONNECTED", "DISCONNECTED", "NOT_CONFIGURED", "ERROR", "PARTIAL", "READY"
     details: Optional[str] = None
+    services: Optional[Dict[str, Any]] = None
+    last_tested_at: Optional[str] = None
+
+    model_config = ConfigDict(extra="allow")
+
 
 class DiagnosticsStatus(BaseModel):
     backend: ServiceStatus

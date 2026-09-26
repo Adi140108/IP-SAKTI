@@ -1,12 +1,46 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createCase, sendChatMessage, getCase, uploadDocument, updateCase } from '@/lib/api';
 import { ChatResponse, CaseState } from '@/types';
 import { FORMULATION_TIERS, getTierFromClassification } from '@/lib/formulationTaxonomy';
 import FormulationPathwayModal from '@/components/FormulationPathwayModal';
 import OfficialFormsModal from '@/components/OfficialFormsModal';
 import DossierExportModal from '@/components/DossierExportModal';
+
+interface SpeechRecognitionResultItem {
+  transcript: string;
+}
+
+interface SpeechRecognitionResultList {
+  [index: number]: SpeechRecognitionResultItem[];
+  length: number;
+}
+
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEventLike {
+  error: string;
+}
+
+interface SpeechRecognitionInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: () => void;
+  onresult: (event: SpeechRecognitionEventLike) => void;
+  onerror: (event: SpeechRecognitionErrorEventLike) => void;
+  onend: () => void;
+  start: () => void;
+}
+
+interface WindowWithSpeech extends Window {
+  SpeechRecognition?: new () => SpeechRecognitionInstance;
+  webkitSpeechRecognition?: new () => SpeechRecognitionInstance;
+}
 
 export default function ChatPage() {
   const [caseId, setCaseId] = useState<string>('');
@@ -61,29 +95,58 @@ export default function ChatPage() {
     { id: 'regulatory', label: 'AYUSH / FSSAI Regulatory', icon: '⚕️' },
   ];
 
-  // Load Persisted Session or Create New Case
-  useEffect(() => {
-    const savedCaseId = localStorage.getItem('ip_sakti_active_case_id');
-    const savedHistory = localStorage.getItem('ip_sakti_chat_history');
-
-    if (savedCaseId) {
-      setCaseId(savedCaseId);
-      refreshCaseState(savedCaseId);
-      if (savedHistory) {
-        try {
-          const parsed = JSON.parse(savedHistory);
-          setChatHistory(parsed);
-          if (parsed.length > 0 && parsed[parsed.length - 1].data) {
-            setLatestResponse(parsed[parsed.length - 1].data);
-          }
-        } catch (e) {
-          console.error(e);
-        }
-      }
-    } else {
-      startNewConsultation();
+  const refreshCaseState = useCallback(async (id: string) => {
+    try {
+      const state = await getCase(id);
+      setCaseState(state);
+    } catch (e) {
+      console.error(e);
     }
   }, []);
+
+  const startNewConsultation = useCallback(() => {
+    localStorage.removeItem('ip_sakti_active_case_id');
+    localStorage.removeItem('ip_sakti_chat_history');
+    setChatHistory([]);
+    setLatestResponse(null);
+    setCaseState(null);
+
+    createCase({ jurisdiction, country, language })
+      .then((res) => {
+        setCaseId(res.case_id);
+        setCaseState(res);
+        localStorage.setItem('ip_sakti_active_case_id', res.case_id);
+      })
+      .catch((err) => console.error('Failed to init case:', err));
+  }, [jurisdiction, country, language]);
+
+  // Load Persisted Session or Create New Case
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const savedCaseId = localStorage.getItem('ip_sakti_active_case_id');
+      const savedHistory = localStorage.getItem('ip_sakti_chat_history');
+
+      if (savedCaseId) {
+        setCaseId(savedCaseId);
+        refreshCaseState(savedCaseId);
+        if (savedHistory) {
+          try {
+            const parsed = JSON.parse(savedHistory);
+            setChatHistory(parsed);
+            if (parsed.length > 0 && parsed[parsed.length - 1].data) {
+              setLatestResponse(parsed[parsed.length - 1].data);
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      } else {
+        startNewConsultation();
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [refreshCaseState, startNewConsultation]);
 
   // Save Chat History to LocalStorage on updates
   useEffect(() => {
@@ -105,31 +168,6 @@ export default function ChatPage() {
       };
     }
   }, []);
-
-  const startNewConsultation = () => {
-    localStorage.removeItem('ip_sakti_active_case_id');
-    localStorage.removeItem('ip_sakti_chat_history');
-    setChatHistory([]);
-    setLatestResponse(null);
-    setCaseState(null);
-
-    createCase({ jurisdiction, country, language })
-      .then((res) => {
-        setCaseId(res.case_id);
-        setCaseState(res);
-        localStorage.setItem('ip_sakti_active_case_id', res.case_id);
-      })
-      .catch((err) => console.error('Failed to init case:', err));
-  };
-
-  const refreshCaseState = async (id: string) => {
-    try {
-      const state = await getCase(id);
-      setCaseState(state);
-    } catch (e) {
-      console.error(e);
-    }
-  };
 
   const handleUpdateClassification = async (tierId: string) => {
     if (!caseId) return;
@@ -170,13 +208,14 @@ export default function ChatPage() {
       return;
     }
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
+    const win = window as WindowWithSpeech;
+    const SpeechRecClass = win.SpeechRecognition || win.webkitSpeechRecognition;
+    if (!SpeechRecClass) {
       alert('Speech recognition is not supported in this browser. Please use Chrome or Edge.');
       return;
     }
 
-    const recognition = new SpeechRecognition();
+    const recognition = new SpeechRecClass();
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = language === 'hi' ? 'hi-IN' : 'en-US';
@@ -186,7 +225,7 @@ export default function ChatPage() {
       setTranscript('');
     };
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionEventLike) => {
       let currentTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         currentTranscript += event.results[i][0].transcript;
@@ -195,7 +234,7 @@ export default function ChatPage() {
       setInputMessage(currentTranscript);
     };
 
-    recognition.onerror = (event: any) => {
+    recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
     };
@@ -238,29 +277,6 @@ export default function ChatPage() {
     window.speechSynthesis.speak(utterance);
   };
 
-  // Document Upload & Inline OCR Processing
-  const handleDocumentSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !caseId) return;
-
-    setIsUploadingDoc(true);
-
-    try {
-      const docRes = await uploadDocument(file, caseId);
-      const extractedText = docRes.ocr_result?.extracted_text || '';
-      
-      const docPrompt = `[Uploaded Document Attached: ${file.name}]\nExtracted Document Text:\n"${extractedText.slice(0, 800)}"\n\nPlease analyze this document for active biological ingredients, classical references, and IP statutory compliance.`;
-      
-      await handleSendMessage(docPrompt);
-    } catch (err) {
-      console.error('Document upload error:', err);
-      alert('Failed to upload document. Please check backend connection.');
-    } finally {
-      setIsUploadingDoc(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
   const handleSendMessage = async (customMessage?: string) => {
     const textToSend = customMessage || inputMessage;
     if (!textToSend.trim() || loading) return;
@@ -292,15 +308,50 @@ export default function ChatPage() {
       }
     } catch (err) {
       console.error('Chat error:', err);
+      const errMsg = err instanceof Error ? err.message : 'An error occurred while reaching the IP-SAKTI gateway.';
       setChatHistory((prev) => [
         ...prev,
         {
           sender: 'assistant',
-          text: 'An error occurred while reaching the IP-SAKTI gateway. Please check your system status.'
+          text: `Error reaching gateway: ${errMsg}`
         }
       ]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Document Upload & Inline OCR Processing
+  const handleDocumentSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !caseId) return;
+
+    if (file.size === 0) {
+      alert('Selected file is empty. Please choose a valid document.');
+      return;
+    }
+
+    if (file.size > 25 * 1024 * 1024) {
+      alert('File exceeds the maximum upload limit of 25 MB. Please upload a smaller file.');
+      return;
+    }
+
+    setIsUploadingDoc(true);
+
+    try {
+      const docRes = await uploadDocument(file, caseId);
+      const extractedText = docRes.ocr_result?.extracted_text || '';
+      
+      const docPrompt = `[Uploaded Document Attached: ${file.name}]\nExtracted Document Text:\n"${extractedText.slice(0, 800)}"\n\nPlease analyze this document for active biological ingredients, classical references, and IP statutory compliance.`;
+      
+      await handleSendMessage(docPrompt);
+    } catch (err) {
+      console.error('Document upload error:', err);
+      const errMsg = err instanceof Error ? err.message : 'Failed to upload document.';
+      alert(`Document upload error: ${errMsg}`);
+    } finally {
+      setIsUploadingDoc(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -355,7 +406,7 @@ export default function ChatPage() {
           {jurisdiction === 'International' && (
             <input
               type="text"
-              placeholder="Country (e.g. Germany, USA)"
+              placeholder="Country (e.g. Germany, USA, Japan)"
               value={country}
               onChange={(e) => setCountry(e.target.value)}
               className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-cyan-500"
@@ -455,7 +506,7 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* FEATURE 1: 6-TIER FORMULATION CLASSIFICATION CARD */}
+            {/* 6-TIER FORMULATION CLASSIFICATION CARD */}
             <div className="p-2.5 rounded-xl border border-emerald-300 dark:border-emerald-800/60 bg-emerald-50/70 dark:bg-emerald-950/30 space-y-2 shadow-xs">
               <div className="flex items-center justify-between">
                 <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 flex items-center gap-1">
@@ -655,6 +706,25 @@ export default function ChatPage() {
                       </div>
                     )}
 
+                    {/* Human Escalation Warning */}
+                    {item.data.requires_human_escalation && (
+                      <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">⚖️</span>
+                          <div>
+                            <strong className="block font-bold">Human Legal Review Required</strong>
+                            <span className="text-[11px] leading-tight">This matter involves cross-border statutory considerations or novel biological formulation claims.</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setShowDossierModal(true)}
+                          className="px-2.5 py-1 rounded-lg bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 font-bold text-[10px] hover:bg-amber-300 transition-all cursor-pointer whitespace-nowrap"
+                        >
+                          Export Dossier ➔
+                        </button>
+                      </div>
+                    )}
+
                     {/* Rendered Guidance Payload */}
                     <div className="prose dark:prose-invert max-w-none text-xs leading-relaxed text-slate-800 dark:text-slate-200 whitespace-pre-wrap font-sans">
                       {item.data.answer}
@@ -832,12 +902,32 @@ export default function ChatPage() {
             </h4>
             {latestResponse?.citations && latestResponse.citations.length > 0 ? (
               latestResponse.citations.map((c, cIdx) => (
-                <div key={cIdx} className="p-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1 text-[10px]">
-                  <div className="font-bold text-slate-900 dark:text-slate-200">{c.source}</div>
-                  <div className="text-emerald-700 dark:text-emerald-400 font-mono text-[9px]">{c.section_or_rule || 'Statute Section'}</div>
+                <div key={cIdx} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5 text-[10px]">
+                  <div className="flex items-start justify-between gap-1">
+                    <span className="font-bold text-slate-900 dark:text-slate-200">{c.source}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase shrink-0 ${
+                      c.is_authoritative
+                        ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800'
+                        : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
+                    }`}>
+                      {c.is_authoritative ? '✓ Authoritative' : 'Reference'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400 font-mono text-[9px]">
+                    <span>{c.section_or_rule || 'Statute Section'}</span>
+                    {c.support_status && (
+                      <span className={`text-[8px] font-bold px-1 rounded ${
+                        c.support_status === 'SUPPORTED'
+                          ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/80'
+                          : 'text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/80'
+                      }`}>
+                        {c.support_status}
+                      </span>
+                    )}
+                  </div>
                   {c.snippet && (
-                    <div className="text-slate-600 dark:text-slate-400 text-[9px] line-clamp-2 italic bg-white dark:bg-slate-900/60 p-1.5 rounded border border-slate-200 dark:border-slate-800/60">
-                      "{c.snippet}"
+                    <div className="text-slate-600 dark:text-slate-400 text-[9px] line-clamp-3 italic bg-white dark:bg-slate-900/60 p-1.5 rounded border border-slate-200 dark:border-slate-800/60 leading-relaxed">
+                      &ldquo;{c.snippet}&rdquo;
                     </div>
                   )}
                 </div>

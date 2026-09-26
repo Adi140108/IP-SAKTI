@@ -1,7 +1,6 @@
 import logging
 from typing import Dict, Any, List
 from app.ai.groq.provider import groq_provider
-from app.ai.gemma.provider import gemma_provider
 from app.case.models import CaseState
 
 logger = logging.getLogger("IP-SAKTI.ClassificationEngine")
@@ -76,13 +75,7 @@ Return ONLY JSON:
         system_prompt = "You are an expert regulatory pharmaceutical classifier for Ayurvedic products under Indian and International law."
 
         try:
-            # Primary: Groq Provider
-            try:
-                res = await groq_provider.generate_structured_json(prompt, system_prompt)
-            except Exception as ge:
-                logger.info(f"Groq classification unavailable ({ge}), attempting Gemma fallback")
-                res = await gemma_provider.generate_structured_json(prompt, system_prompt)
-
+            res = await groq_provider.generate_structured_json(prompt, system_prompt)
             raw_cat = str(res.get("classification", "unknown")).lower()
             if any(k in raw_cat for k in ["classical", "generic", "first schedule"]):
                 cat = "classical"

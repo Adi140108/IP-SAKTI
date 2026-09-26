@@ -23,22 +23,48 @@ class CaseStateManager:
     }
 
     def compute_missing_information(self, state: CaseState) -> List[str]:
-        """Compute list of missing mandatory parameters."""
+        """Compute list of missing mandatory parameters based on current CaseState."""
         missing = []
-        if not state.jurisdiction:
+        
+        # 1. Jurisdiction & Country
+        jur = (state.jurisdiction or "").strip().lower()
+        if not jur or jur in ["unknown", "unspecified"]:
             missing.append("jurisdiction")
-        if not state.product_type:
+        elif jur == "international":
+            country_val = (state.country or "").strip().lower()
+            if not country_val or country_val in ["global", "international", "unknown", "unspecified"]:
+                missing.append("country")
+
+        # 2. Product Identity
+        if not state.product_type or state.product_type.strip().lower() in ["unknown", "unspecified"]:
             missing.append("product_type")
-        if not state.classical_reference and state.formulation_classification in ["unknown", "UNKNOWN"]:
+
+        # 3. IP Objectives
+        valid_objs = [o for o in state.intellectual_property_objective if o and o.lower() not in ["unknown", "unspecified"]]
+        if not valid_objs:
+            missing.append("intellectual_property_objective")
+
+        # 4. Formulation Basis / Classical Reference
+        has_formulation = (
+            (state.formulation_classification and state.formulation_classification.lower() not in ["unknown", "unspecified"])
+            or state.classical_reference
+            or state.classical_or_proprietary
+        )
+        if not has_formulation:
             missing.append("classical_reference")
+
+        # 5. Ingredients
         if not state.ingredients:
             missing.append("ingredients")
-        if state.traditional_knowledge_involved is None:
+
+        # 6. Traditional Knowledge
+        if state.traditional_knowledge_involved is None and not state.classical_reference and not has_formulation:
             missing.append("traditional_knowledge_involved")
-        if state.biological_resources_involved is None:
+
+        # 7. Biological Resources / ABS
+        if state.biological_resources_involved is None and (state.ingredients or state.product_type):
             missing.append("biological_resources_involved")
-        if not state.intellectual_property_objective or "unknown" in state.intellectual_property_objective:
-            missing.append("intellectual_property_objective")
+
         return missing
 
     async def apply_updates(self, current_state: CaseState, extraction: ExtractionResult) -> CaseState:
@@ -70,6 +96,8 @@ class CaseStateManager:
 
         if "biological_resources_involved" in updates and updates["biological_resources_involved"] is not None:
             current_state.biological_resources_involved = bool(updates["biological_resources_involved"])
+            bio_str = "Yes (Indian Biological Resources Sourced)" if current_state.biological_resources_involved else "No (No Biological Resources Sourced from India)"
+            current_state.known_information.append(f"Biological Resources / ABS: {bio_str}")
 
         if "country" in updates and updates["country"]:
             current_state.country = updates["country"]
@@ -84,6 +112,11 @@ class CaseStateManager:
                 if obj not in current_state.intellectual_property_objective:
                     current_state.intellectual_property_objective.append(obj)
             current_state.known_information.append(f"IP Objectives: {', '.join(updates['intellectual_property_objective'])}")
+
+        if extraction.contradictions:
+            for cont in extraction.contradictions:
+                if cont not in current_state.known_information:
+                    current_state.known_information.append(f"Contradiction/Ambiguity: {cont}")
 
         current_state.updated_at = datetime.now().isoformat()
         current_state.missing_information = self.compute_missing_information(current_state)

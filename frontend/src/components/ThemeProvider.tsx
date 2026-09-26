@@ -18,22 +18,17 @@ const ThemeContext = createContext<ThemeContextType>({
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('dark');
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    const savedTheme = localStorage.getItem('ip_sakti_theme') as Theme | null;
-    if (savedTheme) {
-      setThemeState(savedTheme);
+    const timer = setTimeout(() => {
+      const savedTheme = localStorage.getItem('ip_sakti_theme') as Theme | null;
+      const initialTheme: Theme = savedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
       document.documentElement.classList.remove('dark', 'light');
-      document.documentElement.classList.add(savedTheme);
-    } else {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const initial = prefersDark ? 'dark' : 'light';
-      setThemeState(initial);
-      document.documentElement.classList.remove('dark', 'light');
-      document.documentElement.classList.add(initial);
-    }
+      document.documentElement.classList.add(initialTheme);
+      setThemeState(initialTheme);
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const setTheme = (newTheme: Theme) => {

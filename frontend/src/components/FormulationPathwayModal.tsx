@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { FORMULATION_TIERS, FormulationTier, getTierFromClassification } from '@/lib/formulationTaxonomy';
+import { useState } from 'react';
+import { FORMULATION_TIERS } from '@/lib/formulationTaxonomy';
 
 interface FormulationPathwayModalProps {
   isOpen: boolean;

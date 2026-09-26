@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # Groq API Configuration (Primary LLM Engine)
     GROQ_API_KEY: Optional[str] = None
-    GROQ_MODEL: str = "qwen/qwen3.8-27b"
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
 
     # Ollama / Gemma 4 12B (Fallback LLM Engine)
@@ -24,14 +24,28 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = "gemma4:12b"
     OLLAMA_TIMEOUT_SECONDS: float = 120.0
 
-    # BHASHINI API Credentials
+    # Operational Modes & Voice Provider
+    VOICE_PROVIDER: str = "bhashini" # "bhashini" or "mock"
+
+    # BHASHINI API Credentials (Dhruva / Udyat)
     BHASHINI_UDYAT_KEY: Optional[str] = None
     BHASHINI_INFERENCE_KEY: Optional[str] = None
+    BHASHINI_API_KEY: Optional[str] = None
+    BHASHINI_USER_ID: Optional[str] = None
     BHASHINI_BASE_URL: str = "https://dhruva-api.bhashini.gov.in/services/inference"
     BHASHINI_PIPELINE_ID: Optional[str] = None
+    BHASHINI_ASR_SERVICE_ID: Optional[str] = None
+    BHASHINI_OCR_SERVICE_ID: Optional[str] = None
+    BHASHINI_NMT_SERVICE_ID: Optional[str] = None
+    BHASHINI_TTS_SERVICE_ID: Optional[str] = None
 
     # CORS configuration
-    CORS_ORIGINS: str = "*"
+    CORS_ALLOWED_ORIGINS: Optional[str] = None
+    CORS_ORIGINS: Optional[str] = None
+
+    # Security & Limits
+    MAX_UPLOAD_SIZE_BYTES: int = 25 * 1024 * 1024  # 25 MB limit
+    SECURITY_HEADERS_ENABLED: bool = True
 
     # Firebase Firestore
     FIREBASE_PROJECT_ID: Optional[str] = None

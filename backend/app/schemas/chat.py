@@ -3,11 +3,17 @@ from pydantic import BaseModel, Field
 
 class Citation(BaseModel):
     source: str
+    source_id: Optional[str] = None
+    document_id: Optional[str] = None
     section_or_rule: Optional[str] = None
-    jurisdiction: str
+    jurisdiction: str = "India"
+    country: Optional[str] = None
+    region: Optional[str] = None
     effective_date: Optional[str] = None
     snippet: Optional[str] = None
-    is_authoritative: bool = True
+    is_authoritative: bool = False
+    support_status: str = "SUPPORTED" # "SUPPORTED", "PARTIALLY_SUPPORTED", "UNSUPPORTED", "UNVERIFIED"
+    source_url: Optional[str] = None
 
 class EvidenceItem(BaseModel):
     id: str
@@ -33,6 +39,7 @@ class ChatRequest(BaseModel):
     jurisdiction: str = "India"
     country: Optional[str] = None
     audio_base64: Optional[str] = None  # For BHASHINI ASR input
+    enable_audio_output: Optional[bool] = False  # For BHASHINI TTS audio output request
 
 class ChatResponse(BaseModel):
     case_id: str

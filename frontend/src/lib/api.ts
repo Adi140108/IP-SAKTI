@@ -1,4 +1,11 @@
-import { ChatResponse, CaseState, DocumentMetadata, DiagnosticsStatus, EscalationDossier } from '@/types';
+import {
+  ChatResponse,
+  CaseState,
+  DocumentMetadata,
+  DiagnosticsStatus,
+  EscalationDossier,
+  LegalSourceItem
+} from '@/types';
 
 export function getApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
@@ -31,16 +38,32 @@ export function setCustomApiUrl(url: string) {
   }
 }
 
-export async function fetchHealth(): Promise<{ status: string }> {
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let errorDetail = `HTTP ${res.status} ${res.statusText}`;
+    try {
+      const errorJson = await res.json();
+      if (errorJson && typeof errorJson === 'object') {
+        errorDetail = errorJson.detail || errorJson.error || errorJson.message || JSON.stringify(errorJson);
+      }
+    } catch {
+      // Non-JSON error response
+    }
+    throw new Error(errorDetail);
+  }
+  return res.json() as Promise<T>;
+}
+
+export async function fetchHealth(): Promise<{ status: string; service?: string }> {
   const baseUrl = getApiBaseUrl();
   const res = await fetch(`${baseUrl}/health`);
-  return res.json();
+  return handleResponse<{ status: string; service?: string }>(res);
 }
 
 export async function fetchDiagnostics(): Promise<DiagnosticsStatus> {
   const baseUrl = getApiBaseUrl();
   const res = await fetch(`${baseUrl}/system/diagnostics`);
-  return res.json();
+  return handleResponse<DiagnosticsStatus>(res);
 }
 
 export async function createCase(initialData: Partial<CaseState>): Promise<CaseState> {
@@ -50,23 +73,23 @@ export async function createCase(initialData: Partial<CaseState>): Promise<CaseS
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(initialData)
   });
-  return res.json();
+  return handleResponse<CaseState>(res);
 }
 
 export async function getCase(caseId: string): Promise<CaseState> {
   const baseUrl = getApiBaseUrl();
-  const res = await fetch(`${baseUrl}/cases/${caseId}`);
-  return res.json();
+  const res = await fetch(`${baseUrl}/cases/${encodeURIComponent(caseId)}`);
+  return handleResponse<CaseState>(res);
 }
 
 export async function updateCase(caseId: string, updates: Partial<CaseState>): Promise<CaseState> {
   const baseUrl = getApiBaseUrl();
-  const res = await fetch(`${baseUrl}/cases/${caseId}`, {
+  const res = await fetch(`${baseUrl}/cases/${encodeURIComponent(caseId)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates)
   });
-  return res.json();
+  return handleResponse<CaseState>(res);
 }
 
 export async function sendChatMessage(params: {
@@ -83,7 +106,7 @@ export async function sendChatMessage(params: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params)
   });
-  return res.json();
+  return handleResponse<ChatResponse>(res);
 }
 
 export async function uploadDocument(file: File, caseId: string): Promise<DocumentMetadata> {
@@ -96,21 +119,20 @@ export async function uploadDocument(file: File, caseId: string): Promise<Docume
     method: 'POST',
     body: formData
   });
-  return res.json();
+  return handleResponse<DocumentMetadata>(res);
 }
 
-export async function fetchLegalSources(jurisdiction?: string): Promise<any[]> {
+export async function fetchLegalSources(jurisdiction?: string): Promise<LegalSourceItem[]> {
   const baseUrl = getApiBaseUrl();
-  const url = jurisdiction ? `${baseUrl}/sources?jurisdiction=${jurisdiction}` : `${baseUrl}/sources`;
+  const url = jurisdiction ? `${baseUrl}/sources?jurisdiction=${encodeURIComponent(jurisdiction)}` : `${baseUrl}/sources`;
   const res = await fetch(url);
-  return res.json();
+  return handleResponse<LegalSourceItem[]>(res);
 }
 
 export async function fetchEscalationDossier(caseId: string, reason: string = 'User request'): Promise<EscalationDossier> {
   const baseUrl = getApiBaseUrl();
-  const res = await fetch(`${baseUrl}/escalation/dossier?case_id=${caseId}&reason=${encodeURIComponent(reason)}`, {
+  const res = await fetch(`${baseUrl}/escalation/dossier?case_id=${encodeURIComponent(caseId)}&reason=${encodeURIComponent(reason)}`, {
     method: 'POST'
   });
-  return res.json();
+  return handleResponse<EscalationDossier>(res);
 }
-

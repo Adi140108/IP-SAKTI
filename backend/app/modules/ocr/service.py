@@ -18,20 +18,21 @@ class OCRPipeline:
     def render_pdf_to_page_images(self, pdf_bytes: bytes) -> List[bytes]:
         """
         Renders PDF into individual page images.
-        Falls back gracefully if PDF rendering libraries are unpopulated.
+        Raises an explicit error if PDF rendering fails, preventing raw PDF bytes from being passed to image OCR.
         """
         try:
-            # Try PyMuPDF (fitz) or pypdf if installed
             import fitz
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             pages = []
             for page in doc:
                 pix = page.get_pixmap()
                 pages.append(pix.tobytes("png"))
+            if not pages:
+                raise ValueError("PDF document contains 0 renderable pages")
             return pages
         except Exception as e:
-            logger.info(f"PyMuPDF rendering unavailable: {e}. Treating payload as single page image.")
-            return [pdf_bytes]
+            logger.error(f"PDF page rendering failed: {e}. Raw PDF bytes will NOT be forwarded as an image.")
+            raise RuntimeError(f"PDF_RENDERING_FAILED: {e}")
 
     async def process_document_ocr(
         self,
@@ -45,13 +46,32 @@ class OCRPipeline:
         is_pdf = filename.lower().endswith(".pdf")
         
         # 1. Render pages
-        page_images = self.render_pdf_to_page_images(file_bytes) if is_pdf else [file_bytes]
+        if is_pdf:
+            try:
+                page_images = self.render_pdf_to_page_images(file_bytes)
+            except Exception as e:
+                logger.error(f"Document OCR aborted for '{filename}': {e}")
+                return OCRResult(
+                    file_id=file_id,
+                    filename=filename,
+                    ocr_engine="bhashini",
+                    status="failed",
+                    language=language,
+                    page_count=0,
+                    processed_time=processed_time,
+                    extracted_text="",
+                    error=f"PDF_RENDERING_FAILED: {e}"
+                )
+        else:
+            page_images = [file_bytes]
+
         page_results = []
         overall_engine = "bhashini"
         overall_status = "success"
         merged_texts = []
 
         vision_supported = await gemma_provider.supports_vision()
+
 
         for page_num, page_bytes in enumerate(page_images, 1):
             page_b64 = base64.b64encode(page_bytes).decode('utf-8')

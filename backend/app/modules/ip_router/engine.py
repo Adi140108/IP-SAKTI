@@ -1,6 +1,6 @@
 import logging
 from typing import List, Dict, Any
-from app.ai.gemma.provider import gemma_provider
+from app.ai.groq.provider import groq_provider
 from app.case.models import CaseState
 
 logger = logging.getLogger("IP-SAKTI.IPRouter")
@@ -73,7 +73,7 @@ Return ONLY JSON:
         system_prompt = "You are an expert multi-domain IP routing engine for Ayurveda and biotechnology."
 
         try:
-            res = await gemma_provider.generate_structured_json(prompt, system_prompt)
+            res = await groq_provider.generate_structured_json(prompt, system_prompt)
             detected = res.get("domains", ["unknown"])
             valid = [d for d in detected if d in self.SUPPORTED_DOMAINS]
             if not valid:

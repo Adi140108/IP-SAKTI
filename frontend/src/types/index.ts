@@ -1,10 +1,16 @@
 export interface Citation {
   source: string;
+  source_id?: string;
+  document_id?: string;
   section_or_rule?: string;
   jurisdiction: string;
+  country?: string;
+  region?: string;
   effective_date?: string;
   snippet?: string;
   is_authoritative: boolean;
+  support_status?: 'SUPPORTED' | 'PARTIALLY_SUPPORTED' | 'UNSUPPORTED' | 'UNVERIFIED';
+  source_url?: string;
 }
 
 export interface ChatResponse {
@@ -23,6 +29,31 @@ export interface ChatResponse {
   audio_url?: string;
   requires_human_escalation: boolean;
   safe_abstention: boolean;
+}
+
+export interface PreviousAnswer {
+  question_id?: string;
+  question_text?: string;
+  answer_text?: string;
+  timestamp?: string;
+}
+
+export interface EvidenceReference {
+  chunk_id?: string;
+  source_id?: string;
+  document_id?: string;
+  section?: string;
+  snippet?: string;
+  relevance_score?: number;
+}
+
+export interface ConversationHistoryItem {
+  id?: string;
+  sender: 'user' | 'assistant';
+  content?: string;
+  text?: string;
+  timestamp?: string;
+  data?: ChatResponse;
 }
 
 export interface CaseState {
@@ -47,13 +78,15 @@ export interface CaseState {
   intellectual_property_objective: string[];
   international_market: string[];
   uploaded_documents: string[];
-  previous_answers: any[];
+  previous_answers: PreviousAnswer[];
   known_information: string[];
   missing_information: string[];
   classification_confidence?: number;
   jurisdiction_confidence?: number;
-  evidence_references: any[];
-  conversation_history: any[];
+  confidence?: number;
+  evidence_references: EvidenceReference[];
+  conversation_history: ConversationHistoryItem[];
+  current_intent?: string;
   conversation_stage: string;
   created_at?: string;
   updated_at?: string;
@@ -108,7 +141,18 @@ export interface EscalationDossier {
   relevant_ip_domains: string[];
   known_information: string[];
   missing_information: string[];
-  sources_found: any[];
+  sources_found: EvidenceReference[];
   questions_requiring_human_review: string[];
   generated_at: string;
+}
+
+export interface LegalSourceItem {
+  source_id: string;
+  source_title: string;
+  jurisdiction: string;
+  authority?: string;
+  ip_domain: string;
+  sections: string[];
+  effective_date?: string;
+  sample_content: string;
 }
