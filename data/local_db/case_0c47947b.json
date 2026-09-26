@@ -1,0 +1,33 @@
+{
+  "case_id": "0c47947b",
+  "user_id": "guest_user",
+  "language": "en",
+  "jurisdiction": "India",
+  "country": null,
+  "product_type": "Tablet",
+  "ingredients": [],
+  "intended_use": null,
+  "formulation_classification": "UNKNOWN",
+  "classical_or_proprietary": null,
+  "traditional_knowledge_involved": null,
+  "biological_resources_involved": null,
+  "ip_objective": [],
+  "international_market": [],
+  "uploaded_documents": [
+    "9f869beb"
+  ],
+  "previous_answers": [],
+  "known_information": [],
+  "missing_information": [
+    "classical_or_proprietary",
+    "ingredients",
+    "traditional_knowledge_involved",
+    "biological_resources_involved",
+    "ip_objective"
+  ],
+  "current_intent": "initial_query",
+  "conversation_stage": "intake",
+  "confidence": null,
+  "created_at": "2026-09-24T01:45:25.770993",
+  "updated_at": "2026-09-24T01:45:25.770993"
+}

@@ -1,0 +1,33 @@
+{
+  "case_id": "10a15513",
+  "user_id": "guest_user",
+  "language": "en",
+  "jurisdiction": "India",
+  "country": null,
+  "product_type": "Ayurvedic Churnam",
+  "ingredients": [
+    "Withania somnifera",
+    "Zingiber officinale"
+  ],
+  "intended_use": null,
+  "formulation_classification": "UNKNOWN",
+  "classical_or_proprietary": "Classical Reference Text",
+  "traditional_knowledge_involved": null,
+  "biological_resources_involved": null,
+  "ip_objective": [],
+  "international_market": [],
+  "uploaded_documents": [],
+  "previous_answers": [],
+  "known_information": [],
+  "missing_information": [
+    "classical_or_proprietary",
+    "traditional_knowledge_involved",
+    "biological_resources_involved",
+    "ip_objective"
+  ],
+  "current_intent": "initial_query",
+  "conversation_stage": "intake",
+  "confidence": null,
+  "created_at": "2026-09-24T01:45:03.873430",
+  "updated_at": "2026-09-24T01:45:03.873430"
+}

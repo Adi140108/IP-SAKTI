@@ -1,0 +1,41 @@
+{
+  "case_id": "4d4bc163",
+  "user_id": "guest_user",
+  "language": "en",
+  "jurisdiction": "India",
+  "country": "India",
+  "product_type": "Taila",
+  "ingredients": [],
+  "intended_use": null,
+  "formulation_classification": "PATENT_PROPRIETARY",
+  "classical_or_proprietary": null,
+  "traditional_knowledge_involved": null,
+  "biological_resources_involved": null,
+  "ip_objective": [
+    "patent",
+    "abs",
+    "tkdl_prior_art"
+  ],
+  "international_market": [],
+  "uploaded_documents": [],
+  "previous_answers": [
+    {
+      "timestamp": "2026-09-24T01:45:03.924378",
+      "query": "I want to patent my novel Ayurvedic herbal formulation based on Ashwagandha and Ginger."
+    }
+  ],
+  "known_information": [
+    "User Query: I want to patent my novel Ayurvedic herbal formulation based on Ashwagandha and Ginger."
+  ],
+  "missing_information": [
+    "classical_or_proprietary",
+    "ingredients",
+    "traditional_knowledge_involved",
+    "biological_resources_involved"
+  ],
+  "current_intent": "initial_query",
+  "conversation_stage": "intake",
+  "confidence": null,
+  "created_at": "2026-09-24T01:45:03.911445",
+  "updated_at": "2026-09-24T01:45:03.911445"
+}

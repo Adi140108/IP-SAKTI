@@ -1,0 +1,21 @@
+{
+  "file_id": "62632f56",
+  "case_id": "a303aa32",
+  "filename": "test_doc.pdf",
+  "content_type": "application/pdf",
+  "file_size_bytes": 54,
+  "storage_provider": "local_dev",
+  "storage_url": "/api/v1/documents/local/62632f56_test_doc.pdf",
+  "upload_timestamp": "2026-09-26T10:32:59.917042",
+  "ocr_result": {
+    "file_id": "62632f56",
+    "filename": "test_doc.pdf",
+    "ocr_engine": "bhashini",
+    "status": "failed",
+    "language": "hi",
+    "page_count": 1,
+    "processed_time": "2026-09-26T10:32:57.839928",
+    "extracted_text": "",
+    "error": "OCR failed across all document pages"
+  }
+}

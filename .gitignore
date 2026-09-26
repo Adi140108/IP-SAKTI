@@ -1,0 +1,31 @@
+# Environments & Secrets
+.env
+.env.*
+!*.env.example
+firebase_credentials.json
+*.pem
+*.key
+
+# Node & Next.js
+node_modules/
+.next/
+out/
+build/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+.pytest_cache/
+
+# Local DB & Data Temp Storage
+backend/data/local_db/
+backend/data/local_storage/
+data/temp/
+
+# System & OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,49 @@
+{
+  "case_id": "scen1_test",
+  "user_id": "test_user",
+  "language": "en",
+  "jurisdiction": "India",
+  "country": null,
+  "region": null,
+  "product_name": null,
+  "product_type": null,
+  "ingredients": [
+    "Ashwagandha",
+    "Ginger"
+  ],
+  "source_of_ingredients": null,
+  "intended_use": null,
+  "dosage_or_form": null,
+  "manufacturing_context": null,
+  "formulation_classification": "unknown",
+  "classical_reference": null,
+  "classical_or_proprietary": null,
+  "traditional_knowledge_involved": true,
+  "biological_resources_involved": null,
+  "access_and_benefit_sharing": null,
+  "intellectual_property_objective": [
+    "patent"
+  ],
+  "international_market": [],
+  "uploaded_documents": [],
+  "previous_answers": [],
+  "known_information": [
+    "Ingredients: Ashwagandha, Ginger",
+    "Traditional Knowledge: Yes (Traditional Knowledge Involved)",
+    "IP Objectives: patent"
+  ],
+  "missing_information": [
+    "product_type",
+    "classical_reference",
+    "biological_resources_involved"
+  ],
+  "classification_confidence": null,
+  "jurisdiction_confidence": null,
+  "confidence": null,
+  "evidence_references": [],
+  "conversation_history": [],
+  "current_intent": "initial_query",
+  "conversation_stage": "intake",
+  "created_at": null,
+  "updated_at": "2026-09-26T12:53:57.836004"
+}
