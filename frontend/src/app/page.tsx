@@ -12,7 +12,7 @@ export default function HomePage() {
         <div className="absolute -left-20 -bottom-20 w-96 h-96 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
         
         <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          <div className="lg:col-span-8 space-y-6">
+          <div className="lg:col-span-7 space-y-6">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold">
               <span>🇮🇳 SIH Problem Statement PS-26045</span>
             </div>
@@ -42,15 +42,14 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="lg:col-span-4 flex justify-center items-center">
-            <div className="relative w-56 h-56 sm:w-64 sm:h-64 rounded-3xl bg-slate-900/80 border border-emerald-500/30 p-4 shadow-2xl flex items-center justify-center backdrop-blur-md">
-              <div className="absolute inset-0 bg-emerald-500/10 rounded-3xl blur-xl pointer-events-none" />
+          <div className="lg:col-span-5 flex justify-center items-center">
+            <div className="relative w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl border border-emerald-500/30 bg-white/95 dark:bg-slate-900/90 p-2 backdrop-blur-md">
               <Image
-                src="/logo-icon.png"
-                alt="IP-SAKTI Ayurvedic IP Assistant"
-                width={220}
-                height={220}
-                className="object-contain relative z-10 drop-shadow-lg"
+                src="/ip-sakti-exact.png"
+                alt="IP-SAKTI Sahayak - Your AI Companion for Ayurvedic Intellectual Property & Regulatory Guidance"
+                width={500}
+                height={500}
+                className="w-full h-auto object-contain rounded-2xl"
                 priority
               />
             </div>
