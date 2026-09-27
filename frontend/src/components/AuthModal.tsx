@@ -59,6 +59,8 @@ export default function AuthModal({
         msg = 'Invalid email or password. Please verify your credentials.';
       } else if (msg.includes('auth/popup-closed-by-user')) {
         msg = 'Google sign-in popup was closed before completing.';
+      } else if (msg.includes('auth/unauthorized-domain')) {
+        msg = 'This domain is not yet authorized in Firebase Console. Please add your domain to Firebase Console > Authentication > Settings > Authorized Domains.';
       }
       setError(msg);
     } finally {
@@ -77,6 +79,8 @@ export default function AuthModal({
       let msg = err.message || 'Google sign-in failed.';
       if (msg.includes('auth/popup-closed-by-user')) {
         msg = 'Google sign-in popup was closed.';
+      } else if (msg.includes('auth/unauthorized-domain')) {
+        msg = 'This domain is not yet authorized in Firebase Console. Please add your domain to Firebase Console > Authentication > Settings > Authorized Domains.';
       }
       setError(msg);
     } finally {
