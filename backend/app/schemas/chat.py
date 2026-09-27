@@ -1,5 +1,6 @@
 from typing import List, Optional, Any, Dict
 from pydantic import BaseModel, Field
+from app.modules.prior_art.models import PriorArtMatch
 
 class Citation(BaseModel):
     source: str
@@ -55,6 +56,8 @@ class ChatResponse(BaseModel):
     confidence_explanation: str
     next_question: Optional[str] = None
     suggested_options: Optional[List[str]] = None
+    prior_art_matches: Optional[List[PriorArtMatch]] = None
     audio_url: Optional[str] = None  # For BHASHINI TTS output
     requires_human_escalation: bool = False
     safe_abstention: bool = False
+

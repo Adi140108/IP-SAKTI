@@ -23,7 +23,13 @@ class CaseStateManager:
         "applicant_entity_type": "Applicant entity nationality/type for NBA Form I vs Form III vs SBB",
         "intellectual_property_objective": "Primary IP objectives (e.g., patent, trademark, GI, ABS, AYUSH license)",
         "intended_use": "Primary therapeutic or nutritional health indication",
-        "manufacturing_context": "Manufacturing / extraction process context"
+        "manufacturing_context": "Manufacturing / extraction process context",
+        "novelty_aspect": "Novel / distinguishing aspect of formulation or process",
+        "technical_improvement": "Specific technical improvement (e.g., bioavailability, stability, yield)",
+        "composition_details": "Composition quantities, proportions, or concentration ratios",
+        "experimental_evidence": "Experimental lab/clinical/stability test data",
+        "public_disclosure": "Prior public disclosure, commercial sale, or exhibition",
+        "prior_art_known": "Knowledge of existing similar patents, publications, or products"
     }
 
     def compute_missing_information(self, state: CaseState) -> List[str]:
@@ -90,11 +96,65 @@ class CaseStateManager:
             if is_patent_goal or is_extract:
                 missing.append("manufacturing_context")
 
+        # 12. Patent-Focused Intake (Novelty, Improvement, Composition, Evidence, Disclosure, Prior Art)
+        is_patent_focus = (
+            any("patent" in o.lower() for o in state.intellectual_property_objective)
+            or (state.formulation_classification or "").lower() in ["proprietary", "new_non_classical", "phytopharmaceutical"]
+            or (state.classical_reference and "novel" in state.classical_reference.lower())
+            or (state.novelty_aspect is not None or state.technical_improvement is not None)
+        )
+
+        if is_patent_focus:
+            # Novelty aspect: missing if not provided and classical_reference does not already describe novelty
+            novelty_known = bool(
+                (state.novelty_aspect and state.novelty_aspect.strip().lower() not in ["unknown", "unspecified", ""]) or
+                (state.classical_reference and "novel" in state.classical_reference.lower())
+            )
+            if not novelty_known:
+                missing.append("novelty_aspect")
+
+            # Technical improvement: missing if not provided and synergistic efficacy / lab data is not already established
+            tech_known = bool(
+                (state.technical_improvement and state.technical_improvement.strip().lower() not in ["unknown", "unspecified", ""]) or
+                state.synergistic_efficacy_proven is not None
+            )
+            if not tech_known:
+                missing.append("technical_improvement")
+
+            # Composition details: only missing if multiple ingredients exist and composition details not specified
+            comp_known = bool(
+                (state.composition_details and state.composition_details.strip().lower() not in ["unknown", "unspecified", ""]) or
+                not (state.ingredients and len(state.ingredients) >= 2)
+            )
+            if not comp_known and not (novelty_known and tech_known):
+                missing.append("composition_details")
+
+            # Experimental evidence: only missing if experimental evidence not provided and synergistic efficacy is unknown
+            if not state.experimental_evidence and state.synergistic_efficacy_proven is None:
+                missing.append("experimental_evidence")
+
+            # Public disclosure & Prior art: ask if patent sought and not yet disclosed or settled
+            has_foundation = bool(
+                state.jurisdiction and state.product_type and state.ingredients
+            )
+            if has_foundation and not (novelty_known and tech_known and state.biological_resources_involved is not None):
+                if state.public_disclosure is None:
+                    missing.append("public_disclosure")
+                if state.prior_art_known is None:
+                    missing.append("prior_art_known")
+
         return missing
 
-    async def apply_updates(self, current_state: CaseState, extraction: ExtractionResult) -> CaseState:
+
+    async def apply_updates(self, current_state: CaseState, extraction: Any) -> CaseState:
         """Apply extraction updates cleanly to CaseState."""
-        updates = extraction.extracted_updates
+        if isinstance(extraction, ExtractionResult):
+            updates = extraction.extracted_updates
+        elif isinstance(extraction, dict):
+            updates = extraction
+        else:
+            updates = getattr(extraction, "extracted_updates", {})
+
 
         if "product_name" in updates and updates["product_name"]:
             current_state.product_name = updates["product_name"]
@@ -148,6 +208,39 @@ class CaseStateManager:
             current_state.applicant_entity_type = updates["applicant_entity_type"]
             current_state.known_information.append(f"Applicant Entity: {updates['applicant_entity_type']}")
 
+        # Patent-specific fields
+        if "novelty_aspect" in updates and updates["novelty_aspect"]:
+            current_state.novelty_aspect = updates["novelty_aspect"]
+            current_state.known_information.append(f"Novelty Aspect: {updates['novelty_aspect']}")
+
+        if "technical_improvement" in updates and updates["technical_improvement"]:
+            current_state.technical_improvement = updates["technical_improvement"]
+            current_state.known_information.append(f"Technical Improvement: {updates['technical_improvement']}")
+
+        if "composition_details" in updates and updates["composition_details"]:
+            current_state.composition_details = updates["composition_details"]
+            current_state.known_information.append(f"Composition Details: {updates['composition_details']}")
+
+        if "experimental_evidence" in updates and updates["experimental_evidence"]:
+            current_state.experimental_evidence = updates["experimental_evidence"]
+            current_state.known_information.append(f"Experimental Evidence: {updates['experimental_evidence']}")
+
+        if "public_disclosure" in updates and updates["public_disclosure"] is not None:
+            current_state.public_disclosure = bool(updates["public_disclosure"])
+            p_str = "Yes (Public Disclosure Reported)" if current_state.public_disclosure else "No (Kept Confidential)"
+            current_state.known_information.append(f"Public Disclosure: {p_str}")
+
+        if "public_disclosure_details" in updates and updates["public_disclosure_details"]:
+            current_state.public_disclosure_details = updates["public_disclosure_details"]
+
+        if "prior_art_known" in updates and updates["prior_art_known"] is not None:
+            current_state.prior_art_known = bool(updates["prior_art_known"])
+            pa_str = "Yes (Known Prior Art Reported)" if current_state.prior_art_known else "No (No Known Prior Art)"
+            current_state.known_information.append(f"Prior Art Known: {pa_str}")
+
+        if "prior_art_details" in updates and updates["prior_art_details"]:
+            current_state.prior_art_details = updates["prior_art_details"]
+
         if "country" in updates and updates["country"]:
             current_state.country = updates["country"]
             current_state.jurisdiction = "International"
@@ -162,13 +255,17 @@ class CaseStateManager:
                     current_state.intellectual_property_objective.append(obj)
             current_state.known_information.append(f"IP Objectives: {', '.join(updates['intellectual_property_objective'])}")
 
-        if extraction.contradictions:
-            for cont in extraction.contradictions:
+        contradictions = getattr(extraction, "contradictions", None)
+        if contradictions is None and isinstance(extraction, dict):
+            contradictions = extraction.get("contradictions", [])
+        if contradictions:
+            for cont in contradictions:
                 if cont not in current_state.known_information:
                     current_state.known_information.append(f"Contradiction/Ambiguity: {cont}")
 
         current_state.updated_at = datetime.now().isoformat()
         current_state.missing_information = self.compute_missing_information(current_state)
+
 
         # Save to database
         await firestore_service.save_case_state(current_state.case_id, current_state.model_dump())

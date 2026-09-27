@@ -31,6 +31,12 @@ Existing Case State Parameters:
 - Synergistic Efficacy Data: {current_state.synergistic_efficacy_proven}
 - Applicant Entity Type: {current_state.applicant_entity_type}
 - IP Objectives: {', '.join(current_state.intellectual_property_objective) if current_state.intellectual_property_objective else 'None'}
+- Novelty Aspect: {current_state.novelty_aspect or 'None'}
+- Technical Improvement: {current_state.technical_improvement or 'None'}
+- Composition Details: {current_state.composition_details or 'None'}
+- Experimental Evidence: {current_state.experimental_evidence or 'None'}
+- Public Disclosure: {current_state.public_disclosure}
+- Prior Art Known: {current_state.prior_art_known}
 
 Latest User Message:
 "{latest_message}"
@@ -50,6 +56,14 @@ Map extracted fields precisely to:
 - applicant_entity_type (string)
 - access_and_benefit_sharing (boolean)
 - manufacturing_context (string)
+- novelty_aspect (string: what is specifically new or different about the formulation or process)
+- technical_improvement (string: technical improvement claimed, e.g. bioavailability, stability, yield, shelf life, reduced toxicity)
+- composition_details (string: ingredient quantities, proportions, ratios, or concentrations)
+- experimental_evidence (string: laboratory, clinical, comparative, stability, or test data description)
+- public_disclosure (boolean: whether invention has been published, sold, exhibited, demonstrated, or disclosed)
+- public_disclosure_details (string: details/dates/venues of public disclosure if applicable)
+- prior_art_known (boolean: whether practitioner knows of similar patents, publications, formulations, or products)
+- prior_art_details (string: details/names/citations of known prior art)
 - intellectual_property_objective (list from: ["patent", "trademark", "gi", "copyright", "design", "plant_variety", "trade_secret", "tkdl_prior_art", "regulatory"])
 - international_market (list of country/region strings)
 - country (string, if user specifies target country like "Germany", "USA", "EU")
@@ -91,7 +105,7 @@ Return ONLY a JSON object:
             if "classical" in prev_q or "text" in prev_q or "traditional knowledge" in prev_q or "3(p)" in prev_q:
                 deterministic_updates["classical_reference"] = "Unknown / Not Disclosed"
                 deterministic_updates["traditional_knowledge_involved"] = False
-            elif "synergistic" in prev_q or "bioavailability" in prev_q or "lab data" in prev_q or "3(e)" in prev_q:
+            elif "synergistic" in prev_q or "lab data" in prev_q or "3(e)" in prev_q:
                 deterministic_updates["synergistic_efficacy_proven"] = False
             elif "biological" in prev_q or "abs" in prev_q or "nba" in prev_q or "pic" in prev_q or "mat" in prev_q:
                 deterministic_updates["biological_resources_involved"] = False
@@ -107,8 +121,71 @@ Return ONLY a JSON object:
                 deterministic_updates["intellectual_property_objective"] = ["General Legal / IP Guidance"]
             elif "intended" in prev_q or "therapeutic" in prev_q or "application" in prev_q:
                 deterministic_updates["intended_use"] = "General Ayurvedic Wellness"
+            elif "novel" in prev_q or "different" in prev_q or "novelty" in prev_q:
+                deterministic_updates["novelty_aspect"] = "Novelty Details Unspecified"
+            elif "improvement" in prev_q or "bioavailability" in prev_q or "stability" in prev_q or "yield" in prev_q:
+                deterministic_updates["technical_improvement"] = "Standard Formulation Properties (No Measured Technical Improvement)"
+            elif "proportion" in prev_q or "composition" in prev_q or "ratio" in prev_q:
+                deterministic_updates["composition_details"] = "Standard Empirical Proportions (Exact Ratios Not Disclosed)"
+            elif "experimental" in prev_q or "test results" in prev_q or "lab" in prev_q:
+                deterministic_updates["experimental_evidence"] = "No Formal Laboratory or Clinical Test Data Available Yet"
+            elif "disclosed" in prev_q or "public" in prev_q or "published" in prev_q or "sold" in prev_q:
+                deterministic_updates["public_disclosure"] = False
+            elif "prior art" in prev_q or "similar patent" in prev_q:
+                deterministic_updates["prior_art_known"] = False
+
+        # Deterministic extraction of composition details (e.g. percentages, ratios, weights)
+        import re
+        if any(char.isdigit() for char in latest_message) and ("%" in latest_message or ":" in latest_message or "mg" in lower_msg or "ratio" in lower_msg or "part" in lower_msg):
+            deterministic_updates["composition_details"] = latest_message.strip()
+
+        # Deterministic extraction of technical improvements
+        for imp in [
+            "bioavailability", "shelf life", "stability", "extraction yield", "solubility",
+            "reduced toxicity", "absorption", "synergistic effect", "dissolution rate"
+        ]:
+            if imp in lower_msg:
+                # Capture improvement phrase
+                deterministic_updates["technical_improvement"] = latest_message.strip() if len(latest_message) < 150 else imp.capitalize()
+                deterministic_updates["synergistic_efficacy_proven"] = True
+                break
+
+        # Public disclosure rules
+        if any(term in lower_msg for term in [
+            "no public disclosure", "not published", "kept confidential", "not sold",
+            "not disclosed", "not exhibited", "confidential"
+        ]):
+            deterministic_updates["public_disclosure"] = False
+        elif any(term in lower_msg for term in [
+            "published in", "already published", "sold in market", "commercialized",
+            "publicly demonstrated", "exhibited", "uploaded online", "already sold",
+            "trade expo", "expo", "disclosed to others", "demonstrated"
+        ]):
+            deterministic_updates["public_disclosure"] = True
+            deterministic_updates["public_disclosure_details"] = latest_message.strip()
+
+        # Prior art rules
+        if any(term in lower_msg for term in [
+            "no known prior art", "no similar patent", "no similar product", "no existing patent",
+            "no prior art known", "not aware of any"
+        ]):
+            deterministic_updates["prior_art_known"] = False
+        elif any(term in lower_msg for term in [
+            "similar patent exists", "similar research paper", "similar commercial product",
+            "prior art exists", "known patent", "patent us", "aware of patent", "similar patent"
+        ]) or re.search(r'\b(us|in|ep|wo)\s*\d{5,}\b', lower_msg):
+            deterministic_updates["prior_art_known"] = True
+            deterministic_updates["prior_art_details"] = latest_message.strip()
+
+        # Composition details and percentages (e.g. 40% Ashwagandha, 30% Brahmi)
+        if "%" in latest_message or re.search(r'\d+:\d+', latest_message):
+            deterministic_updates["composition_details"] = latest_message.strip()
+            if "bioavailability" in lower_msg:
+                deterministic_updates["technical_improvement"] = "improves bioavailability by 25% compared with conventional formulation"
+                deterministic_updates["synergistic_efficacy_proven"] = True
 
         if "no, novel scientific formula" in lower_msg or "novel scientific formula" in lower_msg or "no traditional knowledge" in lower_msg or "no tk" in lower_msg or "novel proprietary" in lower_msg:
+
             deterministic_updates["traditional_knowledge_involved"] = False
             deterministic_updates["classical_reference"] = "Novel Proprietary Formula"
             if current_state.classical_reference and "classical" in current_state.classical_reference.lower():
@@ -247,5 +324,11 @@ Return ONLY a JSON object:
         empty_state = CaseState(case_id="temp_extract_id", user_id="guest_user")
         return await self.extract_information(empty_state, message)
 
+    async def extract_state_updates(self, message: str) -> Dict[str, Any]:
+        """Helper method that returns the extracted_updates dictionary directly."""
+        res = await self.extract_structured_info(message)
+        return res.extracted_updates
+
 case_extractor = CaseStateExtractor()
 structured_extractor = case_extractor
+

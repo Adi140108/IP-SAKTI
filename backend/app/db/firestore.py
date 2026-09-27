@@ -2,7 +2,7 @@ import os
 import json
 import re
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from app.config import settings
 
 logger = logging.getLogger("IP-SAKTI.Firestore")
@@ -333,5 +333,128 @@ class FirestoreService:
                 return False
         return True
 
+    async def save_escalation_dossier(self, dossier_id: str, dossier_data: Dict[str, Any]) -> bool:
+        """Save human review escalation dossier to human_review_requests collection."""
+        clean_id = self._sanitize_id(dossier_id)
+        if self.is_production_mode():
+            if not self.db:
+                raise RuntimeError("PRODUCTION DATABASE FAILURE: Firestore client is not connected.")
+            try:
+                self.db.collection("human_review_requests").document(clean_id).set(dossier_data, merge=True)
+                return True
+            except Exception as e:
+                logger.error(f"Firestore escalation dossier write error: {type(e).__name__}")
+                raise RuntimeError(f"PRODUCTION DATABASE FAILURE: Firestore escalation dossier write failed: {type(e).__name__}")
+
+        # Development / Mock Mode
+        if self.db:
+            try:
+                self.db.collection("human_review_requests").document(clean_id).set(dossier_data, merge=True)
+                return True
+            except Exception as e:
+                logger.warning(f"Firestore escalation dossier write failed in mock mode, falling back to local DB: {e}")
+
+        file_path = os.path.join(self.local_storage_dir, f"escalation_{clean_id}.json")
+        try:
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(dossier_data, f, indent=2)
+            return True
+        except Exception as e:
+            logger.error(f"Local escalation dossier error: {type(e).__name__}")
+            return False
+
+    async def get_escalation_dossier(self, dossier_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve escalation dossier by ID."""
+        clean_id = self._sanitize_id(dossier_id)
+        if self.is_production_mode():
+            if not self.db:
+                raise RuntimeError("PRODUCTION DATABASE FAILURE: Firestore client is not connected.")
+            try:
+                doc = self.db.collection("human_review_requests").document(clean_id).get()
+                if doc.exists:
+                    return doc.to_dict()
+                return None
+            except Exception as e:
+                logger.error(f"Firestore escalation dossier read error: {type(e).__name__}")
+                raise RuntimeError(f"PRODUCTION DATABASE FAILURE: Firestore escalation dossier read failed: {type(e).__name__}")
+
+        if self.db:
+            try:
+                doc = self.db.collection("human_review_requests").document(clean_id).get()
+                if doc.exists:
+                    return doc.to_dict()
+            except Exception:
+                pass
+
+        file_path = os.path.join(self.local_storage_dir, f"escalation_{clean_id}.json")
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.error(f"Local escalation dossier read error: {type(e).__name__}")
+        return None
+
+    async def list_escalation_dossiers(self, limit: int = 50, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List escalation dossiers with optional status filter."""
+        results = []
+        seen_ids = set()
+
+        if self.db:
+            try:
+                coll_ref = self.db.collection("human_review_requests")
+                query = coll_ref
+                if status:
+                    query = query.where("status", "==", status)
+                docs = query.limit(limit).stream()
+                for doc in docs:
+                    data = doc.to_dict()
+                    did = data.get("dossier_id") or doc.id
+                    if did not in seen_ids:
+                        seen_ids.add(did)
+                        results.append(data)
+                results.sort(key=lambda x: x.get("submitted_at") or x.get("created_at") or "", reverse=True)
+                return results[:limit]
+            except Exception as e:
+                logger.warning(f"Firestore list escalation dossiers error: {e}")
+                if self.is_production_mode():
+                    raise RuntimeError(f"PRODUCTION DATABASE FAILURE: Firestore list escalation dossiers failed: {type(e).__name__}")
+
+        if os.path.exists(self.local_storage_dir):
+            try:
+                for fname in os.listdir(self.local_storage_dir):
+                    if fname.startswith("escalation_") and fname.endswith(".json"):
+                        fpath = os.path.join(self.local_storage_dir, fname)
+                        with open(fpath, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                            did = data.get("dossier_id") or fname.replace("escalation_", "").replace(".json", "")
+                            if did not in seen_ids:
+                                if not status or data.get("status") == status:
+                                    seen_ids.add(did)
+                                    results.append(data)
+                results.sort(key=lambda x: x.get("submitted_at") or x.get("created_at") or "", reverse=True)
+            except Exception as e:
+                logger.error(f"Local DB list escalation dossiers error: {e}")
+        return results[:limit]
+
+    async def update_escalation_status(
+        self,
+        dossier_id: str,
+        new_status: str,
+        audit_entry: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Update the review status and audit trail of an escalation dossier."""
+        dossier = await self.get_escalation_dossier(dossier_id)
+        if not dossier:
+            return None
+
+        dossier["status"] = new_status
+        if audit_entry:
+            dossier.setdefault("audit_log", []).append(audit_entry)
+
+        await self.save_escalation_dossier(dossier_id, dossier)
+        return dossier
+
 
 firestore_service = FirestoreService()
+

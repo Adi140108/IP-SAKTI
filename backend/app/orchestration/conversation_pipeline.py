@@ -19,6 +19,8 @@ from app.modules.citations.claim_extractor import claim_extractor
 from app.modules.citations.validator import citation_validator
 from app.modules.confidence.engine import confidence_engine
 from app.modules.questioning.engine import questioning_engine
+from app.modules.prior_art.matching import prior_art_matcher
+
 
 LANGUAGE_NAMES = {
     "en": "English",
@@ -283,6 +285,36 @@ Return JSON:
                 "To prevent inaccurate legal guidance, please consult an official AYUSH IP attorney or use the Human Escalation option."
             )
 
+        # 8b. Prior-Art & Existing-Record Retrieval (Separated from legal verdict)
+        is_patent_case = (
+            "patent" in [d.lower() for d in case_state.intellectual_property_objective] or
+            case_state.formulation_classification in ["proprietary", "new_non_classical", "phytopharmaceutical"] or
+            "patent" in processed_text.lower() or
+            "prior art" in processed_text.lower() or
+            bool(case_state.novelty_aspect or case_state.technical_improvement)
+        )
+        
+        prior_art_matches = None
+        prior_art_res = None
+        if is_patent_case:
+            prior_art_res = await prior_art_matcher.search_prior_art(case_state)
+            if prior_art_res and prior_art_res.matches:
+                prior_art_matches = prior_art_res.matches
+
+        requires_escalation = safe_abstain
+        # Public Disclosure Warning (Part 12)
+        if is_patent_case and case_state.public_disclosure:
+            disclosure_notice = (
+                "\n\n> ⚠️ **Notice on Prior Public Disclosure**:\n"
+                "> Public disclosure may be relevant to patent filing strategy. "
+                "The assistant cannot determine the legal effect without jurisdiction-specific review."
+            )
+            final_answer += disclosure_notice
+            requires_escalation = True
+
+        if prior_art_res and prior_art_res.requires_human_escalation:
+            requires_escalation = True
+
         # 9. Dynamic Next Question Generation
         q_res = await questioning_engine.generate_next_question(case_state)
         next_question = q_res.next_question if not q_res.is_clarification_complete else None
@@ -341,9 +373,11 @@ Return JSON:
             confidence_explanation=conf_exp,
             next_question=next_question,
             suggested_options=translated_options,
+            prior_art_matches=prior_art_matches,
             audio_url=audio_output,
-            requires_human_escalation=safe_abstain,
+            requires_human_escalation=requires_escalation,
             safe_abstention=safe_abstain
         )
+
 
 conversation_pipeline = ConversationPipeline()

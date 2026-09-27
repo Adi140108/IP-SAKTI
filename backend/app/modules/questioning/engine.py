@@ -34,6 +34,14 @@ class DynamicQuestioningEngine:
         "ingredients",
         "intellectual_property_objective"
     ]
+    PATENT_PRIORITY_FIELDS = [
+        "novelty_aspect",
+        "technical_improvement",
+        "composition_details",
+        "experimental_evidence",
+        "public_disclosure",
+        "prior_art_known"
+    ]
     MEDIUM_PRIORITY_FIELDS = [
         "traditional_knowledge_involved",
         "synergistic_efficacy_proven",
@@ -47,7 +55,7 @@ class DynamicQuestioningEngine:
         "manufacturing_context"
     ]
 
-    # Deterministic Fallback Question Templates (Clean, User-friendly, Non-jargon)
+    # Deterministic Fallback Question Templates (Clean, User-friendly, Practitioner-focused)
     FALLBACK_TEMPLATES_INDIA = {
         "contradiction_clarification": (
             "Could you clarify if your product is based on a classical Ayurvedic text or if it is a newly developed proprietary formulation?",
@@ -76,6 +84,30 @@ class DynamicQuestioningEngine:
         "ingredients": (
             "What are the main medicinal plants or biological ingredients in your formulation?",
             ["Ashwagandha & Curcumin", "Brahmi & Shankhpushpi", "Tulsi & Ginger", "✍️ Type custom ingredients..."]
+        ),
+        "novelty_aspect": (
+            "What is the main thing that is new or different about your formulation compared with existing Ayurvedic formulations?",
+            ["Novel Combination of Herbs", "Novel Extraction / Purification Process", "Novel Dosage Delivery Form", "Modified Release Profile", "✍️ Type novelty details..."]
+        ),
+        "technical_improvement": (
+            "What specific improvement does your formulation provide compared with existing formulations—for example better stability, bioavailability, shelf life, extraction yield, or another measurable effect?",
+            ["Improved Bioavailability / Absorption", "Enhanced Stability & Shelf Life", "Increased Extraction Yield", "Reduced Side Effects / Toxicity", "✍️ Type improvement details..."]
+        ),
+        "composition_details": (
+            "What are the main ingredients and, if known, their approximate proportions or quantities?",
+            ["Standard Equal Ratio (1:1:1)", "Synergistic Ratio (e.g. 2:1:0.5)", "Concentrated Standardized Extract (10:1)", "✍️ Type exact proportions..."]
+        ),
+        "experimental_evidence": (
+            "Do you have laboratory, clinical, comparative, stability, or other test results supporting the claimed improvement?",
+            ["Comparative In-Vitro / In-Vivo Lab Data", "Stability & Shelf Life Test Reports", "Clinical Observation Data", "Testing Currently In Progress", "✍️ Type test details..."]
+        ),
+        "public_disclosure": (
+            "Have you already publicly disclosed, sold, demonstrated, exhibited, published, or uploaded this formulation or its details anywhere?",
+            ["No Public Disclosure (Kept Confidential)", "Published in Academic Journal / Conference", "Commercialized / Sold in Market", "Demonstrated at Public Exhibition / Online", "✍️ Type disclosure details..."]
+        ),
+        "prior_art_known": (
+            "Do you already know of any similar patent, research paper, Ayurvedic text, commercial product, or existing formulation?",
+            ["No Known Similar Patents or Products", "Documented in Classical Ayurvedic Literature", "Similar Commercial Products Exist on Market", "Related Research Papers Published", "✍️ Type known prior art..."]
         ),
         "traditional_knowledge_involved": (
             "Does your formulation rely on publicly known traditional Ayurvedic knowledge, or have you developed a novel composition?",
@@ -131,6 +163,30 @@ class DynamicQuestioningEngine:
         "ingredients": (
             "Which botanical active ingredients in your formula require subject matter eligibility disclosure under foreign patent laws?",
             ["Ashwagandha & Turmeric", "Brahmi & Neem", "Tulsi & Ginger", "✍️ Type custom ingredients..."]
+        ),
+        "novelty_aspect": (
+            "What is the main thing that is new or different about your formulation compared with existing Ayurvedic formulations for international patent filing?",
+            ["Novel Combination of Herbs", "Novel Extraction / Purification Process", "Novel Dosage Delivery Form", "Modified Release Profile", "✍️ Type novelty details..."]
+        ),
+        "technical_improvement": (
+            "What specific technical improvement does your formulation provide compared with conventional preparations under foreign patent standards?",
+            ["Improved Bioavailability / Absorption", "Enhanced Stability & Shelf Life", "Increased Active Yield", "Reduced Side Effects / Toxicity", "✍️ Type improvement details..."]
+        ),
+        "composition_details": (
+            "What are the main ingredients and, if known, their approximate proportions or quantities for foreign patent claims?",
+            ["Standard Equal Ratio (1:1:1)", "Synergistic Ratio (e.g. 2:1:0.5)", "Concentrated Standardized Extract (10:1)", "✍️ Type exact proportions..."]
+        ),
+        "experimental_evidence": (
+            "Do you have laboratory, clinical, comparative, stability, or other test results supporting the claimed improvement for patent filing?",
+            ["Comparative In-Vitro / In-Vivo Lab Data", "Stability & Shelf Life Test Reports", "Clinical Study Observation Data", "Testing Currently In Progress", "✍️ Type test details..."]
+        ),
+        "public_disclosure": (
+            "Have you already publicly disclosed, sold, demonstrated, exhibited, published, or uploaded this formulation or its details anywhere?",
+            ["No Public Disclosure (Kept Confidential)", "Published in Academic Journal / Conference", "Commercialized / Sold in Market", "Demonstrated at Public Exhibition / Online", "✍️ Type disclosure details..."]
+        ),
+        "prior_art_known": (
+            "Do you already know of any similar patent, research paper, Ayurvedic text, commercial product, or existing formulation globally?",
+            ["No Known Similar Patents or Products", "Documented in Classical Ayurvedic Texts", "Similar Commercial Products Exist on Market", "Related Research Papers Published", "✍️ Type known prior art..."]
         ),
         "traditional_knowledge_involved": (
             "Under international Nagoya Protocol guidelines, does your product utilize genetic resources or traditional knowledge originating from India?",
@@ -198,6 +254,18 @@ class DynamicQuestioningEngine:
                 asked_topics.append("classical_reference")
             if "ingredient" in q_text or "medicinal plant" in q_text or "botanical" in q_text or "biological ingredients" in q_text or "quantities or percentages" in q_text or "percentage composition" in q_text:
                 asked_topics.append("ingredients")
+            if "new or different" in q_text or "novelty" in q_text or "what is the main thing that is new" in q_text:
+                asked_topics.append("novelty_aspect")
+            if "specific improvement" in q_text or "technical improvement" in q_text or "stability, bioavailability" in q_text:
+                asked_topics.append("technical_improvement")
+            if "proportions or quantities" in q_text or "composition details" in q_text or "percentage" in q_text:
+                asked_topics.append("composition_details")
+            if "laboratory, clinical" in q_text or "test results supporting" in q_text or "experimental" in q_text:
+                asked_topics.append("experimental_evidence")
+            if "publicly disclosed" in q_text or "public disclosure" in q_text or "exhibited, published" in q_text:
+                asked_topics.append("public_disclosure")
+            if "similar patent, research paper" in q_text or "prior art" in q_text or "already know of any similar" in q_text:
+                asked_topics.append("prior_art_known")
             if "traditional knowledge" in q_text or "tkdl" in q_text or "genetic resources" in q_text or "traditional ayurvedic knowledge" in q_text:
                 asked_topics.append("traditional_knowledge_involved")
             if "synergistic" in q_text or "bioavailability" in q_text or "unexpected synergistic" in q_text or "efficacy" in q_text:
@@ -245,7 +313,26 @@ class DynamicQuestioningEngine:
             return "contradiction_clarification"
 
         # 2. Ordered priority candidate evaluation
-        all_ordered_candidates = self.HIGH_PRIORITY_FIELDS + self.MEDIUM_PRIORITY_FIELDS + self.LOW_PRIORITY_FIELDS
+        is_patent_focus = (
+            any("patent" in o.lower() for o in state.intellectual_property_objective)
+            or (state.formulation_classification or "").lower() in ["proprietary", "new_non_classical", "phytopharmaceutical"]
+            or (state.classical_reference and "novel" in state.classical_reference.lower())
+            or (state.novelty_aspect is not None or state.technical_improvement is not None)
+        )
+
+        if is_patent_focus:
+            all_ordered_candidates = (
+                self.HIGH_PRIORITY_FIELDS
+                + self.PATENT_PRIORITY_FIELDS
+                + self.MEDIUM_PRIORITY_FIELDS
+                + self.LOW_PRIORITY_FIELDS
+            )
+        else:
+            all_ordered_candidates = (
+                self.HIGH_PRIORITY_FIELDS
+                + self.MEDIUM_PRIORITY_FIELDS
+                + self.LOW_PRIORITY_FIELDS
+            )
 
         for candidate in all_ordered_candidates:
             if candidate not in missing_gaps:

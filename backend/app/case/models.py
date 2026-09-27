@@ -26,7 +26,16 @@ class CaseState(BaseModel):
     access_and_benefit_sharing: Optional[bool] = None
     synergistic_efficacy_proven: Optional[bool] = None
     applicant_entity_type: Optional[str] = None # "indian_entity", "foreign_entity_or_nri", "individual_innovator"
+    
+    # Patent-Specific Intake Fields
     novelty_aspect: Optional[str] = None
+    composition_details: Optional[str] = None
+    technical_improvement: Optional[str] = None
+    experimental_evidence: Optional[str] = None
+    public_disclosure: Optional[bool] = None
+    public_disclosure_details: Optional[str] = None
+    prior_art_known: Optional[bool] = None
+    prior_art_details: Optional[str] = None
 
     intellectual_property_objective: List[str] = Field(
         default_factory=list,

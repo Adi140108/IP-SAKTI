@@ -931,29 +931,60 @@ export default function ChatPage() {
                       </button>
                     </div>
 
-                    {/* Safe Abstention Warning */}
+                    {/* Safe Abstention / Insufficient Evidence Warning */}
                     {item.data.safe_abstention && (
-                      <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800/60 text-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
-                        <span>⚠️</span>
-                        <div>{item.data.confidence_explanation}</div>
+                      <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-900 dark:text-rose-200 text-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 font-bold">
+                            <span className="text-sm">⚠️</span>
+                            <span>Safe Abstention — Insufficient Authoritative Evidence</span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full bg-rose-200/80 dark:bg-rose-900/80 text-rose-800 dark:text-rose-200 text-[10px] font-bold">
+                            Confidence: Low
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-rose-800/90 dark:text-rose-300/90 leading-relaxed">
+                          {item.data.confidence_explanation || "I don't have enough authoritative evidence to provide a reliable answer for this specific case."}
+                        </p>
                       </div>
                     )}
 
-                    {/* Human Escalation Warning */}
-                    {item.data.requires_human_escalation && (
-                      <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span>⚖️</span>
-                          <div>
-                            <strong className="font-bold">Human Legal Review Recommended:</strong> Novel biological claims or cross-border statutory considerations.
+                    {/* Human IP Facilitator Escalation Card */}
+                    {(item.data.requires_human_escalation || item.data.safe_abstention || (item.data.confidence_score !== undefined && item.data.confidence_score < 0.75)) && (
+                      <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-emerald-500/5 to-teal-500/10 border border-amber-500/30 dark:border-amber-500/25 space-y-2.5 shadow-2xs">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="flex items-start sm:items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 text-sm">
+                              ⚖️
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                                <span>Need expert assistance?</span>
+                                {item.data.confidence_score !== undefined && (
+                                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                    item.data.confidence_score >= 0.75
+                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                      : item.data.confidence_score >= 0.45
+                                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                      : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                  }`}>
+                                    Confidence: {item.data.confidence_score >= 0.75 ? 'High' : item.data.confidence_score >= 0.45 ? 'Medium' : 'Low'}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-tight mt-0.5">
+                                This case contains questions or evidence that may benefit from review by an IP facilitator.
+                              </p>
+                            </div>
                           </div>
+                          <button
+                            onClick={() => setShowDossierModal(true)}
+                            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 text-white font-bold text-[11px] shadow-sm hover:shadow transition-all cursor-pointer whitespace-nowrap self-start sm:self-center flex items-center gap-1.5 active:scale-95"
+                          >
+                            <span>Request Human Review</span>
+                            <span>➔</span>
+                          </button>
                         </div>
-                        <button
-                          onClick={() => setShowDossierModal(true)}
-                          className="px-2 py-1 rounded bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-100 font-bold text-[10px] hover:bg-amber-300 transition-all cursor-pointer whitespace-nowrap"
-                        >
-                          Export Dossier ➔
-                        </button>
                       </div>
                     )}
 
@@ -961,6 +992,82 @@ export default function ChatPage() {
                     <div className="prose dark:prose-invert max-w-none text-xs leading-relaxed text-slate-800 dark:text-slate-200 whitespace-pre-wrap font-sans">
                       {item.data.answer}
                     </div>
+
+                    {/* Potential Prior-Art Matches Section */}
+                    {item.data.prior_art_matches && item.data.prior_art_matches.length > 0 && (
+                      <div className="p-3 rounded-xl bg-slate-50/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-2.5 shadow-2xs">
+                        <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800/80 pb-1.5">
+                          <div className="text-[11px] font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                            <span>🔍</span>
+                            <span>Potential Prior-Art Matches</span>
+                          </div>
+                          <span className="text-[9px] text-slate-500 dark:text-slate-400 font-medium">
+                            Potential match — not a legal determination.
+                          </span>
+                        </div>
+
+                        <div className="space-y-2">
+                          {item.data.prior_art_matches.map((match, mIdx) => (
+                            <div
+                              key={mIdx}
+                              className="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/90 space-y-1.5"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="font-bold text-[11px] text-slate-900 dark:text-slate-100">
+                                  {match.title}
+                                </div>
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${
+                                  match.match_category === 'Strong potential prior-art relevance'
+                                    ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                    : match.match_category === 'Related traditional knowledge'
+                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                }`}>
+                                  {match.match_category}
+                                </span>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500 dark:text-slate-400">
+                                <span><strong>Source:</strong> {match.source_type}</span>
+                                <span><strong>Jurisdiction:</strong> {match.jurisdiction} {match.country ? `(${match.country})` : ''}</span>
+                                <span><strong>Relevance:</strong> {Math.round(match.relevance_score * 100)}%</span>
+                                {match.source_url && (
+                                  <a
+                                    href={match.source_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-emerald-600 hover:underline font-semibold"
+                                  >
+                                    Source Link ↗
+                                  </a>
+                                )}
+                              </div>
+
+                              {match.matched_features && match.matched_features.length > 0 && (
+                                <div className="flex flex-wrap gap-1 pt-0.5">
+                                  <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">Matched:</span>
+                                  {match.matched_features.map((feat, fIdx) => (
+                                    <span
+                                      key={fIdx}
+                                      className="px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[9px]"
+                                    >
+                                      {feat}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {match.explanation && (
+                                <div className="text-[10px] text-slate-600 dark:text-slate-400 italic bg-slate-50 dark:bg-slate-900/60 p-1.5 rounded">
+                                  {match.explanation}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
 
                     {/* Prominent Dynamic Question Box with 1-Click Option Chips */}
                     {item.data.next_question && (

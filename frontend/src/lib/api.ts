@@ -4,6 +4,7 @@ import {
   DocumentMetadata,
   DiagnosticsStatus,
   EscalationDossier,
+  EscalationSubmissionResponse,
   LegalSourceItem
 } from '@/types';
 
@@ -137,10 +138,70 @@ export async function fetchLegalSources(jurisdiction?: string): Promise<LegalSou
   return handleResponse<LegalSourceItem[]>(res);
 }
 
-export async function fetchEscalationDossier(caseId: string, reason: string = 'User request'): Promise<EscalationDossier> {
+export async function fetchEscalationDossier(caseId: string, reason: string = 'User requested expert review', userNote?: string): Promise<EscalationDossier> {
   const baseUrl = getApiBaseUrl();
-  const res = await fetch(`${baseUrl}/escalation/dossier?case_id=${encodeURIComponent(caseId)}&reason=${encodeURIComponent(reason)}`, {
+  const url = userNote
+    ? `${baseUrl}/escalation/dossier?case_id=${encodeURIComponent(caseId)}&reason=${encodeURIComponent(reason)}&user_note=${encodeURIComponent(userNote)}`
+    : `${baseUrl}/escalation/dossier?case_id=${encodeURIComponent(caseId)}&reason=${encodeURIComponent(reason)}`;
+  const res = await fetch(url, {
     method: 'POST'
   });
   return handleResponse<EscalationDossier>(res);
 }
+
+export async function submitEscalationRequest(
+  caseIdOrPayload: string | { case_id: string; reason?: string; user_note?: string; trigger_type?: string },
+  reason: string = 'User requested expert review',
+  userNote?: string
+): Promise<EscalationSubmissionResponse> {
+  const baseUrl = getApiBaseUrl();
+  let caseId = '';
+  let payloadReason = reason;
+  let payloadNote = userNote;
+  let triggerType = 'user';
+
+  if (typeof caseIdOrPayload === 'object' && caseIdOrPayload !== null) {
+    caseId = caseIdOrPayload.case_id;
+    if (caseIdOrPayload.reason) payloadReason = caseIdOrPayload.reason;
+    if (caseIdOrPayload.user_note) payloadNote = caseIdOrPayload.user_note;
+    if (caseIdOrPayload.trigger_type) triggerType = caseIdOrPayload.trigger_type;
+  } else {
+    caseId = caseIdOrPayload;
+  }
+
+  const res = await fetch(`${baseUrl}/escalation/submit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      case_id: caseId,
+      reason: payloadReason,
+      user_note: payloadNote,
+      trigger_type: triggerType
+    })
+  });
+  return handleResponse<EscalationSubmissionResponse>(res);
+}
+
+export async function fetchEscalationRequests(limit: number = 50, status?: string): Promise<EscalationDossier[]> {
+  const baseUrl = getApiBaseUrl();
+  const url = status
+    ? `${baseUrl}/escalation/requests?limit=${limit}&status=${encodeURIComponent(status)}`
+    : `${baseUrl}/escalation/requests?limit=${limit}`;
+  const res = await fetch(url);
+  return handleResponse<EscalationDossier[]>(res);
+}
+
+export async function updateEscalationStatus(dossierId: string, status: string, facilitatorNote?: string): Promise<EscalationDossier> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/escalation/dossier/${encodeURIComponent(dossierId)}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      status,
+      facilitator_note: facilitatorNote,
+      facilitator_id: 'ip_facilitator_portal'
+    })
+  });
+  return handleResponse<EscalationDossier>(res);
+}
+
