@@ -25,7 +25,7 @@ export default function HomePage() {
               Navigate complex Indian (Sec 3(p), Biological Diversity Act, Drugs & Cosmetics Act) and International (WIPO, PCT, TRIPS, Nagoya Protocol) legal regimes for traditional knowledge, biological resources, and Ayurvedic innovations.
             </p>
 
-            <div className="flex flex-wrap items-center gap-4 pt-2">
+            <div className="flex flex-wrap items-center gap-3 pt-2">
               <Link
                 href="/chat"
                 className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-extrabold text-sm hover:from-emerald-400 hover:to-teal-500 transition-all shadow-lg shadow-emerald-950/50 flex items-center gap-2 cursor-pointer active:scale-95"
@@ -34,10 +34,17 @@ export default function HomePage() {
                 <span>→</span>
               </Link>
               <Link
-                href="/sources"
-                className="px-6 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm border border-white/20 transition-all backdrop-blur-sm cursor-pointer"
+                href="/auth"
+                className="px-5 py-3.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-sm border border-emerald-500/40 transition-all backdrop-blur-sm flex items-center gap-1.5 cursor-pointer"
               >
-                Browse Legal RAG Sources
+                <span>🔑</span>
+                <span>Sign In / Register</span>
+              </Link>
+              <Link
+                href="/sources"
+                className="px-5 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm border border-white/20 transition-all backdrop-blur-sm cursor-pointer"
+              >
+                Legal RAG Sources
               </Link>
             </div>
           </div>

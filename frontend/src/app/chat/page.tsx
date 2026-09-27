@@ -522,6 +522,18 @@ export default function ChatPage() {
             <span className="hidden sm:inline">New Case</span>
           </button>
 
+          {/* Sign In Prompt if not logged in */}
+          {!user && (
+            <Link
+              href="/auth"
+              className="px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 text-amber-800 dark:text-amber-300 font-bold text-xs hover:bg-amber-100 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+              title="Sign in to save your consultations to your account"
+            >
+              <span>🔑</span>
+              <span>Sign In to Save</span>
+            </Link>
+          )}
+
           {/* Switch Saved Case Dropdown */}
           {userCases.length > 0 && (
             <div className="relative" ref={casePickerRef}>
