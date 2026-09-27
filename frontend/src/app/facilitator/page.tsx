@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { EscalationDossier } from '@/types';
 import { fetchEscalationRequests, updateEscalationStatus } from '@/lib/api';
 import { getTierFromClassification } from '@/lib/formulationTaxonomy';
-import { getPersistedDossiers, mergeAndPersistDossiers } from '@/lib/caseRegistry';
+import { getPersistedDossiers, mergeAndPersistDossiers, persistDossier } from '@/lib/caseRegistry';
 
 export default function FacilitatorDashboardPage() {
   const [dossiers, setDossiers] = useState<EscalationDossier[]>(() => getPersistedDossiers());
@@ -48,14 +48,42 @@ export default function FacilitatorDashboardPage() {
   const handleStatusChange = async (newStatus: string) => {
     if (!activeDossier?.dossier_id) return;
     setUpdatingStatus(true);
+
+    const nowIso = new Date().toISOString();
+    const typedStatus = newStatus as EscalationDossier['status'];
+    const updatedLocal: EscalationDossier = {
+      ...activeDossier,
+      status: typedStatus,
+      reviewed_at: newStatus === 'under_review' ? nowIso : activeDossier.reviewed_at,
+      facilitator_notes: facilitatorNote || activeDossier.facilitator_notes,
+      audit_log: [
+        ...(activeDossier.audit_log || []),
+        {
+          action: `status_updated_to_${newStatus}`,
+          timestamp: nowIso,
+          facilitator_id: 'ip_facilitator_portal',
+          note: facilitatorNote || undefined,
+          status: newStatus
+        }
+      ]
+    };
+
+    // 1. Optimistically persist and update UI
+    persistDossier(updatedLocal);
+    setActiveDossier(updatedLocal);
+    setDossiers((prev) => prev.map((d) => (d.dossier_id === updatedLocal.dossier_id ? updatedLocal : d)));
+    setFacilitatorNote('');
+
+    // 2. Sync with backend API
     try {
-      const updated = await updateEscalationStatus(activeDossier.dossier_id, newStatus, facilitatorNote);
-      setActiveDossier(updated);
-      setFacilitatorNote('');
-      loadDossiers();
+      const updatedRemote = await updateEscalationStatus(activeDossier.dossier_id, newStatus, facilitatorNote);
+      if (updatedRemote) {
+        persistDossier(updatedRemote);
+        setActiveDossier(updatedRemote);
+        setDossiers((prev) => prev.map((d) => (d.dossier_id === updatedRemote.dossier_id ? updatedRemote : d)));
+      }
     } catch (err) {
-      console.error('Error updating status:', err);
-      alert('Failed to update escalation status.');
+      console.warn('Backend remote status sync fallback (saved in local registry):', err);
     } finally {
       setUpdatingStatus(false);
     }

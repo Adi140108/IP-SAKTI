@@ -276,16 +276,45 @@ class HumanEscalationService:
         )
 
     async def get_dossier(self, dossier_id: str) -> Optional[EscalationDossier]:
-        """Retrieve persisted escalation dossier by ID."""
+        """Retrieve persisted escalation dossier by ID, resolving by case ID if needed."""
         data = await firestore_service.get_escalation_dossier(dossier_id)
         if data:
             return EscalationDossier(**data)
+        
+        # Check if dossier_id corresponds to a case
+        clean_case_id = dossier_id.replace("dos_", "")
+        case_data = await firestore_service.get_case_state(clean_case_id) or await firestore_service.get_case_state(dossier_id)
+        if case_data:
+            case_state = CaseState(**case_data)
+            dossier = await self.generate_dossier(case_state=case_state)
+            dossier.dossier_id = dossier_id
+            await firestore_service.save_escalation_dossier(dossier_id, dossier.model_dump())
+            return dossier
+
         return None
 
     async def list_dossiers(self, limit: int = 50, status: Optional[str] = None) -> List[EscalationDossier]:
         """List submitted escalation dossiers for facilitator dashboard."""
         records = await firestore_service.list_escalation_dossiers(limit=limit, status=status)
-        return [EscalationDossier(**r) for r in records]
+        dossiers = []
+        for r in records:
+            try:
+                dossiers.append(EscalationDossier(**r))
+            except Exception as e:
+                logger.warning(f"Error parsing dossier record: {e}")
+                dossiers.append(EscalationDossier(
+                    dossier_id=r.get("dossier_id") or "dos_unknown",
+                    case_id=r.get("case_id") or "case_unknown",
+                    product_name=r.get("product_name") or r.get("product_type"),
+                    product_type=r.get("product_type"),
+                    status=r.get("status") or "submitted",
+                    escalation_reason=r.get("escalation_reason") or "User requested review",
+                    user_note=r.get("user_note"),
+                    created_at=r.get("created_at") or r.get("submitted_at") or datetime.now().isoformat(),
+                    submitted_at=r.get("submitted_at") or r.get("created_at") or datetime.now().isoformat(),
+                    ingredients=r.get("ingredients") or []
+                ))
+        return dossiers
 
     async def update_status(
         self,
@@ -295,9 +324,10 @@ class HumanEscalationService:
         facilitator_id: Optional[str] = "facilitator_system"
     ) -> Optional[EscalationDossier]:
         """Update dossier lifecycle status with facilitator audit entry."""
+        now_iso = datetime.now().isoformat()
         audit_entry = {
             "action": f"status_updated_to_{new_status}",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": now_iso,
             "facilitator_id": facilitator_id,
             "note": facilitator_note,
             "status": new_status
@@ -307,9 +337,38 @@ class HumanEscalationService:
             if facilitator_note:
                 res_dict["facilitator_notes"] = facilitator_note
             if new_status == "under_review":
-                res_dict["reviewed_at"] = datetime.now().isoformat()
+                res_dict["reviewed_at"] = now_iso
             await firestore_service.save_escalation_dossier(dossier_id, res_dict)
             return EscalationDossier(**res_dict)
-        return None
+
+        # If not present in DB, construct and persist on the fly
+        clean_case_id = dossier_id.replace("dos_", "")
+        case_data = await firestore_service.get_case_state(clean_case_id) or await firestore_service.get_case_state(dossier_id)
+        if case_data:
+            case_state = CaseState(**case_data)
+            dossier = await self.generate_dossier(case_state=case_state)
+            dossier.dossier_id = dossier_id
+            dossier.status = new_status
+            if facilitator_note:
+                dossier.facilitator_notes = facilitator_note
+            if new_status == "under_review":
+                dossier.reviewed_at = now_iso
+            dossier.audit_log.append(audit_entry)
+            await firestore_service.save_escalation_dossier(dossier_id, dossier.model_dump())
+            return dossier
+
+        # Fallback minimal dossier creation
+        fallback = EscalationDossier(
+            dossier_id=dossier_id,
+            case_id=clean_case_id or dossier_id,
+            status=new_status,
+            facilitator_notes=facilitator_note,
+            reviewed_at=now_iso if new_status == "under_review" else None,
+            audit_log=[audit_entry],
+            created_at=now_iso,
+            submitted_at=now_iso
+        )
+        await firestore_service.save_escalation_dossier(dossier_id, fallback.model_dump())
+        return fallback
 
 human_escalation_service = HumanEscalationService()
