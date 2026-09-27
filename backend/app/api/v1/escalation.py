@@ -34,9 +34,10 @@ async def create_or_submit_escalation_dossier(
 
     case_data = await firestore_service.get_case_state(effective_case_id)
     if not case_data:
-        raise HTTPException(status_code=404, detail="Case state not found")
-
-    case_state = CaseState(**case_data)
+        case_state = CaseState(case_id=effective_case_id)
+        await firestore_service.save_case_state(effective_case_id, case_state.model_dump())
+    else:
+        case_state = CaseState(**case_data)
 
     # If this is an explicit submission request (has request body or explicit submit intention), submit and persist
     dossier = await human_escalation_service.generate_dossier(
@@ -85,8 +86,10 @@ async def get_escalation_dossier_by_case(
     if case_id:
         case_data = await firestore_service.get_case_state(case_id)
         if not case_data:
-            raise HTTPException(status_code=404, detail="Case state not found")
-        case_state = CaseState(**case_data)
+            case_state = CaseState(case_id=case_id)
+            await firestore_service.save_case_state(case_id, case_state.model_dump())
+        else:
+            case_state = CaseState(**case_data)
         return await human_escalation_service.generate_dossier(case_state=case_state)
 
     raise HTTPException(status_code=400, detail="Either case_id or dossier_id must be provided")

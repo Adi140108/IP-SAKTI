@@ -13,7 +13,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const [isHealthy, setIsHealthy] = useState<boolean | null>(null);
   const { theme, toggleTheme } = useTheme();
-  const { user, signOutUser } = useAuth();
+  const { user, userRole, setUserRole, signOutUser } = useAuth();
   const [userDropdownOpen, setUserDropdownOpen] = useState<boolean>(false);
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
@@ -38,14 +38,21 @@ export default function Navbar() {
     };
   }, [isHealthy]);
 
-  const navItems = [
-    { href: '/', label: 'Overview' },
-    { href: '/chat', label: 'AI Chat' },
-    { href: '/case', label: 'Case Workspace' },
-    { href: '/escalation', label: 'Escalate Case' },
-    { href: '/sources', label: 'Legal RAG Sources' },
-    { href: '/facilitator', label: 'Facilitator Portal' },
-  ];
+  const navItems = userRole === 'facilitator'
+    ? [
+        { href: '/', label: 'Overview' },
+        { href: '/facilitator', label: '⚖️ Facilitator Queue' },
+        { href: '/case', label: 'Case Workspace' },
+        { href: '/chat', label: 'AI Consultation' },
+        { href: '/sources', label: 'Legal RAG Sources' },
+      ]
+    : [
+        { href: '/', label: 'Overview' },
+        { href: '/chat', label: 'AI Chat' },
+        { href: '/case', label: 'Case Workspace' },
+        { href: '/escalation', label: 'Escalate Case' },
+        { href: '/sources', label: 'Legal RAG Sources' },
+      ];
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-md border-b transition-colors bg-white/90 dark:bg-slate-950/85 border-slate-200 dark:border-slate-800/80 shadow-xs">
@@ -66,7 +73,7 @@ export default function Navbar() {
               IP-SAKTI <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800/50">Sahayak</span>
             </span>
             <span className="block text-[10px] text-slate-500 dark:text-slate-400 font-medium tracking-wide">
-              SIH PS-26045 • AYUSH & Bio-Resource IP AI
+              SIH PS-26045 • AYUSH &amp; Bio-Resource IP AI
             </span>
           </div>
         </Link>
@@ -119,13 +126,34 @@ export default function Navbar() {
               </button>
 
               {userDropdownOpen && (
-                <div className="absolute right-0 mt-1.5 w-48 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl z-50 py-1.5 text-xs">
+                <div className="absolute right-0 mt-1.5 w-52 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl z-50 py-1.5 text-xs animate-in fade-in zoom-in-95 duration-150">
                   <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">Signed in as</p>
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Account</p>
+                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                        userRole === 'facilitator'
+                          ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
+                          : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
+                      }`}>
+                        {userRole === 'facilitator' ? '⚖️ Facilitator' : '🌿 Practitioner'}
+                      </span>
+                    </div>
                     <p className="font-semibold text-slate-900 dark:text-slate-100 truncate text-[11px]">
                       {user.email || 'User'}
                     </p>
                   </div>
+
+                  <button
+                    onClick={() => {
+                      setUserRole(userRole === 'facilitator' ? 'practitioner' : 'facilitator');
+                      setUserDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors font-medium text-xs flex items-center gap-2 cursor-pointer border-b border-slate-100 dark:border-slate-800"
+                  >
+                    <span>🔄</span>
+                    <span>Switch to {userRole === 'facilitator' ? 'Practitioner' : 'Facilitator'} Mode</span>
+                  </button>
+
                   <Link
                     href="/case"
                     onClick={() => setUserDropdownOpen(false)}
@@ -133,19 +161,29 @@ export default function Navbar() {
                   >
                     📁 My Saved Cases
                   </Link>
-                  <Link
-                    href="/facilitator"
-                    onClick={() => setUserDropdownOpen(false)}
-                    className="block px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 transition-colors"
-                  >
-                    ⚖️ Facilitator Portal
-                  </Link>
+                  {userRole === 'facilitator' ? (
+                    <Link
+                      href="/facilitator"
+                      onClick={() => setUserDropdownOpen(false)}
+                      className="block px-3 py-2 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors font-semibold"
+                    >
+                      ⚖️ Facilitator Review Portal
+                    </Link>
+                  ) : (
+                    <Link
+                      href="/escalation"
+                      onClick={() => setUserDropdownOpen(false)}
+                      className="block px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 transition-colors"
+                    >
+                      🚀 Escalate Active Case
+                    </Link>
+                  )}
                   <button
                     onClick={() => {
                       signOutUser();
                       setUserDropdownOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors font-semibold cursor-pointer"
+                    className="w-full text-left px-3 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors font-semibold cursor-pointer border-t border-slate-100 dark:border-slate-800"
                   >
                     🚪 Sign Out
                   </button>
@@ -227,7 +265,7 @@ export default function Navbar() {
               className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400"
             >
               <span className={`w-2 h-2 rounded-full ${isHealthy ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-              <span>System Health & Diagnostics</span>
+              <span>System Health &amp; Diagnostics</span>
             </Link>
           </div>
         </div>

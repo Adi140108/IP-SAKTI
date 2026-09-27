@@ -238,9 +238,10 @@ class HumanEscalationService:
         """Construct, submit, and persist a human review request."""
         case_data = await firestore_service.get_case_state(case_id)
         if not case_data:
-            raise ValueError(f"Case state not found for ID: {case_id}")
-
-        case_state = CaseState(**case_data)
+            case_state = CaseState(case_id=case_id)
+            await firestore_service.save_case_state(case_id, case_state.model_dump())
+        else:
+            case_state = CaseState(**case_data)
         dossier = await self.generate_dossier(
             case_state=case_state,
             reason=reason,

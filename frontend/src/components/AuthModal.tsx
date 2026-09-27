@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useAuth } from './AuthProvider';
+import { useAuth, UserRole } from './AuthProvider';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -19,9 +19,10 @@ export default function AuthModal({
   title = 'Sign In or Create Account',
   subtitle = 'Sign in to save your consultations to Firebase and resume chatting with your cases anytime.',
 }: AuthModalProps) {
-  const { signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
+  const { signInWithEmail, signUpWithEmail, signInWithGoogle, userRole, setUserRole } = useAuth();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signup');
+  const [role, setRole] = useState<UserRole>(userRole || 'practitioner');
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [displayName, setDisplayName] = useState<string>('');
@@ -32,6 +33,12 @@ export default function AuthModal({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (userRole) {
+      setRole(userRole);
+    }
+  }, [userRole]);
 
   if (!isOpen || !mounted || typeof document === 'undefined') return null;
 
@@ -48,12 +55,13 @@ export default function AuthModal({
         if (password.length < 6) {
           throw new Error('Password must be at least 6 characters long.');
         }
-        await signUpWithEmail(email.trim(), password, displayName.trim() || undefined);
+        await signUpWithEmail(email.trim(), password, displayName.trim() || undefined, role);
       } else {
         if (!email.trim() || !password.trim()) {
           throw new Error('Please enter both email and password.');
         }
         await signInWithEmail(email.trim(), password);
+        setUserRole(role);
       }
       onClose();
       if (onSuccess) onSuccess();
@@ -78,7 +86,7 @@ export default function AuthModal({
     setError(null);
     setLoading(true);
     try {
-      await signInWithGoogle();
+      await signInWithGoogle(role);
       onClose();
       if (onSuccess) onSuccess();
     } catch (err: any) {
@@ -95,13 +103,14 @@ export default function AuthModal({
   };
 
   const handleContinueAsGuest = () => {
+    setUserRole(role);
     onClose();
     if (onSuccess) onSuccess();
   };
 
   return createPortal(
     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md my-auto max-h-[92vh] overflow-y-auto rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-8 space-y-6">
+      <div className="relative w-full max-w-md my-auto max-h-[92vh] overflow-y-auto rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-8 space-y-5">
         
         {/* Close Button */}
         <button
@@ -124,7 +133,51 @@ export default function AuthModal({
           </p>
         </div>
 
-        {/* Tab Selector */}
+        {/* Dual Role Selector */}
+        <div className="space-y-1.5">
+          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            Select Account Role:
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setRole('practitioner')}
+              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                role === 'practitioner'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/80 border-emerald-500 text-emerald-900 dark:text-emerald-200 shadow-xs'
+                  : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+              }`}
+            >
+              <div className="font-extrabold text-xs flex items-center gap-1.5">
+                <span>🌿</span>
+                <span>Practitioner</span>
+              </div>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">
+                Ayurvedic Innovator / Formulator
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setRole('facilitator')}
+              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                role === 'facilitator'
+                  ? 'bg-amber-50 dark:bg-amber-950/80 border-amber-500 text-amber-900 dark:text-amber-200 shadow-xs'
+                  : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+              }`}
+            >
+              <div className="font-extrabold text-xs flex items-center gap-1.5">
+                <span>⚖️</span>
+                <span>IP Facilitator</span>
+              </div>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">
+                Reviewer / Regulatory Officer
+              </p>
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Selector: Sign Up vs Sign In */}
         <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-bold">
           <button
             type="button"
@@ -189,7 +242,7 @@ export default function AuthModal({
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
             />
           </svg>
-          <span>Continue with Google</span>
+          <span>Continue with Google as {role === 'facilitator' ? 'Facilitator' : 'Practitioner'}</span>
         </button>
 
         <div className="relative flex items-center justify-center">
@@ -200,7 +253,7 @@ export default function AuthModal({
         </div>
 
         {/* Email & Password Form */}
-        <form onSubmit={handleEmailAuth} className="space-y-3.5">
+        <form onSubmit={handleEmailAuth} className="space-y-3">
           {mode === 'signup' && (
             <div>
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -252,7 +305,7 @@ export default function AuthModal({
             {loading ? (
               <div className="w-4 h-4 rounded-full border-2 border-slate-950 border-t-transparent animate-spin" />
             ) : (
-              <span>{mode === 'signup' ? 'Create Account & Start' : 'Sign In & Continue'}</span>
+              <span>{mode === 'signup' ? `Create ${role === 'facilitator' ? 'Facilitator' : 'Practitioner'} Account` : 'Sign In & Continue'}</span>
             )}
           </button>
         </form>
@@ -264,7 +317,7 @@ export default function AuthModal({
             onClick={handleContinueAsGuest}
             className="text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 text-xs font-semibold hover:underline cursor-pointer"
           >
-            Continue as Guest without saving →
+            Continue as Guest ({role === 'facilitator' ? 'Facilitator' : 'Practitioner'}) without saving →
           </button>
         </div>
 
