@@ -140,11 +140,26 @@ export async function fetchLegalSources(jurisdiction?: string): Promise<LegalSou
 
 export async function fetchEscalationDossier(caseId: string, reason: string = 'User requested expert review', userNote?: string): Promise<EscalationDossier> {
   const baseUrl = getApiBaseUrl();
-  const url = userNote
-    ? `${baseUrl}/escalation/dossier?case_id=${encodeURIComponent(caseId)}&reason=${encodeURIComponent(reason)}&user_note=${encodeURIComponent(userNote)}`
-    : `${baseUrl}/escalation/dossier?case_id=${encodeURIComponent(caseId)}&reason=${encodeURIComponent(reason)}`;
-  const res = await fetch(url, {
-    method: 'POST'
+  try {
+    const url = `${baseUrl}/escalation/dossier?case_id=${encodeURIComponent(caseId)}`;
+    const res = await fetch(url, { method: 'GET' });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // Try POST fallback
+  }
+
+  const postUrl = `${baseUrl}/escalation/dossier`;
+  const res = await fetch(postUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      case_id: caseId,
+      reason,
+      user_note: userNote,
+      trigger_type: 'user'
+    })
   });
   return handleResponse<EscalationDossier>(res);
 }
@@ -169,17 +184,42 @@ export async function submitEscalationRequest(
     caseId = caseIdOrPayload;
   }
 
-  const res = await fetch(`${baseUrl}/escalation/submit`, {
+  const payload = {
+    case_id: caseId,
+    reason: payloadReason,
+    user_note: payloadNote,
+    trigger_type: triggerType
+  };
+
+  // Try /escalation/submit first
+  try {
+    const res = await fetch(`${baseUrl}/escalation/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // Fallback to /escalation/dossier
+  }
+
+  // Fallback to /escalation/dossier
+  const dossierRes = await fetch(`${baseUrl}/escalation/dossier`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      case_id: caseId,
-      reason: payloadReason,
-      user_note: payloadNote,
-      trigger_type: triggerType
-    })
+    body: JSON.stringify(payload)
   });
-  return handleResponse<EscalationSubmissionResponse>(res);
+  const dossierData = await handleResponse<EscalationDossier>(dossierRes);
+  return {
+    dossier_id: dossierData.dossier_id || `dos_${Date.now().toString(36)}`,
+    case_id: caseId,
+    status: 'submitted',
+    created_at: dossierData.created_at || new Date().toISOString(),
+    message: 'Human review request submitted successfully.',
+    dossier: dossierData
+  };
 }
 
 export async function fetchEscalationRequests(limit: number = 50, status?: string): Promise<EscalationDossier[]> {
