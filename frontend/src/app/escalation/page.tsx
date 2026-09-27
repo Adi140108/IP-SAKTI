@@ -309,14 +309,14 @@ ${activeD?.citations && activeD.citations.length > 0
           <div className="flex items-center gap-2">
             <button
               onClick={downloadMarkdownDossier}
-              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-850 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
             >
               <span>📥</span>
               <span>Export Markdown</span>
             </button>
             <Link
               href={`/chat${activeCaseId ? `?case_id=${activeCaseId}` : ''}`}
-              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
             >
               <span>💬</span>
               <span>Back to Chat</span>
@@ -517,7 +517,7 @@ ${activeD?.citations && activeD.citations.length > 0
                 className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                   activeTab === tab.id
                     ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs border border-slate-200 dark:border-slate-800'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-850'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800'
                 }`}
               >
                 <span>{tab.icon}</span>
@@ -803,7 +803,7 @@ ${activeD?.citations && activeD.citations.length > 0
                 )}
 
                 {/* Safety Disclaimer Banner */}
-                <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-850 border border-slate-300 dark:border-slate-800 text-slate-600 dark:text-slate-400 text-[10px] flex items-center gap-2">
+                <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-800 text-slate-600 dark:text-slate-400 text-[10px] flex items-center gap-2">
                   <span>🛡️</span>
                   <span>
                     <strong>Safety Standard:</strong> Informational case dossier for human IP facilitator review — not an AI legal verdict or determination of patentability.

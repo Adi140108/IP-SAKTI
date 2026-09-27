@@ -170,7 +170,7 @@ export async function fetchEscalationDossier(caseId: string, reason: string = 'U
     // Try POST fallback
   }
 
-  const postUrl = `${baseUrl}/escalation/dossier`;
+  const postUrl = `${baseUrl}/escalation/dossier?case_id=${encodeURIComponent(caseId)}`;
   const res = await fetch(postUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -211,7 +211,7 @@ export async function submitEscalationRequest(
     trigger_type: triggerType
   };
 
-  const res = await fetch(`${baseUrl}/escalation/submit`, {
+  const res = await fetch(`${baseUrl}/escalation/submit?case_id=${encodeURIComponent(caseId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
@@ -223,7 +223,7 @@ export async function submitEscalationRequest(
 
   // Fallback to /escalation/dossier if /escalation/submit was not found (404)
   if (res.status === 404) {
-    const dossierRes = await fetch(`${baseUrl}/escalation/dossier`, {
+    const dossierRes = await fetch(`${baseUrl}/escalation/dossier?case_id=${encodeURIComponent(caseId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
