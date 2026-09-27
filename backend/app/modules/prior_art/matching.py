@@ -7,6 +7,7 @@ from app.rag.reranker import evidence_reranker
 from app.rag.evidence import EvidenceChunk
 from app.modules.tkdl.service import tkdl_service
 from app.modules.prior_art.models import PriorArtMatch, PriorArtSearchResult
+from app.modules.prior_art.patent_database import find_matching_patents
 
 logger = logging.getLogger("IP-SAKTI.PriorArtMatcher")
 
@@ -160,21 +161,30 @@ class PriorArtMatcher:
             return "Weak/partial similarity"
         return "No meaningful match"
 
-from app.modules.prior_art.patent_database import find_matching_patents
-
-    async def search_prior_art(self, case_state: CaseState, top_k: int = 4) -> PriorArtSearchResult:
+    async def search_prior_art(self, case_state: CaseState, user_query: str = "", top_k: int = 4) -> PriorArtSearchResult:
         """
         Executes explainable prior-art and existing patent search across verified patent database,
         indexed vector store, and TKDL public classical pointers.
         """
+        combined_ingredients = list(case_state.ingredients or [])
+        if user_query:
+            uq_lower = user_query.lower()
+            for key, syns in BOTANICAL_SYNONYMS.items():
+                if key in uq_lower or any(s in uq_lower for s in syns):
+                    if key not in [i.lower() for i in combined_ingredients]:
+                        combined_ingredients.append(key)
+
         query = self.build_prior_art_query(case_state)
+        if user_query:
+            query = f"{user_query} {query}".strip()
+
         effective_country = case_state.country or ("India" if case_state.jurisdiction == "India" else None)
         matches: List[PriorArtMatch] = []
         seen_titles = set()
 
         # 1. Primary: Search Verified Real-World Patent Database
         matched_patents = find_matching_patents(
-            ingredients=case_state.ingredients or [],
+            ingredients=combined_ingredients,
             product_type=case_state.product_type,
             novelty=case_state.novelty_aspect,
             technical_improvement=case_state.technical_improvement,

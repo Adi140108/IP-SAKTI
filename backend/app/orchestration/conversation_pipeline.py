@@ -307,7 +307,7 @@ Return JSON:
         prior_art_matches = None
         prior_art_res = None
         if is_patent_case:
-            prior_art_res = await prior_art_matcher.search_prior_art(case_state)
+            prior_art_res = await prior_art_matcher.search_prior_art(case_state, user_query=processed_text)
             if prior_art_res and prior_art_res.matches:
                 prior_art_matches = prior_art_res.matches
 
