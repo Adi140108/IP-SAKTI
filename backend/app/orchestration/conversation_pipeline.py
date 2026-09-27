@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 from app.schemas.chat import ChatRequest, ChatResponse, Citation
 from app.case.models import CaseState
+from app.case.state_manager import case_state_manager
 from app.db.firestore import firestore_service
 from app.ai.groq.provider import groq_provider
 from app.ai.bhashini.service import bhashini_service
