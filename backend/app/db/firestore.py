@@ -187,20 +187,40 @@ class FirestoreService:
         return None
 
     async def list_cases(self, user_id: Optional[str] = None, limit: int = 50) -> list[Dict[str, Any]]:
-        """List case states, optionally filtered by user_id."""
+        """List case states, optionally filtered by user_id with guest fallback and deduplication."""
         results: list[Dict[str, Any]] = []
+        seen_ids = set()
+
         if self.db:
             try:
                 coll_ref = self.db.collection("case_states")
-                if user_id:
+                if user_id and user_id != "guest_user":
                     query = coll_ref.where("user_id", "==", user_id).limit(limit)
+                    for doc in query.stream():
+                        data = doc.to_dict()
+                        if data and data.get("case_id") and data["case_id"] not in seen_ids:
+                            seen_ids.add(data["case_id"])
+                            results.append(data)
+
+                    # Also include unassigned or guest cases so ongoing consultations are never lost
+                    if len(results) < limit:
+                        fallback_query = coll_ref.limit(limit)
+                        for doc in fallback_query.stream():
+                            data = doc.to_dict()
+                            if data and data.get("case_id") and data["case_id"] not in seen_ids:
+                                if data.get("user_id") in [user_id, "guest_user", None]:
+                                    seen_ids.add(data["case_id"])
+                                    results.append(data)
                 else:
                     query = coll_ref.limit(limit)
-                for doc in query.stream():
-                    data = doc.to_dict()
-                    if data:
-                        results.append(data)
-                return results
+                    for doc in query.stream():
+                        data = doc.to_dict()
+                        if data and data.get("case_id") and data["case_id"] not in seen_ids:
+                            seen_ids.add(data["case_id"])
+                            results.append(data)
+
+                results.sort(key=lambda x: x.get("updated_at") or x.get("created_at") or "", reverse=True)
+                return results[:limit]
             except Exception as e:
                 logger.warning(f"Firestore list cases error: {e}")
                 if self.is_production_mode():
@@ -213,11 +233,15 @@ class FirestoreService:
                         fpath = os.path.join(self.local_storage_dir, fname)
                         with open(fpath, "r", encoding="utf-8") as f:
                             data = json.load(f)
-                            if not user_id or data.get("user_id") == user_id:
-                                results.append(data)
+                            cid = data.get("case_id")
+                            if cid and cid not in seen_ids:
+                                if not user_id or data.get("user_id") in [user_id, "guest_user", None]:
+                                    seen_ids.add(cid)
+                                    results.append(data)
+                results.sort(key=lambda x: x.get("updated_at") or x.get("created_at") or "", reverse=True)
             except Exception as e:
                 logger.error(f"Local DB list cases error: {e}")
-        return results
+        return results[:limit]
 
     async def save_document_metadata(self, file_id: str, metadata: Dict[str, Any]) -> bool:
         """Save document metadata."""

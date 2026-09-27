@@ -34,6 +34,43 @@ LANGUAGE_NAMES = {
 
 logger = logging.getLogger("IP-SAKTI.ConversationPipeline")
 
+async def robust_translate(text: str, source_lang: str, target_lang: str) -> str:
+    """
+    Translates text with Bhashini NMT prioritized, seamlessly falling back
+    to high-speed Groq neural Indic translation if Bhashini is unconfigured or unreachable.
+    """
+    if not text or not text.strip() or source_lang == target_lang:
+        return text
+    target_name = LANGUAGE_NAMES.get(target_lang, target_lang)
+    
+    # 1. Primary: Government of India Bhashini NMT
+    if bhashini_service.is_configured():
+        try:
+            translated = await bhashini_service.translate_text(text, source_lang=source_lang, target_lang=target_lang)
+            if translated and translated.strip():
+                return translated
+        except Exception as e:
+            logger.warning(f"Bhashini NMT translation ({source_lang} -> {target_lang}) failed: {e}. Falling back to Groq neural translation.")
+            
+    # 2. Resilient Fallback: Groq Neural Multilingual Translation Engine
+    try:
+        translation_prompt = (
+            f"You are an expert statutory legal translator for AYUSH and IP law in India.\n"
+            f"Translate the following text accurately and idiomatically from {source_lang} into {target_name} ({target_lang}).\n"
+            f"STRICT RULES:\n"
+            f"- Use natural, authentic {target_name} script (e.g. Devanagari for Hindi/Marathi, Tamil script for Tamil, Telugu for Telugu, etc.).\n"
+            f"- Retain exact section numbers, Act citations (e.g. Section 3(p), Patents Act 1970, Form I, BDA 2002), and bullet point structure.\n"
+            f"- Do NOT add conversational fluff or meta-explanations. Output ONLY the translated text.\n\n"
+            f"{text}"
+        )
+        translated = await groq_provider.generate_text(translation_prompt)
+        if translated and translated.strip():
+            return translated.strip()
+    except Exception as e:
+        logger.error(f"Groq translation fallback failed ({source_lang} -> {target_lang}): {e}")
+
+    return text
+
 class ConversationPipeline:
     """
     Decoupled Conversation Orchestrator.
@@ -96,7 +133,7 @@ class ConversationPipeline:
         # Translate input for reasoning if non-English
         processed_text = user_text
         if lang != "en":
-            processed_text = await bhashini_service.translate_text(user_text, source_lang=lang, target_lang="en")
+            processed_text = await robust_translate(user_text, source_lang=lang, target_lang="en")
 
         # 3 & 4. Parallelized Parameter Extraction, Classification & IP Domain Routing
         state_task = case_orchestrator.extract_and_update_state(case_state, processed_text)
@@ -274,11 +311,14 @@ Return JSON:
         case_state.conversation_history.append(turn_record)
 
         # 10. Multilingual Translation & TTS Audio
+        translated_options = q_res.suggested_options if next_question else None
         if lang != "en":
             try:
-                final_answer = await bhashini_service.translate_text(final_answer, source_lang="en", target_lang=lang)
+                final_answer = await robust_translate(final_answer, source_lang="en", target_lang=lang)
                 if next_question:
-                    next_question = await bhashini_service.translate_text(next_question, source_lang="en", target_lang=lang)
+                    next_question = await robust_translate(next_question, source_lang="en", target_lang=lang)
+                if translated_options:
+                    translated_options = [await robust_translate(opt, source_lang="en", target_lang=lang) for opt in translated_options]
             except Exception as e:
                 logger.error(f"Response translation failed (en -> {lang}): {e}")
 
@@ -300,7 +340,7 @@ Return JSON:
             confidence_score=conf_score,
             confidence_explanation=conf_exp,
             next_question=next_question,
-            suggested_options=q_res.suggested_options if next_question else None,
+            suggested_options=translated_options,
             audio_url=audio_output,
             requires_human_escalation=safe_abstain,
             safe_abstention=safe_abstain

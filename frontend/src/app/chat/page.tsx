@@ -757,17 +757,29 @@ export default function ChatPage() {
             )}
           </div>
 
-          {/* Sound ON/OFF Toggle */}
+          {/* Sound ON/OFF Toggle with Crisp Vector Audio Icon */}
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`px-2 py-1 rounded-lg border text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+            className={`p-1.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-center cursor-pointer shadow-2xs ${
               soundEnabled
-                ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-400 dark:border-emerald-500/40 shadow-xs'
-                : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
+                ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-400 dark:border-emerald-500/40 shadow-xs'
+                : 'bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-800 hover:text-slate-900 dark:hover:text-slate-200 hover:border-emerald-500/40'
             }`}
-            title="Toggle Text-to-Speech audio response"
+            title={soundEnabled ? 'Text-to-Speech is ON (Click to mute)' : 'Text-to-Speech is OFF (Click to unmute)'}
           >
-            <span>{soundEnabled ? '🔊' : '🔇'}</span>
+            {soundEnabled ? (
+              <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+                <line x1="23" y1="9" x2="17" y2="15" />
+                <line x1="17" y1="9" x2="23" y2="15" />
+              </svg>
+            )}
           </button>
 
           {/* Language Selector */}
