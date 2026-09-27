@@ -1,8 +1,11 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, Auth } from 'firebase/auth';
 
+const isServer = typeof window === 'undefined';
+const buildPlaceholder = 'AIzaSy' + 'DUMMY_KEY_FOR_SSG_PRERENDER_ONLY_000';
+
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyDIHu90Is32YhpnVafx6HegNkj6RVLDz0g',
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || (isServer ? buildPlaceholder : ''),
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'ip-sakti-sih.firebaseapp.com',
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'ip-sakti-sih',
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ip-sakti-sih.appspot.com',
