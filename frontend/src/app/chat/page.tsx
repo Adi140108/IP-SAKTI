@@ -93,7 +93,12 @@ export default function ChatPage() {
 
   // Voice & Speech Controls (Sound ON/OFF, Female Voice, Slower Speed 0.85x)
   const [isListening, setIsListening] = useState<boolean>(false);
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('ip_sakti_sound_enabled') === 'true';
+    }
+    return false;
+  });
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
   const [transcript, setTranscript] = useState<string>('');
 
@@ -441,6 +446,37 @@ export default function ChatPage() {
     utterance.onerror = () => setSpeakingIdx(null);
 
     window.speechSynthesis.speak(utterance);
+  };
+
+  // Master Global Audio Toggle
+  const toggleGlobalSound = () => {
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ip_sakti_sound_enabled', String(next));
+    }
+    if (!next) {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      setSpeakingIdx(null);
+    } else {
+      // Find the latest assistant message to speak immediately upon unmuting
+      let lastAssistantIdx = -1;
+      for (let i = chatHistory.length - 1; i >= 0; i--) {
+        if (chatHistory[i].sender === 'assistant' && chatHistory[i].data?.answer) {
+          lastAssistantIdx = i;
+          break;
+        }
+      }
+      if (lastAssistantIdx !== -1 && chatHistory[lastAssistantIdx]?.data?.answer) {
+        speakText(
+          chatHistory[lastAssistantIdx].data!.answer,
+          lastAssistantIdx,
+          chatHistory[lastAssistantIdx].data!.next_question
+        );
+      }
+    }
   };
 
   const handleOptionChipClick = (option: string) => {
@@ -794,28 +830,34 @@ export default function ChatPage() {
             )}
           </div>
 
-          {/* Sound ON/OFF Toggle with Crisp Vector Audio Icon */}
+          {/* Master Global Audio ON/OFF Toggle */}
           <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`p-1.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-center cursor-pointer shadow-2xs ${
+            onClick={toggleGlobalSound}
+            className={`px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
               soundEnabled
                 ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-400 dark:border-emerald-500/40 shadow-xs'
                 : 'bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-800 hover:text-slate-900 dark:hover:text-slate-200 hover:border-emerald-500/40'
             }`}
-            title={soundEnabled ? 'Text-to-Speech is ON (Click to mute)' : 'Text-to-Speech is OFF (Click to unmute)'}
+            title={soundEnabled ? 'Overall Voice is ON (Click to mute everywhere)' : 'Overall Voice is OFF (Click to unmute and listen)'}
           >
             {soundEnabled ? (
-              <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
-                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-              </svg>
+              <>
+                <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                </svg>
+                <span className="text-[11px] font-bold">Voice ON</span>
+              </>
             ) : (
-              <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
-                <line x1="23" y1="9" x2="17" y2="15" />
-                <line x1="17" y1="9" x2="23" y2="15" />
-              </svg>
+              <>
+                <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+                  <line x1="23" y1="9" x2="17" y2="15" />
+                  <line x1="17" y1="9" x2="23" y2="15" />
+                </svg>
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Muted</span>
+              </>
             )}
           </button>
 
@@ -930,7 +972,7 @@ export default function ChatPage() {
                 ) : item.data ? (
                   <div className="w-full glass-panel p-4 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800/80 border-l-4 border-l-emerald-500 bg-white/95 dark:bg-slate-950/90 shadow-sm text-xs">
 
-                    {/* Message Header Bar with Voice Button */}
+                    {/* Message Header Bar */}
                     <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-2">
                       <div className="flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -938,23 +980,18 @@ export default function ChatPage() {
                           IP-SAKTI Legal Guidance
                         </span>
                       </div>
-                      <button
-                        onClick={() => speakText(item.data!.answer, idx, item.data!.next_question)}
-                        className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                          speakingIdx === idx
-                            ? 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-400 dark:border-rose-500/50 animate-pulse shadow-xs'
-                            : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-800 hover:border-emerald-500/50 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-200/60 dark:hover:bg-slate-850'
-                        }`}
-                      >
-                        <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
-                          {speakingIdx === idx ? (
-                            <rect x="6" y="6" width="12" height="12" rx="2" />
-                          ) : (
-                            <path d="M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77zm-2.5 0L6.5 7H3v10h3.5l5 3.77V3.23zM16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
-                          )}
-                        </svg>
-                        <span>{speakingIdx === idx ? '⏹ Stop Voice' : '🔊 Listen Summary'}</span>
-                      </button>
+                      
+                      <div className="flex items-center gap-2">
+                        {speakingIdx === idx && (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-[9px] flex items-center gap-1 animate-pulse border border-emerald-300 dark:border-emerald-800">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                            <span>Voice Playing</span>
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                          Statutory Assessment
+                        </span>
+                      </div>
                     </div>
 
                     {/* Safe Abstention / Insufficient Evidence Warning */}
