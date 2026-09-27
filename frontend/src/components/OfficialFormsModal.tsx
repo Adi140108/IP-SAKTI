@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import Dialog from './Dialog';
+import { LandmarkIcon, SearchIcon, ArrowUpRightIcon, ScrollIcon } from './Icons';
 
 interface OfficialFormsModalProps {
   isOpen: boolean;
@@ -133,43 +135,36 @@ export default function OfficialFormsModal({ isOpen, onClose }: OfficialFormsMod
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-        
-        {/* Header */}
-        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/60">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 flex items-center justify-center text-xl font-bold border border-emerald-300 dark:border-emerald-800">
-              🏛️
-            </div>
-            <div>
-              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
-                Official Registry Forms & Portals
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Direct statutory forms for Indian Patent Office, NBA Biological Diversity, FSSAI FoSCoS, and AYUSH SLA.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 flex items-center justify-center font-bold text-sm cursor-pointer"
-          >
-            ✕
-          </button>
-        </div>
-
+    <Dialog
+      isOpen={isOpen}
+      onClose={onClose}
+      icon={<LandmarkIcon size={16} />}
+      title="Official Registry Forms & Portals"
+      description="Direct statutory forms for Indian Patent Office, NBA Biological Diversity, FSSAI FoSCoS, and AYUSH SLA."
+      footer={
+        <p className="w-full text-center text-[11px] text-faint">
+          Source Links verified for SIH PS-26045 &middot; Direct Integration with IP India, NBA ABS
+          e-Filing &amp; FSSAI FoSCoS
+        </p>
+      }
+    >
+      <div className="space-y-5">
         {/* Filter Bar */}
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900">
-          <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div
+            className="flex flex-wrap items-center gap-0.5 rounded-md border border-line bg-sunken p-0.5"
+            role="group"
+            aria-label="Registry filter"
+          >
             {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                aria-pressed={selectedCategory === cat}
+                className={`rounded-[3px] px-2.5 py-1 text-[11px] font-medium transition-colors ${
                   selectedCategory === cat
-                    ? 'bg-emerald-500 text-white dark:text-slate-950 shadow-xs'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    ? 'bg-surface text-ink shadow-soft'
+                    : 'text-muted hover:text-ink'
                 }`}
               >
                 {cat === 'ALL' ? 'All Registries' : cat}
@@ -177,70 +172,62 @@ export default function OfficialFormsModal({ isOpen, onClose }: OfficialFormsMod
             ))}
           </div>
 
-          <input
-            type="text"
-            placeholder="Search forms by name or section..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-emerald-500 w-64"
-          />
-        </div>
-
-        {/* Forms Grid */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredForms.map((form) => (
-              <div
-                key={form.id}
-                className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 space-y-2.5 flex flex-col justify-between hover:border-emerald-500/40 transition-colors shadow-xs"
-              >
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
-                      {form.code}
-                    </span>
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                      {form.category}
-                    </span>
-                  </div>
-
-                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                    {form.title}
-                  </h3>
-
-                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                    {form.description}
-                  </p>
-
-                  <div className="text-[10px] text-slate-500 dark:text-slate-400 italic">
-                    ⚖️ {form.statute}
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between">
-                  <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
-                    Official Government Portal
-                  </span>
-                  <a
-                    href={form.portalUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3 py-1 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white dark:text-slate-950 font-bold text-xs flex items-center gap-1 shadow-xs transition-all cursor-pointer"
-                  >
-                    <span>Open Portal</span>
-                    <span>↗</span>
-                  </a>
-                </div>
-              </div>
-            ))}
+          <div className="relative">
+            <SearchIcon
+              size={13}
+              className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-faint"
+            />
+            <input
+              type="text"
+              placeholder="Search forms by name or section..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search forms"
+              className="w-60 rounded-md border border-line bg-sunken py-1.5 pr-2.5 pl-8 text-[11.5px] text-ink placeholder:text-faint"
+            />
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-center text-xs text-slate-500 dark:text-slate-400">
-          Source Links verified for SIH PS-26045 • Direct Integration with IP India, NBA ABS e-Filing & FSSAI FoSCoS
-        </div>
+        {/* Forms List */}
+        <ul className="divide-y divide-line border-t border-line">
+          {filteredForms.map((form) => (
+            <li key={form.id} className="grid grid-cols-1 gap-3 py-4 lg:grid-cols-12 lg:gap-6">
+              <div className="lg:col-span-7">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="mono-caps rounded border border-accent-line bg-accent-soft px-1.5 py-0.5 text-accent-ink">
+                    {form.code}
+                  </span>
+                  <span className="eyebrow">{form.category}</span>
+                </div>
+                <h3 className="mt-2 text-[13.5px] font-medium text-ink">{form.title}</h3>
+                <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{form.description}</p>
+                <p className="mt-2 flex items-start gap-1.5 text-[10.5px] leading-relaxed text-faint">
+                  <ScrollIcon size={11} className="mt-0.5 shrink-0" />
+                  {form.statute}
+                </p>
+              </div>
+
+              <div className="flex items-start lg:col-span-5 lg:justify-end">
+                <a
+                  href={form.portalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-3 py-1.5 text-[11.5px] font-medium text-ink transition-colors hover:bg-subtle"
+                >
+                  Open Portal
+                  <ArrowUpRightIcon size={12} />
+                </a>
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        {filteredForms.length === 0 && (
+          <p className="py-8 text-center text-[12px] text-faint">
+            No forms match this filter.
+          </p>
+        )}
       </div>
-    </div>
+    </Dialog>
   );
 }

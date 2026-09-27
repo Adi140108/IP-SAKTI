@@ -7,6 +7,17 @@ import { FORMULATION_TIERS, getTierFromClassification } from '@/lib/formulationT
 import FormulationPathwayModal from '@/components/FormulationPathwayModal';
 import OfficialFormsModal from '@/components/OfficialFormsModal';
 import DossierExportModal from '@/components/DossierExportModal';
+import {
+  ScalesIcon,
+  LandmarkIcon,
+  FileTextIcon,
+  FolderIcon,
+  MessageIcon,
+  UserIcon,
+  LeafIcon,
+  SearchIcon,
+  PencilIcon,
+} from '@/components/Icons';
 
 interface ExtendedHistoryItem extends ConversationHistoryItem {
   user_message?: string;
@@ -90,227 +101,238 @@ export default function CaseWorkspacePage() {
   const effectiveRecords = getEffectiveRecords();
   const activeTier = getTierFromClassification(caseState?.formulation_classification || caseState?.product_type);
 
+  const parameters = [
+    {
+      label: 'Jurisdiction',
+      value: `${caseState?.jurisdiction || ''} ${caseState?.country ? `(${caseState.country})` : ''}`.trim(),
+    },
+    { label: 'Language', value: caseState?.language?.toUpperCase() || '' },
+    { label: 'Product Type', value: caseState?.product_type || 'Unspecified' },
+    { label: 'Classical Basis (TK)', value: caseState?.classical_reference || 'None specified' },
+    {
+      label: 'Traditional Knowledge',
+      value: caseState?.traditional_knowledge_involved ? 'Yes' : 'No / Uncertain',
+    },
+    {
+      label: 'Indian Bio-Resources (ABS)',
+      value: caseState?.biological_resources_involved ? 'Yes (NBA Clearance)' : 'No / Exempt',
+    },
+  ];
+
   return (
-    <div className="space-y-8 max-w-5xl mx-auto pb-10">
-      
-      {/* Header and Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-6">
+    <div className="pb-10">
+      <div className="flex flex-wrap items-end justify-between gap-5 border-b border-line pb-6">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white">Case State Workspace</h1>
-          <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">
-            Persisted state parameters, 6-tier formulation classification, and official pre-filing dossier.
+          <h1 className="font-display text-[clamp(1.75rem,3.5vw,2.5rem)] leading-tight text-ink">
+            Case State Workspace
+          </h1>
+          <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted">
+            Persisted state parameters, 6-tier formulation classification, and official pre-filing
+            dossier.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setShowPathwayModal(true)}
-            className="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-xs font-bold hover:bg-amber-100 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-subtle"
           >
-            <span>⚖️ 6-Tier Pathway</span>
+            <ScalesIcon size={13} />
+            6-Tier Pathway
           </button>
 
           <button
             onClick={() => setShowFormsModal(true)}
-            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold hover:text-emerald-600 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-subtle"
           >
-            <span>🏛️ Official Forms</span>
+            <LandmarkIcon size={13} />
+            Official Forms
           </button>
 
           {caseState && (
             <button
               onClick={() => setShowDossierModal(true)}
-              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white dark:text-slate-950 text-xs font-extrabold hover:from-emerald-400 hover:to-teal-500 transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
+              className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-accent-fg transition-colors hover:bg-accent-hover"
             >
-              <span>📄 Export Dossier</span>
+              <FileTextIcon size={13} />
+              Export Dossier
             </button>
           )}
 
-          <div className="flex items-center gap-2 pl-2">
+          <div className="flex items-center gap-1.5 pl-1">
             <input
               type="text"
               placeholder="Enter Case ID..."
               value={caseIdInput}
               onChange={(e) => setCaseIdInput(e.target.value)}
-              className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-1.5 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:border-emerald-500 shadow-xs"
+              aria-label="Case ID"
+              className="mono-caps w-44 rounded-md border border-line bg-surface px-2.5 py-1.5 text-ink placeholder:text-faint"
             />
             <button
               onClick={() => handleFetchCase(caseIdInput)}
-              className="px-3.5 py-1.5 rounded-xl bg-emerald-500 text-white dark:text-slate-950 font-bold text-xs hover:bg-emerald-400 transition-all shadow-xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-subtle"
             >
+              <SearchIcon size={13} />
               Load Case
             </button>
           </div>
         </div>
       </div>
 
-      {loading && <div className="text-slate-600 dark:text-slate-400 text-sm">Loading Case State...</div>}
-      {error && <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs">{error}</div>}
+      {loading && <p className="py-6 text-[13px] text-muted">Loading Case State...</p>}
+      {error && (
+        <p className="mt-6 rounded-md border border-danger-line bg-danger-soft px-3 py-2 text-[12px] text-danger">
+          {error}
+        </p>
+      )}
 
       {!caseState && !loading && (
-        <div className="glass-panel p-12 text-center text-slate-500 dark:text-slate-400 space-y-3 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">
-          <div className="text-4xl">📁</div>
-          <h3 className="text-lg font-bold text-slate-800 dark:text-slate-300">No Case Loaded</h3>
-          <p className="text-xs text-slate-600 dark:text-slate-400">
+        <div className="mt-10 flex flex-col items-center gap-2 border border-dashed border-line-strong rounded-lg py-16 text-center">
+          <FolderIcon size={22} className="text-faint" />
+          <h2 className="font-display text-[17px] text-ink">No Case Loaded</h2>
+          <p className="max-w-sm text-[12px] leading-relaxed text-muted">
             Start a chat session to create an active case or load an existing Case ID above.
           </p>
         </div>
       )}
 
       {caseState && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* Case Parameters Card */}
-            <div className="glass-panel p-6 space-y-4 lg:col-span-2 border-t-4 border-emerald-500 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-                <span className="text-xs font-mono text-emerald-800 dark:text-emerald-400 font-bold">
-                  CASE ID: #{caseState.case_id}
-                </span>
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                  {caseState.updated_at || 'Active Session'}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div className="space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Jurisdiction:</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.jurisdiction} {caseState.country ? `(${caseState.country})` : ''}</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Language:</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.language.toUpperCase()}</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Product Type:</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.product_type || 'Unspecified'}</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Classical Basis (TK):</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.classical_reference || 'None specified'}</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Traditional Knowledge:</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.traditional_knowledge_involved ? 'Yes' : 'No / Uncertain'}</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Indian Bio-Resources (ABS):</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.biological_resources_involved ? 'Yes (NBA Clearance)' : 'No / Exempt'}</p>
-                </div>
-              </div>
-
-              {/* Active Herbs */}
-              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
-                <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold">Active Herbs & Biological Ingredients:</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {caseState.ingredients && caseState.ingredients.length > 0 ? (
-                    caseState.ingredients.map((ing, i) => (
-                      <span key={i} className="px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/60 text-xs font-semibold">
-                        🌿 {ing}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-slate-500 italic">No specific herbs extracted yet.</span>
-                  )}
-                </div>
-              </div>
+        <div className="mt-10 grid grid-cols-1 gap-7 lg:grid-cols-3">
+          {/* Case Parameters */}
+          <div className="panel p-7 lg:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-4">
+              <span className="mono-caps text-accent-ink">CASE ID: #{caseState.case_id}</span>
+              <span className="mono-caps text-faint">
+                {caseState.updated_at || 'Active Session'}
+              </span>
             </div>
 
-            {/* Classification & Pathway Summary Sidebar */}
-            <div className="glass-panel p-6 space-y-4 border-t-4 border-amber-500 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-amber-700 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <span>🏛️</span> Classification
+            <dl className="grid grid-cols-1 gap-x-10 gap-y-5 pt-6 sm:grid-cols-2">
+              {parameters.map((p) => (
+                <div key={p.label}>
+                  <dt className="eyebrow">{p.label}</dt>
+                  <dd className="mt-1.5 text-[13.5px] font-medium text-ink">{p.value}</dd>
+                </div>
+              ))}
+            </dl>
+
+            {/* Active Herbs */}
+            <div className="mt-6 border-t border-line pt-5">
+              <span className="eyebrow">Active Herbs &amp; Biological Ingredients</span>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {caseState.ingredients && caseState.ingredients.length > 0 ? (
+                  caseState.ingredients.map((ing, i) => (
+                    <span key={i} className="chip chip-accent">
+                      <LeafIcon size={10} />
+                      {ing}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-[12.5px] text-faint italic">
+                    No specific herbs extracted yet.
                   </span>
-                  <button
-                    onClick={() => setShowPathwayModal(true)}
-                    className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
-                  >
-                    Modify ➔
-                  </button>
-                </div>
-
-                <div className="font-black text-slate-900 dark:text-white text-base">
-                  {activeTier.label}
-                </div>
-
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  {activeTier.ipPosture}
-                </p>
-
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
-                  <div className="font-bold text-slate-700 dark:text-slate-300">Statutory Authority:</div>
-                  <div className="text-[11px] font-mono text-emerald-700 dark:text-emerald-400">{activeTier.statutoryBasis}</div>
-                </div>
-              </div>
-
-              {/* One-Click Action in Sidebar */}
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  onClick={() => setShowDossierModal(true)}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white dark:text-slate-950 text-xs font-extrabold hover:from-emerald-400 hover:to-teal-500 transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-                >
-                  <span>📄 Generate Pre-Filing Dossier</span>
-                  <span>➔</span>
-                </button>
+                )}
               </div>
             </div>
           </div>
 
-          {/* FULL QUESTIONING & CONSULTATION HISTORY LOG */}
-          <div className="glass-panel p-6 space-y-4 border-t-4 border-emerald-500 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                <span>💬</span> Questioning Records & Consultation Transcript ({effectiveRecords.length})
+          {/* Classification & Pathway Summary */}
+          <div className="panel flex flex-col justify-between p-7">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <span className="eyebrow">Classification</span>
+                <button
+                  onClick={() => setShowPathwayModal(true)}
+                  className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-accent-ink hover:underline"
+                >
+                  <PencilIcon size={11} />
+                  Modify
+                </button>
+              </div>
+
+              <h3 className="font-display text-[19px] leading-snug text-ink">{activeTier.label}</h3>
+
+              <p className="text-[13px] leading-relaxed text-muted">{activeTier.ipPosture}</p>
+
+              <div className="panel-sunken space-y-2 p-4">
+                <div className="eyebrow">Statutory Authority</div>
+                <p className="text-[11.5px] leading-relaxed text-accent-ink">{activeTier.statutoryBasis}</p>
+              </div>
+            </div>
+
+            <div className="mt-6 border-t border-line pt-5">
+              <button
+                onClick={() => setShowDossierModal(true)}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-3 py-3 text-[12.5px] font-medium text-accent-fg transition-colors hover:bg-accent-hover"
+              >
+                <FileTextIcon size={14} />
+                Generate Pre-Filing Dossier
+              </button>
+            </div>
+          </div>
+
+          {/* Questioning & Consultation History */}
+          <div className="panel p-7 lg:col-span-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-4">
+              <h3 className="inline-flex items-center gap-2.5 font-display text-[17px] text-ink">
+                <MessageIcon size={16} className="text-accent" />
+                Questioning Records &amp; Consultation Transcript ({effectiveRecords.length})
               </h3>
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                Case #{caseState.case_id}
-              </span>
+              <span className="mono-caps text-faint">Case #{caseState.case_id}</span>
             </div>
 
             {effectiveRecords.length > 0 ? (
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+              <div className="mt-5 max-h-96 space-y-4 overflow-y-auto pr-1">
                 {effectiveRecords.map((item, idx: number) => {
                   const isUser = item.sender === 'user' || Boolean(item.user_message);
-                  const textContent = item.text || item.user_message || item.data?.answer || item.assistant_answer || item.question || item.content;
-                  const questionAsked = item.data?.next_question || item.next_question || item.question;
+                  const textContent =
+                    item.text ||
+                    item.user_message ||
+                    item.data?.answer ||
+                    item.assistant_answer ||
+                    item.question ||
+                    item.content;
+                  const questionAsked =
+                    item.data?.next_question || item.next_question || item.question;
 
                   return (
-                    <div key={idx} className={`p-3.5 rounded-xl border text-xs leading-relaxed space-y-2 ${
-                      isUser && item.user_message
-                        ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200'
-                        : isUser
-                        ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800/40 text-emerald-900 dark:text-emerald-200'
-                        : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-300'
-                    }`}>
-                      <div className="flex items-center justify-between font-bold text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                        <span>{isUser ? '👤 User Input / Answer' : '⚖️ IP-SAKTI Legal Response'}</span>
-                        {item.timestamp && <span className="font-mono text-[9px]">{new Date(item.timestamp).toLocaleTimeString()}</span>}
+                    <div
+                      key={idx}
+                      className={`space-y-2.5 rounded-md border p-4 text-[12.5px] leading-relaxed ${
+                        isUser
+                          ? 'border-line bg-sunken text-ink'
+                          : 'border-line bg-surface text-muted'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="eyebrow inline-flex items-center gap-2">
+                          {isUser ? <UserIcon size={12} /> : <ScalesIcon size={12} />}
+                          {isUser ? 'User Input / Answer' : 'IP-SAKTI Legal Response'}
+                        </span>
+                        {item.timestamp && (
+                          <span className="mono-caps text-faint">
+                            {new Date(item.timestamp).toLocaleTimeString()}
+                          </span>
+                        )}
                       </div>
 
                       {item.user_message && (
-                        <div className="p-2 rounded-lg bg-emerald-50 dark:bg-slate-900 text-emerald-800 dark:text-emerald-300 font-medium">
-                          👤 {item.user_message}
+                        <div className="rounded-md bg-accent-soft px-3 py-2.5 font-medium text-accent-ink">
+                          {item.user_message}
                         </div>
                       )}
 
                       {item.assistant_answer && (
-                        <div className="whitespace-pre-wrap font-sans text-slate-800 dark:text-slate-200">
-                          {item.assistant_answer}
-                        </div>
+                        <div className="whitespace-pre-wrap text-ink">{item.assistant_answer}</div>
                       )}
 
                       {!item.user_message && !item.assistant_answer && (
-                        <div className="whitespace-pre-wrap font-sans text-slate-800 dark:text-slate-200">
-                          {textContent}
-                        </div>
+                        <div className="whitespace-pre-wrap">{textContent}</div>
                       )}
 
                       {questionAsked && (
-                        <div className="p-2 rounded-lg bg-emerald-100/80 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-300 text-[11px] font-semibold flex items-center gap-1.5">
-                          <span>❓</span>
-                          <span>Target Question Asked: {questionAsked}</span>
+                        <div className="rounded-md border border-accent-line bg-accent-soft px-3 py-2 text-[11.5px] font-medium text-accent-ink">
+                          Target Question Asked: {questionAsked}
                         </div>
                       )}
                     </div>
@@ -318,9 +340,10 @@ export default function CaseWorkspacePage() {
                 })}
               </div>
             ) : (
-              <div className="text-xs text-slate-500 italic p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 text-center">
-                No previous questioning records stored for this case session yet. Submit a message in AI Chat to start recording.
-              </div>
+              <p className="mt-5 rounded-md border border-dashed border-line-strong px-3 py-8 text-center text-[12.5px] text-faint">
+                No previous questioning records stored for this case session yet. Submit a message
+                in AI Chat to start recording.
+              </p>
             )}
           </div>
         </div>

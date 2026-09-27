@@ -3,6 +3,18 @@
 import React, { useState } from 'react';
 import { CaseState, ChatResponse } from '@/types';
 import { getTierFromClassification } from '@/lib/formulationTaxonomy';
+import Dialog from './Dialog';
+import {
+  FileTextIcon,
+  CopyIcon,
+  DownloadIcon,
+  PrinterIcon,
+  CheckIcon,
+  ScrollIcon,
+  ClipboardIcon,
+  PencilIcon,
+  stripLeadingGlyphs,
+} from './Icons';
 
 interface DossierExportModalProps {
   isOpen: boolean;
@@ -44,10 +56,10 @@ export default function DossierExportModal({
   const generateMarkdownDossier = (): string => {
     return `# IP-SAKTI SAHAYAK • AYURVEDIC IP PRE-FILING DIAGNOSTIC DOSSIER
 **SIH Problem Statement PS-26045: AYUSH & Bio-Resource IP AI**
-**Case ID:** ${caseId}  
-**Date of Generation:** ${now}  
-**Jurisdiction:** ${jurisdiction} ${country ? `(${country})` : ''}  
-**Target Category:** ${tier.label}  
+**Case ID:** ${caseId}
+**Date of Generation:** ${now}
+**Jurisdiction:** ${jurisdiction} ${country ? `(${country})` : ''}
+**Target Category:** ${tier.label}
 
 ---
 
@@ -124,197 +136,215 @@ ${
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn print:p-0 print:bg-white">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden print:border-none print:shadow-none print:max-h-none print:w-full">
-        
-        {/* Header (Hidden on Print) */}
-        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/60 print:hidden">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 flex items-center justify-center text-xl font-bold border border-emerald-300 dark:border-emerald-800">
-              📄
-            </div>
-            <div>
-              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
-                Ayurvedic IP Diagnostic Dossier
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Official SIH PS-26045 Pre-Filing Diagnostic Dossier • Case #{caseId}
-              </p>
+    <Dialog
+      isOpen={isOpen}
+      onClose={onClose}
+      size="lg"
+      printable
+      icon={<FileTextIcon size={16} />}
+      title="Ayurvedic IP Diagnostic Dossier"
+      description={`Official SIH PS-26045 Pre-Filing Diagnostic Dossier • Case #${caseId}`}
+      headerActions={
+        <>
+          <button
+            onClick={handleCopy}
+            className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 py-1.5 text-[11.5px] font-medium text-ink transition-colors hover:bg-subtle"
+          >
+            {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
+            {copied ? 'Copied' : 'Copy MD'}
+          </button>
+          <button
+            onClick={handleDownloadMarkdown}
+            className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 py-1.5 text-[11.5px] font-medium text-ink transition-colors hover:bg-subtle"
+          >
+            <DownloadIcon size={12} />
+            Download .md
+          </button>
+          <button
+            onClick={handlePrint}
+            className="inline-flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1.5 text-[11.5px] font-medium text-accent-fg transition-colors hover:bg-accent-hover"
+          >
+            <PrinterIcon size={12} />
+            Print / PDF
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-6 text-[12px] leading-relaxed print:bg-white print:text-black">
+        {/* Dossier Title Box */}
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b-2 border-ink pb-4 print:border-black">
+          <div className="space-y-1">
+            <span className="eyebrow">SIH Problem Statement PS-26045 • Official Output</span>
+            <h1 className="font-display text-[21px] leading-snug text-ink print:text-black">
+              Ayurvedic IP &amp; Regulatory Pre-Filing Dossier
+            </h1>
+            <div className="mono-caps text-faint">
+              Case ID: <span className="font-medium text-accent-ink">{caseId}</span> • Regime:{' '}
+              {jurisdiction} • Date: {now}
             </div>
           </div>
-          
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleCopy}
-              className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold hover:border-emerald-500 transition-all flex items-center gap-1 cursor-pointer"
-            >
-              <span>{copied ? '✓ Copied!' : '📋 Copy MD'}</span>
-            </button>
-            <button
-              onClick={handleDownloadMarkdown}
-              className="px-3 py-1.5 rounded-xl bg-slate-800 dark:bg-slate-800 text-white text-xs font-bold hover:bg-slate-700 transition-all flex items-center gap-1 cursor-pointer"
-            >
-              <span>⬇ Download .md</span>
-            </button>
-            <button
-              onClick={handlePrint}
-              className="px-3 py-1.5 rounded-xl bg-emerald-500 text-white dark:text-slate-950 text-xs font-extrabold hover:bg-emerald-400 transition-all flex items-center gap-1 shadow-xs cursor-pointer"
-            >
-              <span>🖨 Print / PDF</span>
-            </button>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 flex items-center justify-center font-bold text-sm cursor-pointer ml-2"
-            >
-              ✕
-            </button>
-          </div>
+          <span className="chip chip-accent">{stripLeadingGlyphs(tier.badge)}</span>
         </div>
 
-        {/* Printable Preview Body */}
-        <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 text-slate-800 dark:text-slate-200 text-xs leading-relaxed bg-white dark:bg-slate-900 font-sans print:p-0 print:text-black">
-          
-          {/* Dossier Title Box */}
-          <div className="border-b-2 border-emerald-500 pb-4 flex items-start justify-between">
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
-                SIH Problem Statement PS-26045 • Official Output
-              </span>
-              <h1 className="text-xl font-black text-slate-900 dark:text-white print:text-black">
-                Ayurvedic IP & Regulatory Pre-Filing Dossier
-              </h1>
-              <div className="text-slate-500 dark:text-slate-400 text-[11px] font-mono">
-                Case ID: <span className="font-bold text-emerald-700 dark:text-emerald-400">{caseId}</span> • Regime: {jurisdiction} • Date: {now}
-              </div>
+        {/* Section 1: Classification & Legal Pathway */}
+        <section className="panel-sunken space-y-3 p-4 print:border-gray-300 print:bg-white">
+          <h2 className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ink print:text-black">
+            <ScrollIcon size={13} className="text-accent" />
+            1. Formulation Legal Classification &amp; Statutory Pathway
+          </h2>
+          <div className="grid grid-cols-1 gap-3 text-[11.5px] md:grid-cols-2">
+            <Field label="Classified Category" value={tier.label} emphasis />
+            <Field label="Statutory Basis" value={tier.statutoryBasis} />
+            <div className="md:col-span-2">
+              <Field label="Intellectual Property Posture" value={tier.ipPosture} />
             </div>
-            <div className="text-right">
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                {tier.badge}
-              </span>
-            </div>
+            <Field label="ABS & Biodiversity Duty" value={tier.absPosture} />
+            <Field label="Manufacturing & Regulatory" value={tier.regulatoryPathway} />
           </div>
+        </section>
 
-          {/* Section 1: Classification & Legal Pathway */}
-          <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60 space-y-3">
-            <h3 className="font-bold text-sm text-slate-900 dark:text-white print:text-black flex items-center gap-1.5">
-              <span>🏛️</span> 1. Formulation Legal Classification & Statutory Pathway
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
-              <div>
-                <span className="font-bold text-slate-500 dark:text-slate-400 block">Classified Category:</span>
-                <span className="font-extrabold text-slate-900 dark:text-white">{tier.label}</span>
-              </div>
-              <div>
-                <span className="font-bold text-slate-500 dark:text-slate-400 block">Statutory Basis:</span>
-                <span className="text-slate-700 dark:text-slate-300">{tier.statutoryBasis}</span>
-              </div>
-              <div className="md:col-span-2">
-                <span className="font-bold text-slate-500 dark:text-slate-400 block">Intellectual Property Posture:</span>
-                <span className="text-slate-700 dark:text-slate-300">{tier.ipPosture}</span>
-              </div>
-              <div>
-                <span className="font-bold text-slate-500 dark:text-slate-400 block">ABS & Biodiversity Duty:</span>
-                <span className="text-slate-700 dark:text-slate-300">{tier.absPosture}</span>
-              </div>
-              <div>
-                <span className="font-bold text-slate-500 dark:text-slate-400 block">Manufacturing & Regulatory:</span>
-                <span className="text-slate-700 dark:text-slate-300">{tier.regulatoryPathway}</span>
-              </div>
-            </div>
+        {/* Section 2: Case State Parameters Matrix */}
+        <section className="space-y-2">
+          <h2 className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ink print:text-black">
+            <ClipboardIcon size={13} className="text-accent" />
+            2. Gathered Innovation Parameters
+          </h2>
+          <div className="overflow-hidden rounded-md border border-line print:border-gray-300">
+            <table className="w-full text-left text-[11px]">
+              <thead className="bg-sunken text-muted print:bg-gray-100">
+                <tr className="border-b border-line print:border-gray-300">
+                  <th className="p-2.5 font-medium">Parameter</th>
+                  <th className="p-2.5 font-medium">Recorded Value</th>
+                  <th className="p-2.5 font-medium">Statutory Impact</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line-subtle print:divide-gray-200">
+                <tr>
+                  <td className="p-2.5 font-medium text-ink print:text-black">
+                    Active Herbal Ingredients
+                  </td>
+                  <td className="p-2.5 text-accent-ink">
+                    {caseState?.ingredients && caseState.ingredients.length > 0
+                      ? caseState.ingredients.join(', ')
+                      : 'Not specified'}
+                  </td>
+                  <td className="p-2.5 text-muted">
+                    National Biodiversity Act Biological Resource Check
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-2.5 font-medium text-ink print:text-black">Classical Text Basis</td>
+                  <td className="p-2.5 text-ink print:text-black">
+                    {caseState?.classical_reference || 'None specified'}
+                  </td>
+                  <td className="p-2.5 text-muted">
+                    Section 3(p) TK Prior Art Bar &amp; TKDL Defense
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-2.5 font-medium text-ink print:text-black">
+                    Traditional Knowledge Involved
+                  </td>
+                  <td className="p-2.5 text-ink print:text-black">
+                    {caseState?.traditional_knowledge_involved ? 'Yes (Prior Art)' : 'No (Novel Formula)'}
+                  </td>
+                  <td className="p-2.5 text-muted">
+                    WIPO GRATK Treaty (2024) Mandatory Disclosure
+                  </td>
+                </tr>
+                <tr>
+                  <td className="p-2.5 font-medium text-ink print:text-black">
+                    Indian Bio-Resources (ABS)
+                  </td>
+                  <td className="p-2.5 text-ink print:text-black">
+                    {caseState?.biological_resources_involved ? 'Yes (NBA Clearance)' : 'No Indian Bio'}
+                  </td>
+                  <td className="p-2.5 text-muted">
+                    NBA Form I &amp; Form III Approval prior to patent grant
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
+        </section>
 
-          {/* Section 2: Case State Parameters Matrix */}
+        {/* Section 3: Verified Statutory Citations */}
+        <section className="space-y-2">
+          <h2 className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ink print:text-black">
+            <ScrollIcon size={13} className="text-accent" />
+            3. Authoritative Statutory Citations
+          </h2>
           <div className="space-y-2">
-            <h3 className="font-bold text-sm text-slate-900 dark:text-white print:text-black flex items-center gap-1.5">
-              <span>📋</span> 2. Gathered Innovation Parameters
-            </h3>
-            <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
-              <table className="w-full text-left text-[11px]">
-                <thead className="bg-slate-100 dark:bg-slate-950 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
-                  <tr>
-                    <th className="p-2.5">Parameter</th>
-                    <th className="p-2.5">Recorded Value</th>
-                    <th className="p-2.5">Statutory Impact</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                  <tr>
-                    <td className="p-2.5 font-bold text-slate-900 dark:text-white">Active Herbal Ingredients</td>
-                    <td className="p-2.5 text-emerald-700 dark:text-emerald-400 font-medium">
-                      {caseState?.ingredients && caseState.ingredients.length > 0 ? caseState.ingredients.join(', ') : 'Not specified'}
-                    </td>
-                    <td className="p-2.5 text-slate-600 dark:text-slate-400">National Biodiversity Act Biological Resource Check</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2.5 font-bold text-slate-900 dark:text-white">Classical Text Basis</td>
-                    <td className="p-2.5 text-slate-700 dark:text-slate-300">
-                      {caseState?.classical_reference || 'None specified'}
-                    </td>
-                    <td className="p-2.5 text-slate-600 dark:text-slate-400">Section 3(p) TK Prior Art Bar & TKDL Defense</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2.5 font-bold text-slate-900 dark:text-white">Traditional Knowledge Involved</td>
-                    <td className="p-2.5 font-medium text-slate-700 dark:text-slate-300">
-                      {caseState?.traditional_knowledge_involved ? 'Yes (Prior Art)' : 'No (Novel Formula)'}
-                    </td>
-                    <td className="p-2.5 text-slate-600 dark:text-slate-400">WIPO GRATK Treaty (2024) Mandatory Disclosure</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2.5 font-bold text-slate-900 dark:text-white">Indian Bio-Resources (ABS)</td>
-                    <td className="p-2.5 font-medium text-slate-700 dark:text-slate-300">
-                      {caseState?.biological_resources_involved ? 'Yes (NBA Clearance)' : 'No Indian Bio'}
-                    </td>
-                    <td className="p-2.5 text-slate-600 dark:text-slate-400">NBA Form I & Form III Approval prior to patent grant</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Section 3: Verified Statutory Citations */}
-          <div className="space-y-2">
-            <h3 className="font-bold text-sm text-slate-900 dark:text-white print:text-black flex items-center gap-1.5">
-              <span>📖</span> 3. Authoritative Statutory Citations
-            </h3>
-            <div className="space-y-2">
-              {allCitations.length > 0 ? (
-                allCitations.map((c, idx) => (
-                  <div key={idx} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-[11px] space-y-1">
-                    <div className="flex items-center justify-between font-bold">
-                      <span className="text-slate-900 dark:text-white">{c.source}</span>
-                      <span className="text-emerald-700 dark:text-emerald-400 font-mono text-[10px]">{c.section_or_rule || 'Statute Section'}</span>
-                    </div>
-                    {c.snippet && <div className="text-slate-600 dark:text-slate-400 italic">&ldquo;{c.snippet}&rdquo;</div>}
+            {allCitations.length > 0 ? (
+              allCitations.map((c, idx) => (
+                <div key={idx} className="panel-sunken space-y-1 p-2.5 print:border-gray-300 print:bg-white">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium text-ink print:text-black">{c.source}</span>
+                    <span className="mono-caps text-accent-ink">
+                      {c.section_or_rule || 'Statute Section'}
+                    </span>
                   </div>
-                ))
-              ) : (
-                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 italic">
-                  Statutory provisions cited: The Patents Act 1970 (Sec 3(p), 3(e)), Biological Diversity Act 2002/2023, Drugs & Cosmetics Act 1940 (Sec 3(h)), WIPO GRATK Treaty 2024.
+                  {c.snippet && (
+                    <p className="border-l-2 border-line-strong pl-2 text-muted italic print:border-gray-400 print:text-gray-700">
+                      &ldquo;{c.snippet}&rdquo;
+                    </p>
+                  )}
                 </div>
-              )}
-            </div>
+              ))
+            ) : (
+              <p className="panel-sunken p-2.5 text-faint italic print:border-gray-300 print:bg-white print:text-gray-700">
+                Statutory provisions cited: The Patents Act 1970 (Sec 3(p), 3(e)), Biological
+                Diversity Act 2002/2023, Drugs &amp; Cosmetics Act 1940 (Sec 3(h)), WIPO GRATK Treaty
+                2024.
+              </p>
+            )}
           </div>
+        </section>
 
-          {/* Section 4: Required Official Forms */}
-          <div className="space-y-2">
-            <h3 className="font-bold text-sm text-slate-900 dark:text-white print:text-black flex items-center gap-1.5">
-              <span>📝</span> 4. Required Statutory Filing Forms
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {tier.formsRequired.map((f, idx) => (
-                <span key={idx} className="px-3 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 font-mono font-bold text-[11px]">
-                  {f}
-                </span>
-              ))}
-            </div>
+        {/* Section 4: Required Official Forms */}
+        <section className="space-y-2">
+          <h2 className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ink print:text-black">
+            <PencilIcon size={13} className="text-accent" />
+            4. Required Statutory Filing Forms
+          </h2>
+          <div className="flex flex-wrap gap-1.5">
+            {tier.formsRequired.map((f, idx) => (
+              <span key={idx} className="mono-caps rounded border border-line bg-sunken px-2 py-0.5 text-ink print:border-gray-300 print:bg-gray-100 print:text-black">
+                {f}
+              </span>
+            ))}
           </div>
+        </section>
 
-          {/* Footnote Disclaimer */}
-          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 text-[10px] text-slate-500 dark:text-slate-400 text-center">
-            Generated by IP-SAKTI Sahayak AI Engine • SIH Problem Statement PS-26045 • Compliant with Digital Personal Data Protection (DPDP) Act 2023.
-          </div>
-        </div>
+        {/* Footnote Disclaimer */}
+        <p className="border-t border-line pt-4 text-center text-[10px] text-faint print:border-gray-300">
+          Generated by IP-SAKTI Sahayak AI Engine • SIH Problem Statement PS-26045 • Compliant with
+          Digital Personal Data Protection (DPDP) Act 2023.
+        </p>
       </div>
+    </Dialog>
+  );
+}
+
+function Field({
+  label,
+  value,
+  emphasis,
+}: {
+  label: string;
+  value: string;
+  emphasis?: boolean;
+}) {
+  return (
+    <div>
+      <span className="eyebrow block">{label}</span>
+      <span
+        className={`mt-0.5 block ${
+          emphasis ? 'font-medium text-ink print:text-black' : 'text-muted print:text-gray-700'
+        }`}
+      >
+        {value}
+      </span>
     </div>
   );
 }
