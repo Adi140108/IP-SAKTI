@@ -1016,10 +1016,10 @@ export default function ChatPage() {
                         <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800/80 pb-1.5">
                           <div className="text-[11px] font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                             <span>🔍</span>
-                            <span>Potential Prior-Art Matches</span>
+                            <span>{t.potentialPriorArt}</span>
                           </div>
                           <span className="text-[9px] text-slate-500 dark:text-slate-400 font-medium">
-                            Potential match — not a legal determination.
+                            {t.priorArtNotice}
                           </span>
                         </div>
 
@@ -1092,10 +1092,10 @@ export default function ChatPage() {
                         <div className="flex items-center justify-between">
                           <div className="text-[10px] font-extrabold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                            <span>⚡ Case Clarification</span>
+                            <span>⚡ {t.caseClarification}</span>
                           </div>
                           <span className="text-[9px] text-amber-800 dark:text-amber-400 font-mono font-bold bg-amber-100 dark:bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-300 dark:border-amber-800/50">
-                            Select to proceed
+                            {t.selectToProceed}
                           </span>
                         </div>
 

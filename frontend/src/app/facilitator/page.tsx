@@ -5,12 +5,16 @@ import Link from 'next/link';
 import { EscalationDossier } from '@/types';
 import { fetchEscalationRequests, updateEscalationStatus } from '@/lib/api';
 import { getTierFromClassification } from '@/lib/formulationTaxonomy';
+import { getPersistedDossiers, mergeAndPersistDossiers } from '@/lib/caseRegistry';
 
 export default function FacilitatorDashboardPage() {
-  const [dossiers, setDossiers] = useState<EscalationDossier[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [dossiers, setDossiers] = useState<EscalationDossier[]>(() => getPersistedDossiers());
+  const [loading, setLoading] = useState<boolean>(() => getPersistedDossiers().length === 0);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [activeDossier, setActiveDossier] = useState<EscalationDossier | null>(null);
+  const [activeDossier, setActiveDossier] = useState<EscalationDossier | null>(() => {
+    const initial = getPersistedDossiers();
+    return initial.length > 0 ? initial[0] : null;
+  });
   const [facilitatorNote, setFacilitatorNote] = useState<string>('');
   const [updatingStatus, setUpdatingStatus] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -19,14 +23,20 @@ export default function FacilitatorDashboardPage() {
     setLoading(true);
     fetchEscalationRequests(50, selectedStatus === 'all' ? undefined : selectedStatus)
       .then((data) => {
-        setDossiers(data || []);
-        if (data && data.length > 0 && !activeDossier) {
-          setActiveDossier(data[0]);
+        const merged = mergeAndPersistDossiers(data || []);
+        setDossiers(merged);
+        if (merged.length > 0 && !activeDossier) {
+          setActiveDossier(merged[0]);
         }
         setLoading(false);
       })
       .catch((err) => {
         console.error('Error fetching escalation requests:', err);
+        const local = getPersistedDossiers();
+        setDossiers(local);
+        if (local.length > 0 && !activeDossier) {
+          setActiveDossier(local[0]);
+        }
         setLoading(false);
       });
   };

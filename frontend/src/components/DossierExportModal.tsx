@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { CaseState, ChatResponse, EscalationDossier } from '@/types';
 import { getTierFromClassification } from '@/lib/formulationTaxonomy';
 import { fetchEscalationDossier, submitEscalationRequest } from '@/lib/api';
+import { persistDossier } from '@/lib/caseRegistry';
 
 interface DossierExportModalProps {
   isOpen: boolean;
@@ -92,6 +93,22 @@ export default function DossierExportModal({
     try {
       const res = await submitEscalationRequest(caseId, escalationReason, userNote);
       setSubmissionSuccess(true);
+      const returnedDossier = res.dossier || dossierData || {
+        dossier_id: res.dossier_id || `dos_${Date.now().toString(36)}`,
+        case_id: caseId,
+        product_name: caseState?.product_name || caseState?.product_type || 'Ayurvedic Case',
+        product_type: caseState?.product_type || 'Formulation',
+        formulation_classification: caseState?.formulation_classification || 'proprietary',
+        ingredients: caseState?.ingredients || [],
+        jurisdiction: jurisdiction,
+        country: country,
+        escalation_reason: escalationReason,
+        user_note: userNote,
+        status: 'submitted',
+        submitted_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      };
+      persistDossier(returnedDossier);
       setSubmittedDossierId(res.dossier_id || res.dossier?.dossier_id || 'SUBMITTED');
     } catch (err) {
       console.error('Failed to submit escalation request:', err);

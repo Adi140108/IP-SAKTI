@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { EscalationDossier, CaseState } from '@/types';
 import { fetchEscalationDossier, submitEscalationRequest, getCase, listCases, createCase } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
-import { getPersistedCases, persistCase, mergeAndPersistCases } from '@/lib/caseRegistry';
+import { getPersistedCases, persistCase, mergeAndPersistCases, persistDossier } from '@/lib/caseRegistry';
 
 const ESCALATION_REASONS = [
   'Insufficient authoritative evidence in corpus',
@@ -200,9 +200,13 @@ function EscalationContent() {
 
       if (res && res.dossier) {
         setDossier(res.dossier);
+        persistDossier(res.dossier);
       } else if (res && res.dossier_id) {
         const updated = await fetchEscalationDossier(activeCaseId, selectedReason);
         setDossier(updated);
+        persistDossier(updated);
+      } else if (dossier) {
+        persistDossier({ ...dossier, status: 'submitted' });
       }
       setSubmitSuccess(`Escalation request submitted successfully! Dossier ID: ${res.dossier_id || dossier?.dossier_id || 'Registered'}`);
     } catch (err: any) {

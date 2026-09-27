@@ -115,6 +115,11 @@ class ConversationPipeline:
         existing_data = await firestore_service.get_case_state(case_id)
         if existing_data:
             case_state = CaseState(**existing_data)
+            if request.language and request.language != "en":
+                lang = request.language
+                case_state.language = request.language
+            elif case_state.language:
+                lang = case_state.language
             if request.user_id and request.user_id != "guest_user" and case_state.user_id in ["guest_user", None]:
                 case_state.user_id = request.user_id
         else:
