@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, AliasChoices
 
 class CaseState(BaseModel):
     case_id: str
@@ -25,7 +25,10 @@ class CaseState(BaseModel):
     biological_resources_involved: Optional[bool] = None
     access_and_benefit_sharing: Optional[bool] = None
 
-    intellectual_property_objective: List[str] = Field(default_factory=list) # ["patent", "trademark", "gi", "copyright", "design", "plant_variety", "trade_secret", "tkdl_prior_art", "regulatory", "unknown"]
+    intellectual_property_objective: List[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("intellectual_property_objective", "ip_objective")
+    ) # ["patent", "trademark", "gi", "copyright", "design", "plant_variety", "trade_secret", "tkdl_prior_art", "regulatory", "unknown"]
     international_market: List[str] = Field(default_factory=list)
 
     uploaded_documents: List[str] = Field(default_factory=list)

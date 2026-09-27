@@ -124,6 +124,7 @@ export interface ServiceStatus {
 
 export interface DiagnosticsStatus {
   backend: ServiceStatus;
+  groq?: ServiceStatus;
   firestore: ServiceStatus;
   backblaze: ServiceStatus;
   ollama_gemma: ServiceStatus;

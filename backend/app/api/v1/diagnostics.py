@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from datetime import datetime
 from app.db.firestore import firestore_service
 from app.storage.backblaze import backblaze_service
+from app.ai.groq.provider import groq_provider
 from app.ai.gemma.provider import gemma_provider
 from app.ai.bhashini.service import bhashini_service
 from app.schemas.system import DiagnosticsStatus, ServiceStatus
@@ -11,10 +12,16 @@ router = APIRouter(tags=["Diagnostics"])
 @router.get("/system/diagnostics", response_model=DiagnosticsStatus)
 async def system_diagnostics():
     """Live diagnostic check of all connected services and sub-systems."""
+    groq_check = await groq_provider.check_availability()
+    groq_status = ServiceStatus(
+        name="Groq Primary LLM (70B / 120B)",
+        status="CONNECTED" if groq_check.get("available") else ("NOT_CONFIGURED" if "not configured" in str(groq_check.get("error", "")).lower() else "DISCONNECTED"),
+        details=f"Model: {groq_provider.model}. Details: {groq_check.get('error', 'Ready')}"
+    )
+
     gemma_check = await gemma_provider.check_availability()
-    
     gemma_status = ServiceStatus(
-        name="Ollama / Gemma 4 12B",
+        name="Ollama / Gemma Fallback LLM",
         status="CONNECTED" if gemma_check.get("available") else "DISCONNECTED",
         details=f"Model: {gemma_provider.model}. Details: {gemma_check.get('error', 'Ready')}"
     )
@@ -45,6 +52,7 @@ async def system_diagnostics():
 
     return DiagnosticsStatus(
         backend=backend_status,
+        groq=groq_status,
         firestore=firestore_status,
         backblaze=backblaze_status,
         ollama_gemma=gemma_status,

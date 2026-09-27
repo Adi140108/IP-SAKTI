@@ -21,7 +21,7 @@ class GroqProvider(LLMProvider):
     async def check_availability(self) -> Dict[str, Any]:
         """Check if Groq API key is present and service is reachable."""
         if not settings.GROQ_API_KEY:
-            return {"available": False, "error": "GROQ_API_KEY is not configured"}
+            return {"available": False, "error": "API key is not configured"}
 
         url = f"{self.base_url}/models"
         headers = {
@@ -81,7 +81,7 @@ class GroqProvider(LLMProvider):
                 
                 # If primary model unavailable or rate-limited (HTTP 429/404/400), attempt fallback Groq models
                 if res.status_code in (429, 404, 400):
-                    fallback_models = ["openai/gpt-oss-20b", "qwen/qwen3.8-27b", "openai/gpt-oss-120b"]
+                    fallback_models = ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama-3.1-8b-instant", "qwen-2.5-32b"]
                     for alt_model in fallback_models:
                         if alt_model != payload["model"]:
                             logger.warning(f"Groq API model {payload['model']} returned HTTP {res.status_code}. Retrying with {alt_model}.")

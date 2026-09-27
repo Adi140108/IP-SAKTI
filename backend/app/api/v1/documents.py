@@ -1,12 +1,15 @@
 import uuid
+import logging
 from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from app.storage.backblaze import backblaze_service
 from app.db.firestore import firestore_service
 from app.modules.ocr.service import ocr_pipeline
 from app.schemas.document import DocumentMetadata
+from app.case.models import CaseState
 from app.config import settings
 
+logger = logging.getLogger("IP-SAKTI.DocumentsAPI")
 router = APIRouter(tags=["Documents"])
 
 @router.post("/documents/upload", response_model=DocumentMetadata)
@@ -53,17 +56,24 @@ async def upload_document(
         ocr_result=ocr_res
     )
 
-    # 3. Update Firestore Case State
+    # 3. Update Firestore Case State & Extract Structured Information
     existing_case = await firestore_service.get_case_state(case_id)
     if existing_case:
-        docs = existing_case.get("uploaded_documents", [])
-        docs.append(file_id)
-        existing_case["uploaded_documents"] = docs
-        if ocr_res.extracted_text:
-            knowns = existing_case.get("known_information", [])
-            knowns.append(f"Document ({file.filename}) Extracted Text: {ocr_res.extracted_text[:150]}...")
-            existing_case["known_information"] = knowns
-        await firestore_service.save_case_state(case_id, existing_case)
+        case_obj = CaseState(**existing_case)
+        if file_id not in case_obj.uploaded_documents:
+            case_obj.uploaded_documents.append(file_id)
+
+        if ocr_res.extracted_text and len(ocr_res.extracted_text.strip()) > 10:
+            doc_context = f"Document '{file.filename}' uploaded. Extracted Content:\n{ocr_res.extracted_text[:3000]}"
+            from app.orchestration.case_orchestrator import case_orchestrator
+            try:
+                case_obj = await case_orchestrator.extract_and_update_state(case_obj, doc_context)
+            except Exception as e:
+                logger.warning(f"Structured extraction from document failed: {e}")
+                case_obj.known_information.append(f"Document ({file.filename}) Extracted Text: {ocr_res.extracted_text[:150]}...")
+                await firestore_service.save_case_state(case_id, case_obj.model_dump())
+        else:
+            await firestore_service.save_case_state(case_id, case_obj.model_dump())
 
     await firestore_service.save_document_metadata(file_id, meta.model_dump())
     return meta

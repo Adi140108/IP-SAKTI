@@ -86,12 +86,43 @@ Return ONLY JSON:
                 "explanation": res.get("explanation", "Routed based on cumulative case parameters")
             }
         except Exception as e:
-            logger.warning(f"IP Router error: {e}")
-            return {
-                "primary_route": "unknown",
-                "domains": ["unknown"],
-                "domain_statuses": {"unknown": "Unknown"},
-                "explanation": "Insufficient parameters to route IP domain"
-            }
+            logger.warning(f"IP Router error: {e}. Falling back to deterministic rule-based evaluation.")
+            return self._evaluate_rule_based_routing(case_state, latest_message)
+
+    def _evaluate_rule_based_routing(self, case_state: CaseState, message: str = "") -> Dict[str, Any]:
+        """Deterministic keyword and parameter-based routing when LLM is unavailable."""
+        text = f"{case_state.product_name or ''} {case_state.product_type or ''} {' '.join(case_state.ingredients)} {' '.join(case_state.intellectual_property_objective)} {message}".lower()
+        domains = []
+
+        if any(w in text for w in ["patent", "synergistic", "novel", "extract", "formulation", "process", "invention", "3(p)", "3(e)"]):
+            domains.append("patent")
+        if any(w in text for w in ["trademark", "brand", "logo", "name", "trade name", "mark"]):
+            domains.append("trademark")
+        if case_state.biological_resources_involved or any(w in text for w in ["biological", "nba", "abs", "forest", "sourced in india", "herbs", "plant material", "nagoya"]):
+            domains.append("abs")
+        if case_state.traditional_knowledge_involved or any(w in text for w in ["classical", "samhita", "charaka", "traditional knowledge", "tkdl", "prior art"]):
+            domains.append("tkdl_prior_art")
+        if any(w in text for w in ["gi", "geographical indication", "regional", "kerala", "kashmir", "origin"]):
+            domains.append("gi")
+        if any(w in text for w in ["design", "bottle", "packaging", "container", "shape"]):
+            domains.append("design")
+        if any(w in text for w in ["fssai", "ayurveda aahar", "drug license", "form 25d", "cdsco", "regulatory"]):
+            domains.append("regulatory")
+
+        # Also incorporate any explicitly stated objectives in CaseState
+        for obj in case_state.intellectual_property_objective:
+            if obj in self.SUPPORTED_DOMAINS and obj not in domains and obj != "unknown":
+                domains.append(obj)
+
+        if not domains:
+            domains = ["unknown"]
+
+        return {
+            "primary_route": domains[0],
+            "domains": domains,
+            "domain_statuses": {d: "Relevant" for d in domains},
+            "explanation": "Routed based on cumulative case parameters and statutory keyword heuristics."
+        }
 
 ip_router = IPRouterEngine()
+

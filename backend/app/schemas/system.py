@@ -13,6 +13,7 @@ class ServiceStatus(BaseModel):
 
 class DiagnosticsStatus(BaseModel):
     backend: ServiceStatus
+    groq: Optional[ServiceStatus] = None
     firestore: ServiceStatus
     backblaze: ServiceStatus
     ollama_gemma: ServiceStatus
