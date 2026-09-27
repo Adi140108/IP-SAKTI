@@ -292,10 +292,15 @@ Return JSON:
 
         # 8b. Prior-Art & Existing-Record Retrieval (Separated from legal verdict)
         is_patent_case = (
+            bool(case_state.ingredients) or
             "patent" in [d.lower() for d in case_state.intellectual_property_objective] or
-            case_state.formulation_classification in ["proprietary", "new_non_classical", "phytopharmaceutical"] or
+            case_state.formulation_classification in ["proprietary", "new_non_classical", "phytopharmaceutical", "classical", "unknown"] or
             "patent" in processed_text.lower() or
             "prior art" in processed_text.lower() or
+            "similar" in processed_text.lower() or
+            "herbal" in processed_text.lower() or
+            "extract" in processed_text.lower() or
+            "formulation" in processed_text.lower() or
             bool(case_state.novelty_aspect or case_state.technical_improvement)
         )
         

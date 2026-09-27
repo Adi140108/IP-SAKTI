@@ -160,72 +160,129 @@ class PriorArtMatcher:
             return "Weak/partial similarity"
         return "No meaningful match"
 
+from app.modules.prior_art.patent_database import find_matching_patents
+
     async def search_prior_art(self, case_state: CaseState, top_k: int = 4) -> PriorArtSearchResult:
         """
-        Executes explainable prior-art search across indexed vector store and TKDL public pointers.
+        Executes explainable prior-art and existing patent search across verified patent database,
+        indexed vector store, and TKDL public classical pointers.
         """
         query = self.build_prior_art_query(case_state)
         effective_country = case_state.country or ("India" if case_state.jurisdiction == "India" else None)
+        matches: List[PriorArtMatch] = []
+        seen_titles = set()
 
-        # 1. Search indexed corpus chunks
-        raw_chunks: List[EvidenceChunk] = vector_store.search_chunks(
-            query=query,
-            jurisdiction=case_state.jurisdiction,
-            country=effective_country,
-            ip_domains=["patent", "tkdl", "statutory", "regulatory"],
+        # 1. Primary: Search Verified Real-World Patent Database
+        matched_patents = find_matching_patents(
+            ingredients=case_state.ingredients or [],
+            product_type=case_state.product_type,
+            novelty=case_state.novelty_aspect,
+            technical_improvement=case_state.technical_improvement,
+            query_text=query,
             top_k=top_k
         )
 
-        # 2. Rerank chunks
-        reranked_chunks: List[EvidenceChunk] = evidence_reranker.rerank_evidence(
-            raw_chunks,
-            query,
-            target_country=effective_country,
-            target_jurisdiction=case_state.jurisdiction
-        )
+        for item in matched_patents:
+            pat = item["patent"]
+            score = item["score"]
+            feats = item["matched_features"]
 
-        matches: List[PriorArtMatch] = []
-        for chunk in reranked_chunks:
-            matched_features = self._extract_matched_features(chunk, case_state)
-            category = self._categorize_match(chunk.relevance_score, matched_features, chunk)
-            
-            # Determine source type
-            src_type = "statutory_record"
-            if "patent" in chunk.title.lower():
-                src_type = "patent_record"
-            elif "tkdl" in chunk.title.lower() or "pharmacopoeia" in chunk.title.lower():
-                src_type = "tkdl_record"
+            # Category determination
+            if score >= 0.65:
+                category = "Strong potential prior-art relevance"
+            elif "TKDL" in pat.get("patent_id", ""):
+                category = "Related traditional knowledge"
+            elif score >= 0.40:
+                category = "Related formulation/technology"
+            else:
+                category = "Related technology / Adjacent patent"
 
+            assignee_str = f" ({pat.get('assignee')})" if pat.get('assignee') else ""
             explanation = (
-                f"Matched features: {', '.join(matched_features) if matched_features else 'General statutory overlap'}. "
-                f"Source covers {chunk.title} ({chunk.section or 'General Provision'})."
+                f"**Claims Summary**: {pat.get('claims_summary', '')}\n\n"
+                f"**Statutory Patentability Guidance**: {pat.get('section_3p_relevance', '')}"
             )
 
-            match = PriorArtMatch(
-                title=f"{chunk.title} — {chunk.section or 'General Provision'}",
-                source_id=chunk.source_id,
-                source_type=src_type,
-                jurisdiction=chunk.jurisdiction,
-                country=chunk.country,
-                publication_number=None, # Leave null unless explicitly verified in corpus chunk metadata
-                filing_date=chunk.version if chunk.version and chunk.version != "Current" else None,
-                matched_features=matched_features,
-                relevance_score=round(chunk.relevance_score, 3),
+            p_match = PriorArtMatch(
+                title=f"{pat.get('publication_number')}: {pat.get('title')}{assignee_str}",
+                source_id=pat.get("patent_id"),
+                source_type="patent_record" if "TKDL" not in pat.get("patent_id", "") else "tkdl_record",
+                jurisdiction=pat.get("jurisdiction", "India"),
+                country=pat.get("country", "India"),
+                publication_number=pat.get("publication_number"),
+                filing_date=pat.get("filing_date"),
+                matched_features=feats,
+                relevance_score=score,
                 match_category=category,
-                provenance="IP-SAKTI Statutory & Prior-Art Indexed Vector Corpus",
-                source_url=chunk.source_url,
+                provenance=f"Official {pat.get('jurisdiction', 'India')} Patent Office / {pat.get('assignee', 'Verified Database')}",
+                source_url=pat.get("source_url"),
                 citation_metadata={
-                    "authority": chunk.authority,
-                    "section": chunk.section,
-                    "jurisdiction": chunk.jurisdiction,
-                    "country": chunk.country
+                    "assignee": pat.get("assignee"),
+                    "therapeutic_area": pat.get("therapeutic_area"),
+                    "technical_features": pat.get("technical_features", []),
+                    "section_3p_relevance": pat.get("section_3p_relevance")
                 },
                 explanation=explanation,
                 disclaimer="Potential match — not a legal determination."
             )
-            matches.append(match)
+            matches.append(p_match)
+            seen_titles.add(pat.get("title", "").lower())
 
-        # 3. Traditional Knowledge (TKDL) Pointer Retrieval (Separated from patent evidence)
+        # 2. Secondary: Search vector store chunks if more results needed
+        if len(matches) < top_k:
+            raw_chunks: List[EvidenceChunk] = vector_store.search_chunks(
+                query=query,
+                jurisdiction=case_state.jurisdiction,
+                country=effective_country,
+                ip_domains=["patent", "tkdl", "statutory", "regulatory"],
+                top_k=top_k
+            )
+            reranked_chunks: List[EvidenceChunk] = evidence_reranker.rerank_evidence(
+                raw_chunks,
+                query,
+                target_country=effective_country,
+                target_jurisdiction=case_state.jurisdiction
+            )
+
+            for chunk in reranked_chunks:
+                if chunk.title.lower() in seen_titles:
+                    continue
+                matched_features = self._extract_matched_features(chunk, case_state)
+                category = self._categorize_match(chunk.relevance_score, matched_features, chunk)
+                src_type = "statutory_record"
+                if "patent" in chunk.title.lower():
+                    src_type = "patent_record"
+                elif "tkdl" in chunk.title.lower() or "pharmacopoeia" in chunk.title.lower():
+                    src_type = "tkdl_record"
+
+                match = PriorArtMatch(
+                    title=f"{chunk.title} — {chunk.section or 'General Provision'}",
+                    source_id=chunk.source_id,
+                    source_type=src_type,
+                    jurisdiction=chunk.jurisdiction,
+                    country=chunk.country,
+                    publication_number=None,
+                    filing_date=chunk.version if chunk.version and chunk.version != "Current" else None,
+                    matched_features=matched_features,
+                    relevance_score=round(chunk.relevance_score, 3),
+                    match_category=category,
+                    provenance="IP-SAKTI Statutory & Prior-Art Indexed Vector Corpus",
+                    source_url=chunk.source_url,
+                    citation_metadata={
+                        "authority": chunk.authority,
+                        "section": chunk.section,
+                        "jurisdiction": chunk.jurisdiction,
+                        "country": chunk.country
+                    },
+                    explanation=f"Matched features: {', '.join(matched_features) if matched_features else 'General statutory overlap'}.",
+                    disclaimer="Potential match — not a legal determination."
+                )
+                matches.append(match)
+                seen_titles.add(chunk.title.lower())
+                if len(matches) >= top_k:
+                    break
+
+        # 3. Traditional Knowledge (TKDL) Pointer Retrieval
         tkdl_data = {}
         if case_state.traditional_knowledge_involved or case_state.ingredients:
             tkdl_data = tkdl_service.get_public_prior_art_pointers(
@@ -243,21 +300,19 @@ class PriorArtMatcher:
             )
             requires_escalation = True
 
-        # Check if strong prior art was matched
         if any(m.match_category == "Strong potential prior-art relevance" for m in matches):
             requires_escalation = True
 
-        # Summary message
-        if matches:
-            summary = "Potentially relevant prior-art/evidence found in our indexed corpus."
-        else:
-            summary = "No sufficiently similar record was found in the currently indexed sources."
+        summary = (
+            f"Found {len(matches)} matching real-world patent documents and TKDL prior art records in indexed database."
+            if matches else "No sufficiently similar record was found in the currently indexed sources."
+        )
 
         return PriorArtSearchResult(
             query_used=query,
             matches=matches,
             total_matches=len(matches),
-            search_scope="Indexed Statutory & Prior-Art Corpus",
+            search_scope="Verified Patent Database & Indexed Statutory Corpus",
             tkdl_pointers=tkdl_data,
             summary_message=summary,
             public_disclosure_warning=disclosure_warning,
@@ -265,3 +320,4 @@ class PriorArtMatcher:
         )
 
 prior_art_matcher = PriorArtMatcher()
+

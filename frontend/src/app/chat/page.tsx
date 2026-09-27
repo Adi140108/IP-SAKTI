@@ -1010,63 +1010,72 @@ export default function ChatPage() {
                       {item.data.answer}
                     </div>
 
-                    {/* Potential Prior-Art Matches Section */}
+                    {/* Potential Prior-Art & Similar Patent Matches Section */}
                     {item.data.prior_art_matches && item.data.prior_art_matches.length > 0 && (
-                      <div className="p-3 rounded-xl bg-slate-50/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-2.5 shadow-2xs">
-                        <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800/80 pb-1.5">
-                          <div className="text-[11px] font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                            <span>🔍</span>
-                            <span>{t.potentialPriorArt}</span>
+                      <div className="p-3.5 rounded-xl bg-gradient-to-r from-slate-50 via-teal-50/20 to-slate-50 dark:from-slate-900/90 dark:via-teal-950/20 dark:to-slate-900/90 border border-teal-500/30 dark:border-teal-500/25 space-y-3 shadow-2xs">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-teal-500/20 pb-2">
+                          <div className="text-xs font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-md bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center text-xs">
+                              🔬
+                            </span>
+                            <span>Matching Patents & Prior-Art Disclosures ({item.data.prior_art_matches.length})</span>
                           </div>
-                          <span className="text-[9px] text-slate-500 dark:text-slate-400 font-medium">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
                             {t.priorArtNotice}
                           </span>
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-2.5">
                           {item.data.prior_art_matches.map((match, mIdx) => (
                             <div
                               key={mIdx}
-                              className="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/90 space-y-1.5"
+                              className="p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200/90 dark:border-slate-800/90 space-y-2 shadow-xs hover:border-teal-500/40 transition-all"
                             >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="font-bold text-[11px] text-slate-900 dark:text-slate-100">
-                                  {match.title}
+                              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                                <div className="space-y-1">
+                                  {match.publication_number && (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="px-2 py-0.5 rounded-md bg-teal-100 dark:bg-teal-950 text-teal-900 dark:text-teal-300 font-mono font-black text-[10px] border border-teal-300 dark:border-teal-800/60">
+                                        📜 {match.publication_number}
+                                      </span>
+                                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
+                                        {match.jurisdiction} {match.country ? `(${match.country})` : ''}
+                                      </span>
+                                      {match.filing_date && (
+                                        <span className="text-[9px] text-slate-400 dark:text-slate-500">
+                                          • Filed: {match.filing_date}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                  <div className="font-bold text-xs text-slate-900 dark:text-slate-100 leading-snug">
+                                    {match.title}
+                                  </div>
                                 </div>
-                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${
-                                  match.match_category === 'Strong potential prior-art relevance'
-                                    ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                                    : match.match_category === 'Related traditional knowledge'
-                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                                    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                }`}>
-                                  {match.match_category}
-                                </span>
-                              </div>
 
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500 dark:text-slate-400">
-                                <span><strong>Source:</strong> {match.source_type}</span>
-                                <span><strong>Jurisdiction:</strong> {match.jurisdiction} {match.country ? `(${match.country})` : ''}</span>
-                                <span><strong>Relevance:</strong> {Math.round(match.relevance_score * 100)}%</span>
-                                {match.source_url && (
-                                  <a
-                                    href={match.source_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-emerald-600 hover:underline font-semibold"
-                                  >
-                                    Source Link ↗
-                                  </a>
-                                )}
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    match.match_category === 'Strong potential prior-art relevance'
+                                      ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800/60'
+                                      : match.match_category === 'Related traditional knowledge'
+                                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800/60'
+                                      : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/60'
+                                  }`}>
+                                    {match.match_category}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-[10px] font-mono font-bold">
+                                    {Math.round(match.relevance_score * 100)}% Match
+                                  </span>
+                                </div>
                               </div>
 
                               {match.matched_features && match.matched_features.length > 0 && (
-                                <div className="flex flex-wrap gap-1 pt-0.5">
-                                  <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">Matched:</span>
+                                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Overlap:</span>
                                   {match.matched_features.map((feat, fIdx) => (
                                     <span
                                       key={fIdx}
-                                      className="px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[9px]"
+                                      className="px-2 py-0.5 rounded-md bg-teal-50 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800/50 text-teal-800 dark:text-teal-300 text-[9px] font-medium"
                                     >
                                       {feat}
                                     </span>
@@ -1075,8 +1084,22 @@ export default function ChatPage() {
                               )}
 
                               {match.explanation && (
-                                <div className="text-[10px] text-slate-600 dark:text-slate-400 italic bg-slate-50 dark:bg-slate-900/60 p-1.5 rounded">
+                                <div className="text-[11px] text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/80 p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-800/80 leading-relaxed">
                                   {match.explanation}
+                                </div>
+                              )}
+
+                              {match.source_url && (
+                                <div className="pt-1 flex justify-end">
+                                  <a
+                                    href={match.source_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-900 hover:bg-teal-50 dark:hover:bg-teal-950/60 border border-slate-200 dark:border-slate-800 hover:border-teal-500/50 text-teal-700 dark:text-teal-400 text-[10px] font-bold flex items-center gap-1.5 transition-all shadow-2xs"
+                                  >
+                                    <span>🔍 View Official Patent Record on Google Patents / InPASS</span>
+                                    <span>↗</span>
+                                  </a>
                                 </div>
                               )}
                             </div>
