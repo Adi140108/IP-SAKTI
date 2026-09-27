@@ -186,6 +186,11 @@ function EscalationContent() {
     setError(null);
 
     try {
+      // Ensure backend has case state synced if available
+      if (caseState) {
+        createCase(caseState).catch(() => {});
+      }
+
       const res = await submitEscalationRequest({
         case_id: activeCaseId,
         reason: selectedReason,
@@ -202,7 +207,15 @@ function EscalationContent() {
       setSubmitSuccess(`Escalation request submitted successfully! Dossier ID: ${res.dossier_id || dossier?.dossier_id || 'Registered'}`);
     } catch (err: any) {
       console.error('Submission error:', err);
-      setError(err?.message || 'Failed to submit escalation request to human facilitator.');
+      let msg = 'Failed to submit escalation request to human facilitator.';
+      if (typeof err === 'string' && err.trim()) {
+        msg = err;
+      } else if (err?.message && typeof err.message === 'string' && err.message.trim()) {
+        msg = err.message;
+      } else if (err && typeof err === 'object') {
+        msg = JSON.stringify(err);
+      }
+      setError(msg);
     } finally {
       setSubmitting(false);
     }

@@ -1203,7 +1203,7 @@ export default function ChatPage() {
         {/* ===================================================================== */}
         {/* COMPACT CASE CONTEXT SIDEBAR (Col 4 / ~28% on desktop) */}
         {/* ===================================================================== */}
-        <div className={`lg:col-span-4 xl:col-span-3 flex-col glass-panel p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 overflow-y-auto space-y-3 shadow-xs text-xs ${
+        <div className={`lg:col-span-4 xl:col-span-3 flex flex-col glass-panel p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 overflow-y-auto space-y-3 shadow-xs text-xs min-h-0 h-full max-h-full ${
           showMobileSidebar ? 'flex fixed inset-x-4 top-20 bottom-4 z-40 bg-white dark:bg-slate-900' : 'hidden lg:flex'
         }`}>
 
@@ -1237,7 +1237,7 @@ export default function ChatPage() {
           </div>
 
           {/* SECTION 1: COMPACT CASE CONTEXT ROWS */}
-          <div className="space-y-1.5 bg-slate-50/70 dark:bg-slate-950/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80">
+          <div className="space-y-1.5 bg-slate-50/70 dark:bg-slate-950/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80 shrink-0">
             {/* Jurisdiction */}
             <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
               <span className="text-slate-500 dark:text-slate-400 font-medium">Jurisdiction</span>
@@ -1301,7 +1301,7 @@ export default function ChatPage() {
           </div>
 
           {/* SECTION 2: COLLAPSIBLE CASE PARAMETERS ACCORDION */}
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 overflow-hidden">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 overflow-hidden shrink-0">
             <button
               onClick={() => setIsParamsOpen(!isParamsOpen)}
               className="w-full px-3 py-2 bg-slate-50/90 dark:bg-slate-950/80 flex items-center justify-between text-left hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors cursor-pointer"
@@ -1365,7 +1365,7 @@ export default function ChatPage() {
           </div>
 
           {/* SECTION 3: COLLAPSIBLE IP DOMAINS ACCORDION */}
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 overflow-hidden">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 overflow-hidden shrink-0">
             <button
               onClick={() => setIsIpDomainsOpen(!isIpDomainsOpen)}
               className="w-full px-3 py-2 bg-slate-50/90 dark:bg-slate-950/80 flex items-center justify-between text-left hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors cursor-pointer"
@@ -1415,7 +1415,7 @@ export default function ChatPage() {
           </div>
 
           {/* SECTION 4: COLLAPSIBLE VERIFIED CITATIONS ACCORDION */}
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 overflow-hidden">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 overflow-hidden shrink-0">
             <button
               onClick={() => setIsSourcesOpen(!isSourcesOpen)}
               className="w-full px-3 py-2 bg-slate-50/90 dark:bg-slate-950/80 flex items-center justify-between text-left hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors cursor-pointer"
@@ -1434,7 +1434,7 @@ export default function ChatPage() {
             </button>
 
             {isSourcesOpen && (
-              <div className="p-2 space-y-2 bg-white dark:bg-slate-900/40 text-[10px] border-t border-slate-200 dark:border-slate-800 max-h-60 overflow-y-auto">
+              <div className="p-2 space-y-2 bg-white dark:bg-slate-900/40 text-[10px] border-t border-slate-200 dark:border-slate-800">
                 {latestResponse?.citations && latestResponse.citations.length > 0 ? (
                   latestResponse.citations.map((c, cIdx) => (
                     <div key={cIdx} className="p-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1">

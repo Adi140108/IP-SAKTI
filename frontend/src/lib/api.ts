@@ -45,12 +45,32 @@ async function handleResponse<T>(res: Response): Promise<T> {
     try {
       const errorJson = await res.json();
       if (errorJson && typeof errorJson === 'object') {
-        errorDetail = errorJson.detail || errorJson.error || errorJson.message || JSON.stringify(errorJson);
+        const d = errorJson.detail ?? errorJson.error ?? errorJson.message;
+        if (typeof d === 'string' && d.trim()) {
+          errorDetail = d;
+        } else if (Array.isArray(d)) {
+          errorDetail = d
+            .map((item: any) => {
+              if (typeof item === 'string') return item;
+              if (item && typeof item === 'object') {
+                const loc = Array.isArray(item.loc) ? item.loc.filter((x: any) => x !== 'body').join('.') : item.loc;
+                const msg = item.msg || item.message || JSON.stringify(item);
+                return loc ? `${loc}: ${msg}` : msg;
+              }
+              return String(item);
+            })
+            .filter(Boolean)
+            .join('; ');
+        } else if (typeof d === 'object' && d !== null) {
+          errorDetail = JSON.stringify(d);
+        } else if (errorJson) {
+          errorDetail = JSON.stringify(errorJson);
+        }
       }
     } catch {
       // Non-JSON error response
     }
-    throw new Error(errorDetail);
+    throw new Error(errorDetail || `Request failed with status ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
@@ -187,39 +207,39 @@ export async function submitEscalationRequest(
   const payload = {
     case_id: caseId,
     reason: payloadReason,
-    user_note: payloadNote,
+    user_note: payloadNote || undefined,
     trigger_type: triggerType
   };
 
-  // Try /escalation/submit first
-  try {
-    const res = await fetch(`${baseUrl}/escalation/submit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch {
-    // Fallback to /escalation/dossier
-  }
-
-  // Fallback to /escalation/dossier
-  const dossierRes = await fetch(`${baseUrl}/escalation/dossier`, {
+  const res = await fetch(`${baseUrl}/escalation/submit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
-  const dossierData = await handleResponse<EscalationDossier>(dossierRes);
-  return {
-    dossier_id: dossierData.dossier_id || `dos_${Date.now().toString(36)}`,
-    case_id: caseId,
-    status: 'submitted',
-    created_at: dossierData.created_at || new Date().toISOString(),
-    message: 'Human review request submitted successfully.',
-    dossier: dossierData
-  };
+
+  if (res.ok) {
+    return (await res.json()) as EscalationSubmissionResponse;
+  }
+
+  // Fallback to /escalation/dossier if /escalation/submit was not found (404)
+  if (res.status === 404) {
+    const dossierRes = await fetch(`${baseUrl}/escalation/dossier`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const dossierData = await handleResponse<EscalationDossier>(dossierRes);
+    return {
+      dossier_id: dossierData.dossier_id || `dos_${Date.now().toString(36)}`,
+      case_id: caseId,
+      status: 'submitted',
+      created_at: dossierData.created_at || new Date().toISOString(),
+      message: 'Human review request submitted successfully.',
+      dossier: dossierData
+    };
+  }
+
+  return handleResponse<EscalationSubmissionResponse>(res);
 }
 
 export async function fetchEscalationRequests(limit: number = 50, status?: string): Promise<EscalationDossier[]> {
