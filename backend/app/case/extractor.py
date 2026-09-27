@@ -120,22 +120,28 @@ Return ONLY a JSON object:
             if current_state.classical_reference and "novel" in current_state.classical_reference.lower():
                 detected_contradictions.append("Contradiction: User previously stated a novel proprietary formula, but now stated classical Ayurvedic traditional knowledge basis.")
 
-        if any(term in lower_msg for term in ["proven synergistic efficacy", "proven synergistic", "synergistic efficacy", "proven 3x", "bioavailability", "lab data exists", "synergistic scientific efficacy"]):
-            deterministic_updates["synergistic_efficacy_proven"] = True
-        elif any(term in lower_msg for term in ["no lab data", "no synergistic", "traditional knowledge basis only", "no comparative efficacy"]):
+        if any(term in lower_msg for term in ["no lab data", "no synergistic", "traditional knowledge basis only", "no comparative efficacy", "not tested"]):
             deterministic_updates["synergistic_efficacy_proven"] = False
+        elif any(term in lower_msg for term in ["proven synergistic efficacy", "proven synergistic", "synergistic efficacy", "proven 3x", "bioavailability", "lab data exists", "synergistic scientific efficacy"]):
+            deterministic_updates["synergistic_efficacy_proven"] = True
 
-        if "yes, indian biological resources" in lower_msg or "indian biological resources used" in lower_msg or "sourcing from india" in lower_msg:
-            deterministic_updates["biological_resources_involved"] = True
-        elif "no biological resources sourced from india" in lower_msg or "no indian bio" in lower_msg or "no biological resources" in lower_msg:
+        if any(term in lower_msg for term in [
+            "no biological resources", "no biological resources sourced from india",
+            "sourced outside india", "no indian bio", "outside india", "not sourcing from india",
+            "no biological resources sourced", "no, sourced outside"
+        ]):
             deterministic_updates["biological_resources_involved"] = False
+        elif any(term in lower_msg for term in [
+            "sourced in india", "sourced from india", "sourcing from india", "sourced from kerala",
+            "sourced within india", "indian biological resources", "biological materials are sourced",
+            "sourcing in india", "biological resources sourced", "yes, sourced in india", "yes, indian biological resources"
+        ]):
+            deterministic_updates["biological_resources_involved"] = True
 
-        if "indian citizen / indian entity" in lower_msg or "indian entity" in lower_msg or "indian citizen" in lower_msg:
-            deterministic_updates["applicant_entity_type"] = "Indian Entity (Section 7 SBB Intimation)"
-        elif "foreign company / nri" in lower_msg or "foreign company" in lower_msg or "nri" in lower_msg or "foreign collaboration" in lower_msg:
-            deterministic_updates["applicant_entity_type"] = "Foreign Entity / NRI (NBA Section 3 Form I Approval)"
-        elif "startup" in lower_msg or "micro enterprise" in lower_msg:
+        if any(term in lower_msg for term in ["indian citizen", "indian entity", "indian startup", "micro enterprise", "startup company", "startup"]):
             deterministic_updates["applicant_entity_type"] = "Indian Startup / MSME"
+        elif any(term in lower_msg for term in ["foreign company", "nri", "foreign collaboration", "foreign entity", "foreign corporation", "multinational"]):
+            deterministic_updates["applicant_entity_type"] = "Foreign Entity / NRI (NBA Section 3 Form I Approval)"
 
         if "therapeutic treatment" in lower_msg or "therapeutic" in lower_msg or "ayush medicine form 25d" in lower_msg:
             deterministic_updates["intended_use"] = "Therapeutic Treatment (AYUSH Drug Licensing Form 25D)"
@@ -153,12 +159,38 @@ Return ONLY a JSON object:
         elif "standardized bioactive fraction" in lower_msg:
             deterministic_updates["manufacturing_context"] = "Standardized Purified Fraction with >= 4 Bioactive Markers"
 
+        if "india (domestic law)" in lower_msg or lower_msg == "india":
+            deterministic_updates["jurisdiction"] = "India"
+        elif "international / export markets" in lower_msg or "international" in lower_msg:
+            deterministic_updates["jurisdiction"] = "International"
+
+        if "patent protection" in lower_msg or lower_msg == "patent":
+            deterministic_updates["intellectual_property_objective"] = ["patent"]
+        elif "trademark / brand registration" in lower_msg or "trademark" in lower_msg:
+            deterministic_updates["intellectual_property_objective"] = ["trademark"]
+        elif "geographical indication" in lower_msg or "gi" in lower_msg:
+            deterministic_updates["intellectual_property_objective"] = ["gi"]
+        elif "nba clearance" in lower_msg or "national biodiversity authority" in lower_msg:
+            deterministic_updates["intellectual_property_objective"] = ["regulatory", "abs"]
+        elif "pct international" in lower_msg:
+            deterministic_updates["intellectual_property_objective"] = ["patent", "pct"]
+
+        # Ingredients pairs
+        extracted_pair_ings = []
+        for herb in ["ashwagandha", "turmeric", "curcumin", "piperine", "brahmi", "guduchi", "tulsi", "ginger", "neem", "giloy", "triphala"]:
+            if herb in lower_msg:
+                extracted_pair_ings.append(herb.capitalize())
+        if extracted_pair_ings:
+            deterministic_updates["ingredients"] = extracted_pair_ings
+
         if "herbal extract" in lower_msg:
             deterministic_updates["product_type"] = "Herbal Extract / Active Compound"
         elif "classical powder" in lower_msg or "churnam" in lower_msg or "taila" in lower_msg:
             deterministic_updates["product_type"] = "Classical Ayurvedic Preparation [Churnam/Taila]"
         elif "capsule" in lower_msg or "tablet" in lower_msg:
             deterministic_updates["product_type"] = "Capsule / Tablet Dosage Form"
+        elif "ayurveda-aahar" in lower_msg or "ayurveda aahar" in lower_msg:
+            deterministic_updates["product_type"] = "Ayurveda-Aahar Health Food / Beverage"
 
         # Check country extraction
         from app.modules.jurisdiction.engine import jurisdiction_engine
