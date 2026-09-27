@@ -34,6 +34,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     case_id: str
+    user_id: Optional[str] = "guest_user"
     message: str
     language: str = "en"
     jurisdiction: str = "India"

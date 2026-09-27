@@ -281,23 +281,76 @@ export default function ChatPage() {
     }
   };
 
+  const LANG_VOICE_MAP: Record<string, string> = {
+    en: 'en-US',
+    hi: 'hi-IN',
+    ta: 'ta-IN',
+    te: 'te-IN',
+    mr: 'mr-IN',
+    bn: 'bn-IN',
+    gu: 'gu-IN',
+    kn: 'kn-IN',
+    ml: 'ml-IN',
+  };
+
+  // Extract clean 2-sentence conversational executive summary for speech
+  const extractSpokenSummary = (rawText: string, nextQuestion?: string): string => {
+    if (!rawText) return '';
+    let clean = rawText
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/!\[.*?\]\(.*?\)/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/^#{1,6}\s+.*/gm, '')
+      .replace(/>\s+.*Notice.*/gi, '')
+      .replace(/>/g, '')
+      .replace(/\|.*?\|/g, '')
+      .replace(/[-*•]\s+/g, '')
+      .replace(/\b(Section|Sec\.)\s+\d+[\w()]*/gi, '')
+      .replace(/[*_~`#]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const sentences = clean.split(/(?<=[.?!])\s+/).filter((s) => s.trim().length > 12);
+    let summary = sentences.slice(0, 2).join(' ');
+    if (!summary || summary.length < 20) {
+      summary = clean.slice(0, 180);
+    }
+
+    if (nextQuestion && nextQuestion.trim()) {
+      const cleanQ = nextQuestion.replace(/[*_`#]/g, '').trim();
+      summary += ` Regarding your next step: ${cleanQ}`;
+    }
+
+    return summary;
+  };
+
   // Helper: Find Natural Female Voice
-  const getFemaleVoice = (): SpeechSynthesisVoice | null => {
+  const getFemaleVoice = (targetLangCode?: string): SpeechSynthesisVoice | null => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
     const voices = window.speechSynthesis.getVoices();
     if (!voices || voices.length === 0) return null;
+
+    const prefix = (targetLangCode || 'en').slice(0, 2);
+    const langVoices = voices.filter((v) => v.lang.toLowerCase().startsWith(prefix));
 
     const femaleKeywords = [
       'female', 'zira', 'samantha', 'google us english', 'victoria', 'karen',
       'veena', 'swara', 'kalpana', 'hazel', 'susan', 'aria', 'jenny', 'heera', 'anita'
     ];
 
-    const found = voices.find((v) => {
+    const foundInLang = langVoices.find((v) => {
+      const n = v.name.toLowerCase();
+      return femaleKeywords.some((k) => n.includes(k));
+    });
+    if (foundInLang) return foundInLang;
+    if (langVoices.length > 0) return langVoices[0];
+
+    const foundGeneral = voices.find((v) => {
       const n = v.name.toLowerCase();
       return femaleKeywords.some((k) => n.includes(k));
     });
 
-    return found || voices[0];
+    return foundGeneral || voices[0];
   };
 
   // Speech Recognition (Speech-to-Text)
@@ -317,7 +370,7 @@ export default function ChatPage() {
     const recognition = new SpeechRecClass();
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.lang = language === 'hi' ? 'hi-IN' : 'en-US';
+    recognition.lang = LANG_VOICE_MAP[language] || 'en-US';
 
     recognition.onstart = () => {
       setIsListening(true);
@@ -345,8 +398,8 @@ export default function ChatPage() {
     recognition.start();
   };
 
-  // Speech Synthesis (Text-to-Speech / Female Voice / Slower Speed 0.85x)
-  const speakText = (text: string, idx?: number) => {
+  // Speech Synthesis (Text-to-Speech / Executive 2-sentence summary / Female Voice)
+  const speakText = (text: string, idx?: number, nextQuestion?: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
     window.speechSynthesis.cancel();
@@ -356,17 +409,17 @@ export default function ChatPage() {
       return;
     }
 
-    const cleanedText = text.replace(/[*#`>_-]/g, ' ').replace(/\s+/g, ' ').trim();
-    const utterance = new SpeechSynthesisUtterance(cleanedText.slice(0, 350));
+    const spokenSummary = extractSpokenSummary(text, nextQuestion);
+    const utterance = new SpeechSynthesisUtterance(spokenSummary);
 
-    utterance.rate = 0.85;
+    utterance.rate = 0.88;
     utterance.pitch = 1.05;
 
-    const femaleVoice = getFemaleVoice();
+    const femaleVoice = getFemaleVoice(language);
     if (femaleVoice) {
       utterance.voice = femaleVoice;
     }
-    utterance.lang = language === 'hi' ? 'hi-IN' : 'en-US';
+    utterance.lang = LANG_VOICE_MAP[language] || 'en-US';
 
     if (idx !== undefined) setSpeakingIdx(idx);
 
@@ -419,31 +472,36 @@ export default function ChatPage() {
     setChatHistory((prev) => [...prev, { sender: 'user', text: textToSend }]);
     if (!customMessage) setInputMessage('');
 
+    // Ensure a unique dedicated case ID is assigned so previous cases are never overwritten
+    const effectiveCaseId = caseId || `case_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    if (!caseId) {
+      setCaseId(effectiveCaseId);
+    }
+
     try {
       const res = await sendChatMessage({
-        case_id: caseId || 'default_case',
+        case_id: effectiveCaseId,
         message: textToSend,
         language,
         jurisdiction,
-        country: jurisdiction === 'International' ? country : undefined
+        country: jurisdiction === 'International' ? country : undefined,
+        user_id: user?.uid || undefined
       });
 
       const newIdx = chatHistory.length + 1;
       setChatHistory((prev) => [...prev, { sender: 'assistant', data: res }]);
       setLatestResponse(res);
-      if (caseId) refreshCaseState(caseId);
+      refreshCaseState(effectiveCaseId);
+      fetchUserCases();
 
       // Auto-open sources if citations returned
       if (res.citations && res.citations.length > 0) {
         setIsSourcesOpen(true);
       }
 
-      // Auto-speak in Female Voice if Sound ON is enabled
+      // Auto-speak natural 2-sentence conversational summary if Sound is enabled
       if (soundEnabled && res.answer) {
-        speakText(
-          res.next_question ? `${res.answer.slice(0, 140)}. Next question: ${res.next_question}` : res.answer,
-          newIdx
-        );
+        speakText(res.answer, newIdx, res.next_question);
       }
     } catch (err) {
       console.error('Chat error:', err);
@@ -463,7 +521,12 @@ export default function ChatPage() {
   // Document Upload & Inline OCR Processing
   const handleDocumentSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !caseId) return;
+    if (!file) return;
+
+    const effectiveCaseId = caseId || `case_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    if (!caseId) {
+      setCaseId(effectiveCaseId);
+    }
 
     if (file.size === 0) {
       alert('Selected file is empty. Please choose a valid document.');
@@ -827,14 +890,21 @@ export default function ChatPage() {
                         </span>
                       </div>
                       <button
-                        onClick={() => speakText(item.data!.answer, idx)}
-                        className={`px-2 py-0.5 rounded-md border text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                        onClick={() => speakText(item.data!.answer, idx, item.data!.next_question)}
+                        className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                           speakingIdx === idx
-                            ? 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-400 dark:border-rose-500/50 animate-pulse'
-                            : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-800 hover:border-emerald-500/50 hover:text-emerald-600 dark:hover:text-emerald-400'
+                            ? 'bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-400 dark:border-rose-500/50 animate-pulse shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-800 hover:border-emerald-500/50 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-200/60 dark:hover:bg-slate-850'
                         }`}
                       >
-                        <span>{speakingIdx === idx ? '⏹ Stop' : '🔊 Listen (TTS)'}</span>
+                        <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
+                          {speakingIdx === idx ? (
+                            <rect x="6" y="6" width="12" height="12" rx="2" />
+                          ) : (
+                            <path d="M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77zm-2.5 0L6.5 7H3v10h3.5l5 3.77V3.23zM16.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
+                          )}
+                        </svg>
+                        <span>{speakingIdx === idx ? '⏹ Stop Voice' : '🔊 Listen Summary'}</span>
                       </button>
                     </div>
 
@@ -949,23 +1019,27 @@ export default function ChatPage() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploadingDoc}
-                className="p-2 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/40 transition-all text-sm flex items-center justify-center cursor-pointer shrink-0"
+                className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-slate-850 transition-all flex items-center justify-center cursor-pointer shrink-0 shadow-2xs"
                 title="Upload Document / PDF / Image (Inline OCR)"
               >
-                📎
+                <svg className="w-4 h-4 text-current" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
               </button>
 
               {/* Speech-to-Text Microphone Button */}
               <button
                 onClick={toggleListening}
-                className={`p-2 rounded-xl border transition-all text-sm flex items-center justify-center cursor-pointer shrink-0 ${
+                className={`p-2.5 rounded-xl border transition-all flex items-center justify-center cursor-pointer shrink-0 shadow-2xs ${
                   isListening
-                    ? 'bg-rose-500 text-white border-rose-400 shadow-md animate-bounce'
-                    : 'bg-slate-100 dark:bg-slate-950 border-slate-300 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/40'
+                    ? 'bg-rose-500 text-white border-rose-400 shadow-md ring-2 ring-rose-400/50 animate-pulse'
+                    : 'bg-slate-100 dark:bg-slate-900 border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-slate-850'
                 }`}
-                title="Voice Input (Speech-to-Text)"
+                title={isListening ? 'Click to stop listening' : 'Voice Input (Speech-to-Text)'}
               >
-                🎙️
+                <svg className="w-4 h-4 text-current" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
               </button>
 
               {/* Query Text Input */}

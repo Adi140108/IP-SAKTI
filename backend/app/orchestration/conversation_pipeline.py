@@ -20,6 +20,18 @@ from app.modules.citations.validator import citation_validator
 from app.modules.confidence.engine import confidence_engine
 from app.modules.questioning.engine import questioning_engine
 
+LANGUAGE_NAMES = {
+    "en": "English",
+    "hi": "Hindi (हिंदी)",
+    "ta": "Tamil (தமிழ்)",
+    "te": "Telugu (తెలుగు)",
+    "mr": "Marathi (मराठी)",
+    "bn": "Bengali (বাংলা)",
+    "gu": "Gujarati (ગુજરાતી)",
+    "kn": "Kannada (ಕನ್ನಡ)",
+    "ml": "Malayalam (മലയാളം)",
+}
+
 logger = logging.getLogger("IP-SAKTI.ConversationPipeline")
 
 class ConversationPipeline:
@@ -64,10 +76,12 @@ class ConversationPipeline:
         existing_data = await firestore_service.get_case_state(case_id)
         if existing_data:
             case_state = CaseState(**existing_data)
+            if request.user_id and request.user_id != "guest_user" and case_state.user_id in ["guest_user", None]:
+                case_state.user_id = request.user_id
         else:
             case_state = CaseState(
                 case_id=case_id,
-                user_id="guest_user",
+                user_id=request.user_id or "guest_user",
                 language=lang,
                 jurisdiction=jur_norm["jurisdiction"],
                 country=jur_norm["country"],
@@ -105,6 +119,7 @@ class ConversationPipeline:
         # 6. Groq / LLM Answer Generation with EvidenceContext
         jurisdiction_prompt = jurisdiction_engine.get_jurisdiction_prompt_filter(jur_norm)
         evidence_prompt_text = evidence_context.to_formatted_prompt_text()
+        lang_name = LANGUAGE_NAMES.get(lang, "English")
 
         system_prompt = (
             "You are IP-SAKTI Sahayak, an authoritative legal and regulatory AI assistant "
@@ -116,6 +131,12 @@ class ConversationPipeline:
             "3. Do NOT write long narrative essays or repetitive fluff.\n"
             "4. Never invent sections, acts, treaties, fees, or procedural deadlines."
         )
+
+        if lang != "en":
+            system_prompt += (
+                f"\n5. MULTILINGUAL INSTRUCTION: The user has selected the language '{lang_name}'. "
+                f"You MUST formulate and write the entire 'answer' text in {lang_name} using natural, authentic Indic script and proper terminology."
+            )
 
         user_prompt = f"""
 Case Parameters:

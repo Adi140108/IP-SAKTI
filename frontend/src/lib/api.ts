@@ -101,6 +101,7 @@ export async function updateCase(caseId: string, updates: Partial<CaseState>): P
 
 export async function sendChatMessage(params: {
   case_id: string;
+  user_id?: string;
   message: string;
   language: string;
   jurisdiction: string;
