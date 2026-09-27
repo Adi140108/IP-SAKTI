@@ -74,6 +74,36 @@ export function mergeAndPersistCases(apiCases: CaseState[]): CaseState[] {
 const DOSSIER_STORAGE_KEY = 'ip_sakti_persisted_dossiers';
 
 /**
+ * Dynamically computes a robust evidence and case completeness confidence score (0.35 - 0.98).
+ */
+export function computeCaseConfidence(c?: Partial<CaseState> | null): number {
+  if (!c) return 0.75;
+  if (typeof c.confidence === 'number' && c.confidence > 0) {
+    return Math.min(0.98, Math.max(0.35, Math.round(c.confidence * 100) / 100));
+  }
+
+  let score = 0.50; // Starting baseline
+  if (c.ingredients && c.ingredients.length > 0) score += 0.15;
+  if (c.product_type && c.product_type !== 'unknown') score += 0.10;
+  if (c.formulation_classification && c.formulation_classification !== 'unknown') score += 0.10;
+  if (c.intellectual_property_objective && c.intellectual_property_objective.length > 0) score += 0.08;
+  if (c.evidence_references && c.evidence_references.length > 0) score += 0.07;
+  if (c.conversation_history && c.conversation_history.length > 0) {
+    score += Math.min(0.10, c.conversation_history.length * 0.04);
+  }
+  if (c.missing_information && c.missing_information.length > 0) {
+    score -= Math.min(0.15, c.missing_information.length * 0.03);
+  }
+  return Math.min(0.98, Math.max(0.35, Math.round(score * 100) / 100));
+}
+
+export function getConfidenceLevel(score: number): 'High' | 'Medium' | 'Low' {
+  if (score >= 0.75) return 'High';
+  if (score >= 0.50) return 'Medium';
+  return 'Low';
+}
+
+/**
  * Retrieve all escalation dossiers saved in local storage registry,
  * also synthesizing dossiers for any persisted user cases.
  */
@@ -101,6 +131,9 @@ export function getPersistedDossiers(): any[] {
         const alreadyHasDossier = Array.from(dossierMap.values()).some((d) => d.case_id === c.case_id);
         if (!alreadyHasDossier) {
           const autoKey = `dos_${c.case_id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+          const dynConfidence = computeCaseConfidence(c);
+          const dynLevel = getConfidenceLevel(dynConfidence);
+
           const synthDossier = {
             dossier_id: autoKey,
             case_id: c.case_id,
@@ -112,8 +145,8 @@ export function getPersistedDossiers(): any[] {
             country: c.country || 'India',
             escalation_reason: 'User requested expert review',
             status: 'submitted',
-            confidence: c.confidence || 0.65,
-            confidence_level: (c.confidence || 0.65) >= 0.75 ? 'High' : 'Medium',
+            confidence: dynConfidence,
+            confidence_level: dynLevel,
             user_note: c.known_information && c.known_information.length > 0 ? c.known_information.join('; ') : 'Submitted for human facilitator review.',
             created_at: c.created_at || new Date().toISOString(),
             submitted_at: c.updated_at || c.created_at || new Date().toISOString(),

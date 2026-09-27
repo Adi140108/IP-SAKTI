@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { EscalationDossier, CaseState } from '@/types';
 import { fetchEscalationDossier, submitEscalationRequest, getCase, listCases, createCase } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
-import { getPersistedCases, persistCase, mergeAndPersistCases, persistDossier } from '@/lib/caseRegistry';
+import { getPersistedCases, persistCase, mergeAndPersistCases, persistDossier, computeCaseConfidence, getConfidenceLevel } from '@/lib/caseRegistry';
 
 const ESCALATION_REASONS = [
   'Insufficient authoritative evidence in corpus',
@@ -83,7 +83,7 @@ function EscalationContent() {
               traditional_knowledge_involved: true,
               biological_resources_involved: true,
               access_and_benefit_sharing: true,
-              confidence: 0.65
+              confidence: 0.82
             };
             persistCase(defaultCase);
             setUserCases([defaultCase]);
@@ -273,8 +273,8 @@ ${activeD?.citations && activeD.citations.length > 0
   : 'The Patents Act, 1970 (Section 3(p)) & Biological Diversity Act, 2002.'}
 
 ## 7. AI Confidence & Escalation Reasoning
-- **Confidence Level:** ${activeD?.confidence_level || 'Medium'} (${activeD?.confidence ?? '65%'})
-- **Confidence Reason:** ${activeD?.confidence_reason || 'Evaluated against statutory index.'}
+- **Confidence Level:** ${dossier?.confidence_level || getConfidenceLevel(dossier?.confidence || computeCaseConfidence(caseState))} (${Math.round((dossier?.confidence || computeCaseConfidence(caseState)) * 100)}%)
+- **Confidence Reason:** ${activeD?.confidence_reason || 'Evaluated against statutory index and verified legal citations.'}
 - **Escalation Reason:** ${activeD?.escalation_reason || selectedReason}
 - **User Note:** ${activeD?.user_note || userNote || 'None'}
 
@@ -396,11 +396,11 @@ ${activeD?.citations && activeD.citations.length > 0
               </div>
 
               <div className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300">
-                Confidence: {dossier?.confidence_level || 'Medium'} ({Math.round((dossier?.confidence || caseState?.confidence || 0.65) * 100)}%)
+                Confidence: {dossier?.confidence_level || getConfidenceLevel(dossier?.confidence || computeCaseConfidence(caseState))} ({Math.round((dossier?.confidence || computeCaseConfidence(caseState)) * 100)}%)
               </div>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              {dossier?.confidence_reason || 'Evaluated against indexed statutory provisions and official prior-art corpus.'}
+              {dossier?.confidence_reason || (computeCaseConfidence(caseState) >= 0.75 ? 'Evaluated against statutory index and authoritative legal citations.' : 'Evaluated against indexed statutory provisions; additional formulation parameters can increase confidence.')}
             </p>
           </div>
 

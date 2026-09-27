@@ -281,6 +281,7 @@ Return JSON:
             validated_citations=validated_cits,
             jurisdiction=case_state.jurisdiction
         )
+        case_state.confidence = conf_score
 
         final_answer = raw_answer
         if safe_abstain:
