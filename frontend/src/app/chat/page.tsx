@@ -8,6 +8,7 @@ import { FORMULATION_TIERS, getTierFromClassification } from '@/lib/formulationT
 import FormulationPathwayModal from '@/components/FormulationPathwayModal';
 import OfficialFormsModal from '@/components/OfficialFormsModal';
 import DossierExportModal from '@/components/DossierExportModal';
+import AuthModal from '@/components/AuthModal';
 import { useAuth } from '@/components/AuthProvider';
 import { listCases } from '@/lib/api';
 
@@ -65,6 +66,7 @@ export default function ChatPage() {
   const [showPathwayModal, setShowPathwayModal] = useState<boolean>(false);
   const [showFormsModal, setShowFormsModal] = useState<boolean>(false);
   const [showDossierModal, setShowDossierModal] = useState<boolean>(false);
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
 
   // Actions dropdown & Mobile sidebar toggle
   const [actionsDropdownOpen, setActionsDropdownOpen] = useState<boolean>(false);
@@ -524,14 +526,14 @@ export default function ChatPage() {
 
           {/* Sign In Prompt if not logged in */}
           {!user && (
-            <Link
-              href="/auth"
-              className="px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 text-amber-800 dark:text-amber-300 font-bold text-xs hover:bg-amber-100 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+            <button
+              onClick={() => setShowAuthModal(true)}
+              className="px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 text-amber-800 dark:text-amber-300 font-bold text-xs hover:bg-amber-100 transition-all flex items-center gap-1 cursor-pointer shadow-xs active:scale-95"
               title="Sign in to save your consultations to your account"
             >
               <span>🔑</span>
               <span>Sign In to Save</span>
-            </Link>
+            </button>
           )}
 
           {/* Switch Saved Case Dropdown */}
@@ -1291,6 +1293,16 @@ export default function ChatPage() {
         chatHistory={chatHistory}
         jurisdiction={jurisdiction}
         country={country}
+      />
+
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={() => {
+          fetchUserCases();
+        }}
+        title="Sign In to Save Consultations"
+        subtitle="Sign in with Google or email so your consultations and case history are saved and accessible anytime."
       />
     </div>
   );

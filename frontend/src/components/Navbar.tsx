@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { fetchHealth } from '@/lib/api';
 import { useTheme } from './ThemeProvider';
 import { useAuth } from './AuthProvider';
+import AuthModal from './AuthModal';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -14,6 +15,7 @@ export default function Navbar() {
   const { theme, toggleTheme } = useTheme();
   const { user, signOutUser } = useAuth();
   const [userDropdownOpen, setUserDropdownOpen] = useState<boolean>(false);
+  const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -139,13 +141,13 @@ export default function Navbar() {
               )}
             </div>
           ) : (
-            <Link
-              href="/auth"
+            <button
+              onClick={() => setAuthModalOpen(true)}
               className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-extrabold text-xs hover:from-emerald-400 hover:to-teal-400 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
             >
               <span>🔑</span>
               <span>Sign In</span>
-            </Link>
+            </button>
           )}
 
           <Link
@@ -167,6 +169,12 @@ export default function Navbar() {
           </Link>
         </div>
       </div>
+
+      {/* Global Auth Modal Triggered from Navbar */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+      />
     </header>
   );
 }

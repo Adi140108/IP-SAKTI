@@ -1,9 +1,25 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/AuthProvider';
+import AuthModal from '@/components/AuthModal';
 
 export default function HomePage() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+
+  const handleLaunchConsultation = () => {
+    if (!user) {
+      setShowAuthModal(true);
+    } else {
+      router.push('/chat');
+    }
+  };
+
   return (
     <div className="space-y-12 pb-10">
       {/* Hero Banner */}
@@ -26,20 +42,32 @@ export default function HomePage() {
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
-              <Link
-                href="/chat"
+              <button
+                onClick={handleLaunchConsultation}
                 className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-extrabold text-sm hover:from-emerald-400 hover:to-teal-500 transition-all shadow-lg shadow-emerald-950/50 flex items-center gap-2 cursor-pointer active:scale-95"
               >
                 <span>Launch AI Consultation</span>
                 <span>→</span>
-              </Link>
-              <Link
-                href="/auth"
-                className="px-5 py-3.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-sm border border-emerald-500/40 transition-all backdrop-blur-sm flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>🔑</span>
-                <span>Sign In / Register</span>
-              </Link>
+              </button>
+
+              {!user ? (
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="px-5 py-3.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-sm border border-emerald-500/40 transition-all backdrop-blur-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <span>🔑</span>
+                  <span>Sign In / Register</span>
+                </button>
+              ) : (
+                <Link
+                  href="/case"
+                  className="px-5 py-3.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-sm border border-emerald-500/40 transition-all backdrop-blur-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>📁</span>
+                  <span>My Saved Cases</span>
+                </Link>
+              )}
+
               <Link
                 href="/sources"
                 className="px-5 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm border border-white/20 transition-all backdrop-blur-sm cursor-pointer"
@@ -96,6 +124,15 @@ export default function HomePage() {
           </p>
         </div>
       </section>
+
+      {/* Sign In / Sign Up Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={() => router.push('/chat')}
+        title="Sign In Before Starting Your Consultation"
+        subtitle="Sign in to save your consultations to Firebase and resume chatting with your cases anytime, or continue as guest."
+      />
     </div>
   );
 }
