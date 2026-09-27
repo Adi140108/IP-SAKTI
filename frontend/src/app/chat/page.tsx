@@ -13,6 +13,7 @@ import DossierExportModal from '@/components/DossierExportModal';
 import AuthModal from '@/components/AuthModal';
 import { useAuth } from '@/components/AuthProvider';
 import { listCases } from '@/lib/api';
+import { findClientMatchingPatents } from '@/lib/patents';
 
 interface SpeechRecognitionResultItem {
   transcript: string;
@@ -500,6 +501,14 @@ export default function ChatPage() {
         country: jurisdiction === 'International' ? country : undefined,
         user_id: user?.uid || undefined
       });
+
+      // Resilient fallback: If backend matches are empty or still deploying, check verified client catalog
+      if (!res.prior_art_matches || res.prior_art_matches.length === 0) {
+        const clientMatches = findClientMatchingPatents(textToSend);
+        if (clientMatches.length > 0) {
+          res.prior_art_matches = clientMatches;
+        }
+      }
 
       const newIdx = chatHistory.length + 1;
       setChatHistory((prev) => [...prev, { sender: 'assistant', data: res }]);
