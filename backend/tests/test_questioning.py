@@ -138,3 +138,68 @@ async def test_12_international_germany_recognizes_country_known():
     res = await questioning_engine.generate_next_question(state)
     assert "country" not in res.detected_missing_info
     assert "which target foreign country" not in res.next_question.lower()
+
+@pytest.mark.asyncio
+async def test_13_questioning_continues_beyond_2_turns_for_missing_legal_parameters():
+    """TEST 13: Questioning continues past turn 2 when critical legal parameters (e.g. synergistic efficacy, biological sourcing) remain uncollected."""
+    state = CaseState(
+        case_id="t13",
+        jurisdiction="India",
+        product_name="Ashwa-Curcumin Plus",
+        product_type="Capsule",
+        classical_reference="Novel Proprietary Formulation",
+        ingredients=["Ashwagandha", "Curcumin"],
+        intellectual_property_objective=["patent"],
+        conversation_history=[
+            {"question": "What type of Ayurvedic product have you formulated?", "user_message": "Capsule"},
+            {"question": "What are the main medicinal plants or biological ingredients?", "user_message": "Ashwagandha and Curcumin"}
+        ]
+    )
+    # Turn 3: Should ask about synergistic efficacy lab data (Section 3(e))
+    res = await questioning_engine.generate_next_question(state)
+    assert not res.is_clarification_complete
+    assert res.next_question is not None
+    assert "synergistic_efficacy_proven" in res.detected_missing_info
+
+@pytest.mark.asyncio
+async def test_14_max_questions_cap_at_7():
+    """TEST 14: Hard cap at 7 questions -> stops asking questions when 7 questions have been asked."""
+    dummy_history = [
+        {"question": f"Question {i}", "user_message": f"Answer {i}"}
+        for i in range(7)
+    ]
+    state = CaseState(
+        case_id="t14",
+        jurisdiction="India",
+        conversation_history=dummy_history
+    )
+    res = await questioning_engine.generate_next_question(state)
+    assert res.is_clarification_complete
+    assert "Maximum intake questions reached" in res.next_question or "gathered" in res.next_question.lower()
+
+@pytest.mark.asyncio
+async def test_15_early_stopping_when_all_parameters_met_before_7():
+    """TEST 15: Early stopping -> if all critical legal & regulatory parameters are met before 7 questions, stop immediately."""
+    state = CaseState(
+        case_id="t15",
+        jurisdiction="India",
+        product_name="AyurShield",
+        product_type="Capsule",
+        classical_reference="Novel Proprietary Formulation",
+        ingredients=["Ashwagandha", "Tulsi", "Giloy"],
+        traditional_knowledge_involved=False,
+        synergistic_efficacy_proven=True,
+        biological_resources_involved=True,
+        applicant_entity_type="Indian Entity",
+        intended_use="Therapeutic Treatment (Form 25D)",
+        manufacturing_context="Novel Supercritical Fluid Extraction",
+        intellectual_property_objective=["patent", "trademark"],
+        conversation_history=[
+            {"question": "What type of Ayurvedic product have you formulated?", "user_message": "Capsule"}
+        ]
+    )
+    res = await questioning_engine.generate_next_question(state)
+    assert res.is_clarification_complete
+    assert res.detected_missing_info == []
+    assert "All key case parameters have been gathered" in res.next_question
+

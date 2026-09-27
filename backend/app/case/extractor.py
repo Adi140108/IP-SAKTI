@@ -28,6 +28,8 @@ Existing Case State Parameters:
 - Ingredients: {', '.join(current_state.ingredients) if current_state.ingredients else 'None listed'}
 - Traditional Knowledge: {current_state.traditional_knowledge_involved}
 - Biological Resources: {current_state.biological_resources_involved}
+- Synergistic Efficacy Data: {current_state.synergistic_efficacy_proven}
+- Applicant Entity Type: {current_state.applicant_entity_type}
 - IP Objectives: {', '.join(current_state.intellectual_property_objective) if current_state.intellectual_property_objective else 'None'}
 
 Latest User Message:
@@ -43,8 +45,11 @@ Map extracted fields precisely to:
 - intended_use (string)
 - classical_reference (string, e.g., "Charaka Samhita", "Sushruta Samhita", or "Novel proprietary formula")
 - traditional_knowledge_involved (boolean)
+- synergistic_efficacy_proven (boolean)
 - biological_resources_involved (boolean)
+- applicant_entity_type (string)
 - access_and_benefit_sharing (boolean)
+- manufacturing_context (string)
 - intellectual_property_objective (list from: ["patent", "trademark", "gi", "copyright", "design", "plant_variety", "trade_secret", "tkdl_prior_art", "regulatory"])
 - international_market (list of country/region strings)
 - country (string, if user specifies target country like "Germany", "USA", "EU")
@@ -86,8 +91,12 @@ Return ONLY a JSON object:
             if "classical" in prev_q or "text" in prev_q or "traditional knowledge" in prev_q or "3(p)" in prev_q:
                 deterministic_updates["classical_reference"] = "Unknown / Not Disclosed"
                 deterministic_updates["traditional_knowledge_involved"] = False
+            elif "synergistic" in prev_q or "bioavailability" in prev_q or "lab data" in prev_q or "3(e)" in prev_q:
+                deterministic_updates["synergistic_efficacy_proven"] = False
             elif "biological" in prev_q or "abs" in prev_q or "nba" in prev_q or "pic" in prev_q or "mat" in prev_q:
                 deterministic_updates["biological_resources_involved"] = False
+            elif "entity type" in prev_q or "applicant" in prev_q:
+                deterministic_updates["applicant_entity_type"] = "Indian Entity"
             elif "country" in prev_q or "foreign" in prev_q or "market" in prev_q or "pct" in prev_q:
                 deterministic_updates["country"] = "General International Market"
             elif "ingredient" in prev_q or "herb" in prev_q:
@@ -96,26 +105,53 @@ Return ONLY a JSON object:
                 deterministic_updates["product_type"] = "Ayurvedic Product (Unspecified Form)"
             elif "objective" in prev_q or "protection" in prev_q:
                 deterministic_updates["intellectual_property_objective"] = ["General Legal / IP Guidance"]
+            elif "intended" in prev_q or "therapeutic" in prev_q or "application" in prev_q:
+                deterministic_updates["intended_use"] = "General Ayurvedic Wellness"
 
         if "no, novel scientific formula" in lower_msg or "novel scientific formula" in lower_msg or "no traditional knowledge" in lower_msg or "no tk" in lower_msg or "novel proprietary" in lower_msg:
             deterministic_updates["traditional_knowledge_involved"] = False
             deterministic_updates["classical_reference"] = "Novel Proprietary Formula"
-            # Check for contradiction with existing classical reference
             if current_state.classical_reference and "classical" in current_state.classical_reference.lower():
                 detected_contradictions.append("Contradiction: User previously stated classical Ayurvedic text basis, but now stated it is a novel proprietary formula.")
 
         elif "yes, traditional knowledge involved" in lower_msg or "traditional knowledge involved" in lower_msg or "classical text reference" in lower_msg:
             deterministic_updates["traditional_knowledge_involved"] = True
             deterministic_updates["classical_reference"] = "Classical Ayurvedic Text Reference"
-            # Check for contradiction with existing proprietary reference
             if current_state.classical_reference and "novel" in current_state.classical_reference.lower():
                 detected_contradictions.append("Contradiction: User previously stated a novel proprietary formula, but now stated classical Ayurvedic traditional knowledge basis.")
 
+        if any(term in lower_msg for term in ["proven synergistic efficacy", "proven synergistic", "synergistic efficacy", "proven 3x", "bioavailability", "lab data exists", "synergistic scientific efficacy"]):
+            deterministic_updates["synergistic_efficacy_proven"] = True
+        elif any(term in lower_msg for term in ["no lab data", "no synergistic", "traditional knowledge basis only", "no comparative efficacy"]):
+            deterministic_updates["synergistic_efficacy_proven"] = False
+
         if "yes, indian biological resources" in lower_msg or "indian biological resources used" in lower_msg or "sourcing from india" in lower_msg:
             deterministic_updates["biological_resources_involved"] = True
-
         elif "no biological resources sourced from india" in lower_msg or "no indian bio" in lower_msg or "no biological resources" in lower_msg:
             deterministic_updates["biological_resources_involved"] = False
+
+        if "indian citizen / indian entity" in lower_msg or "indian entity" in lower_msg or "indian citizen" in lower_msg:
+            deterministic_updates["applicant_entity_type"] = "Indian Entity (Section 7 SBB Intimation)"
+        elif "foreign company / nri" in lower_msg or "foreign company" in lower_msg or "nri" in lower_msg or "foreign collaboration" in lower_msg:
+            deterministic_updates["applicant_entity_type"] = "Foreign Entity / NRI (NBA Section 3 Form I Approval)"
+        elif "startup" in lower_msg or "micro enterprise" in lower_msg:
+            deterministic_updates["applicant_entity_type"] = "Indian Startup / MSME"
+
+        if "therapeutic treatment" in lower_msg or "therapeutic" in lower_msg or "ayush medicine form 25d" in lower_msg:
+            deterministic_updates["intended_use"] = "Therapeutic Treatment (AYUSH Drug Licensing Form 25D)"
+        elif "dietary supplement" in lower_msg or "ayurveda aahar" in lower_msg or "health food" in lower_msg or "nutrition" in lower_msg:
+            deterministic_updates["intended_use"] = "Dietary Food / Nutrition (FSSAI Ayurveda Aahar Regulations 2022)"
+        elif "skin / topical beauty" in lower_msg or "cosmetic" in lower_msg or "beauty" in lower_msg:
+            deterministic_updates["intended_use"] = "Topical Beauty / Cleansing (Cosmetics Rules 2020)"
+        elif "phytopharmaceutical drug" in lower_msg or "cdsco ind" in lower_msg:
+            deterministic_updates["intended_use"] = "Phytopharmaceutical Drug (CDSCO Rule 122E IND)"
+
+        if "novel hydro-alcoholic" in lower_msg or "supercritical extraction" in lower_msg or "solvent extraction" in lower_msg:
+            deterministic_updates["manufacturing_context"] = "Novel Solvent / Supercritical Fluid Extraction"
+        elif "standard classical decoction" in lower_msg or "kwatha" in lower_msg:
+            deterministic_updates["manufacturing_context"] = "Classical Aqueous Kwatha Decoction"
+        elif "standardized bioactive fraction" in lower_msg:
+            deterministic_updates["manufacturing_context"] = "Standardized Purified Fraction with >= 4 Bioactive Markers"
 
         if "herbal extract" in lower_msg:
             deterministic_updates["product_type"] = "Herbal Extract / Active Compound"

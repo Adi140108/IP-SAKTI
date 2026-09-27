@@ -16,9 +16,13 @@ class DynamicQuestioningEngine:
     2. Deterministic Priority System: Selects exactly ONE highest-priority missing field based on strict dependency rules.
     3. Contradiction First: Prioritizes clarification if conflicting statements exist.
     4. Non-Repetition: Tracks question history to avoid re-asking previously addressed or declined topics.
-    5. Groq for Natural Language Generation: Generates plain, non-jargon questions tailored to the specific case context.
-    6. Deterministic Fallback: Reliable template fallback if Groq API is unavailable (Zero Ollama reasoning fallback).
+    5. Max Question Cap (7 Questions): Hard ceiling of 7 intake questions to avoid endless interrogation.
+    6. Early Stopping: Stops immediately as soon as all necessary legal & regulatory parameters are gathered.
+    7. Groq for Natural Language Generation: Generates plain, non-jargon questions tailored to the specific case context.
+    8. Deterministic Fallback: Reliable template fallback if Groq API is unavailable.
     """
+
+    MAX_QUESTIONS_CAP = 7
 
     # Deterministic Priority Ordering
     HIGH_PRIORITY_FIELDS = [
@@ -26,13 +30,15 @@ class DynamicQuestioningEngine:
         "jurisdiction",
         "country",
         "product_type",
-        "intellectual_property_objective",
-        "classical_reference"
+        "classical_reference",
+        "ingredients",
+        "intellectual_property_objective"
     ]
     MEDIUM_PRIORITY_FIELDS = [
-        "ingredients",
         "traditional_knowledge_involved",
+        "synergistic_efficacy_proven",
         "biological_resources_involved",
+        "applicant_entity_type",
         "international_market"
     ]
     LOW_PRIORITY_FIELDS = [
@@ -72,12 +78,28 @@ class DynamicQuestioningEngine:
             ["Ashwagandha & Turmeric", "Brahmi & Guduchi", "Tulsi & Ginger", "Other Botanical Ingredients"]
         ),
         "traditional_knowledge_involved": (
-            "Does your formulation rely on publicly known traditional Ayurvedic knowledge, or have you demonstrated a new synergistic efficacy through testing?",
-            ["Based on Traditional Knowledge", "Proven Synergistic Scientific Efficacy", "Novel Non-traditional Formula"]
+            "Does your formulation rely on publicly known traditional Ayurvedic knowledge, or have you developed a novel composition?",
+            ["Based on Traditional Knowledge", "Novel Non-traditional Formula", "Modified Classical Recipe"]
+        ),
+        "synergistic_efficacy_proven": (
+            "Have you demonstrated proven synergistic efficacy or improved bioavailability through laboratory or clinical testing?",
+            ["Proven Synergistic Scientific Efficacy", "Traditional Knowledge Combination Only", "Testing Currently in Progress", "Not Tested / Unknown"]
         ),
         "biological_resources_involved": (
             "Are the medicinal plants or biological materials in your formulation sourced within India?",
             ["Yes, Sourced in India (Requires NBA Clearance)", "No, Sourced Outside India", "Not Applicable"]
+        ),
+        "applicant_entity_type": (
+            "What is the legal status/nationality of the applicant entity under the Biological Diversity Act?",
+            ["Indian Citizen / Indian Entity", "Foreign Company / NRI Collaboration", "Indian Startup / Micro Enterprise"]
+        ),
+        "intended_use": (
+            "What is the primary intended therapeutic or commercial health use of your formulation?",
+            ["Therapeutic Treatment (AYUSH Drug Lic Form 25D)", "Dietary Supplement (Ayurveda Aahar FSSAI)", "Cosmetic / Beauty Application", "Phytopharmaceutical Drug (CDSCO)"]
+        ),
+        "manufacturing_context": (
+            "What manufacturing or extraction process is used in creating your formulation?",
+            ["Novel Solvent / Supercritical CO2 Extraction", "Standard Classical Aqueous Kwatha Decoction", "Standardized Purified Fraction", "Conventional Dry Grinding"]
         ),
         "international_market": (
             "Which specific foreign market or regulatory pathway are you targeting?",
@@ -114,15 +136,41 @@ class DynamicQuestioningEngine:
             "Under international Nagoya Protocol guidelines, does your product utilize genetic resources or traditional knowledge originating from India?",
             ["Yes, Traditional Knowledge Involved", "No, Novel Scientific Formula"]
         ),
+        "synergistic_efficacy_proven": (
+            "For foreign patent filings (e.g. USPTO/EPO), do you have experimental comparative data showing unexpected synergistic effects over known botanical combinations?",
+            ["Proven Synergistic Experimental Data", "No Comparative Lab Data", "Testing in Progress"]
+        ),
         "biological_resources_involved": (
             "Do you require Nagoya Protocol Prior Informed Consent (PIC) or Mutually Agreed Terms (MAT) to export biological material?",
             ["Yes, Indian Biological Resources Used (ABS)", "No Biological Resources Sourced from India"]
+        ),
+        "applicant_entity_type": (
+            "Under the Nagoya Protocol and international ABS frameworks, what is the incorporation status of the applicant entity?",
+            ["Foreign Corporation / Multinational", "Joint Venture with Indian Partner", "Indian Entity Exporting Abroad"]
+        ),
+        "intended_use": (
+            "What regulatory product category are you targeting in foreign markets?",
+            ["Dietary / Herbal Supplement (US FDA / EU)", "Traditional Herbal Medicine (THMPD)", "Phytomedicine / Drug Registration", "Cosmeceutical / Topical Application"]
+        ),
+        "manufacturing_context": (
+            "What processing technology or standardized extraction method is utilized for international regulatory compliance?",
+            ["Standardized Bioactive Marker Extraction", "Novel Supercritical Fluid Extraction", "Traditional Hydro-Alcoholic Method", "Cold-Pressed / Mechanical Processing"]
         ),
         "international_market": (
             "What is your intended foreign distribution or filing strategy?",
             ["PCT International Phase", "Direct National Phase Entry", "Commercial Export Partnership"]
         )
     }
+
+    def count_questions_asked(self, state: CaseState) -> int:
+        """Count how many dynamic clarification questions have been asked in this session."""
+        count = 0
+        for turn in state.conversation_history:
+            if not isinstance(turn, dict):
+                continue
+            if turn.get("next_question") or turn.get("question"):
+                count += 1
+        return count
 
     async def detect_information_gaps(self, state: CaseState) -> List[str]:
         """Detect missing information gaps directly from the updated CaseState."""
@@ -140,20 +188,30 @@ class DynamicQuestioningEngine:
 
             if "jurisdiction" in q_text or "domestic" in q_text or "international" in q_text:
                 asked_topics.append("jurisdiction")
-            if "country" in q_text or "foreign" in q_text or "market" in q_text:
+            if "target country" in q_text or "foreign country" in q_text or "enter" in q_text or "region are you planning" in q_text:
                 asked_topics.append("country")
-            if "dosage" in q_text or "delivery" in q_text or "form" in q_text or "type of ayurvedic" in q_text:
+            if "dosage" in q_text or "delivery" in q_text or "type of ayurvedic" in q_text or "product have you formulated" in q_text or "form does your product take" in q_text:
                 asked_topics.append("product_type")
-            if "objective" in q_text or "protection" in q_text or "trademark" in q_text or "patent" in q_text:
+            if "objective" in q_text or "type of legal protection" in q_text or "pathway are you pursuing" in q_text or "trademark" in q_text:
                 asked_topics.append("intellectual_property_objective")
-            if "classical" in q_text or "text" in q_text or "charaka" in q_text or "sushruta" in q_text or "samhita" in q_text:
+            if "classical" in q_text or "charaka" in q_text or "sushruta" in q_text or "samhita" in q_text or "classical ayurvedic text" in q_text:
                 asked_topics.append("classical_reference")
-            if "ingredient" in q_text or "herb" in q_text or "plant" in q_text:
+            if "ingredient" in q_text or "medicinal plant" in q_text or "botanical" in q_text or "biological ingredients" in q_text:
                 asked_topics.append("ingredients")
-            if "traditional knowledge" in q_text or "prior art" in q_text or "3(p)" in q_text or "3(e)" in q_text:
+            if "traditional knowledge" in q_text or "tkdl" in q_text or "genetic resources" in q_text or "traditional ayurvedic knowledge" in q_text:
                 asked_topics.append("traditional_knowledge_involved")
-            if "biological" in q_text or "nba" in q_text or "abs" in q_text or "pic" in q_text:
+            if "synergistic" in q_text or "bioavailability" in q_text or "unexpected synergistic" in q_text:
+                asked_topics.append("synergistic_efficacy_proven")
+            if "sourced within india" in q_text or "biological materials" in q_text or "pic" in q_text or "nagoya" in q_text:
                 asked_topics.append("biological_resources_involved")
+            if "applicant" in q_text or "nationality" in q_text or "incorporation" in q_text or "entity" in q_text:
+                asked_topics.append("applicant_entity_type")
+            if "intended therapeutic" in q_text or "intended use" in q_text or "regulatory product category" in q_text or "commercial health use" in q_text:
+                asked_topics.append("intended_use")
+            if "manufacturing" in q_text or "extraction process" in q_text or "processing technology" in q_text:
+                asked_topics.append("manufacturing_context")
+            if "foreign market" in q_text or "distribution or filing strategy" in q_text:
+                asked_topics.append("international_market")
             if "contradiction" in q_text or "clarify" in q_text:
                 asked_topics.append("contradiction_clarification")
 
@@ -207,9 +265,14 @@ class DynamicQuestioningEngine:
                 if not state.ingredients and not state.product_type:
                     continue
 
+            if candidate == "applicant_entity_type":
+                # Only ask if biological resources are involved or jurisdiction is relevant
+                if state.biological_resources_involved is not True:
+                    continue
+
             if candidate == "classical_reference":
                 # Do not ask if formulation is already classified or known
-                if state.formulation_classification and state.formulation_classification.lower() not in ["unknown", "unspecified"]:
+                if state.classical_reference and state.classical_reference.strip().lower() not in ["unknown", "unspecified", ""]:
                     continue
 
             # Skip if already asked in previous turns to avoid repetition
@@ -228,14 +291,28 @@ class DynamicQuestioningEngine:
     async def generate_next_question(self, state: CaseState) -> QuestioningResponse:
         """
         Generate exactly ONE targeted question based on the cumulative CaseState.
+        Enforces a hard ceiling of MAX_QUESTIONS_CAP (7 questions) and stops early if all information is gathered.
         """
+        questions_asked = self.count_questions_asked(state)
+        state.questions_asked_count = questions_asked
+
+        # Check Hard Max Questions Cap (7 Questions)
+        if questions_asked >= self.MAX_QUESTIONS_CAP:
+            logger.info(f"Case {state.case_id}: Max questions cap reached ({questions_asked}/{self.MAX_QUESTIONS_CAP}). Proceeding to complete assessment.")
+            return QuestioningResponse(
+                next_question="Maximum intake questions reached. All available case parameters gathered. Generating complete statutory assessment.",
+                detected_missing_info=state.missing_information or [],
+                is_clarification_complete=True,
+                suggested_options=None
+            )
+
         # Re-compute fresh missing information gaps from updated CaseState
         missing_info = await self.detect_information_gaps(state)
         state.missing_information = missing_info
 
-        # If no gaps remain, return completion
+        # Early Stop: If no gaps remain and no active contradictions exist, return completion
         if not missing_info and not self._detect_contradictions(state):
-            logger.info(f"Case {state.case_id}: Clarification complete. All essential parameters gathered.")
+            logger.info(f"Case {state.case_id}: Clarification complete early ({questions_asked} questions asked). All essential parameters gathered.")
             return QuestioningResponse(
                 next_question="All key case parameters have been gathered. Ready to generate complete legal guidance.",
                 detected_missing_info=[],
@@ -248,7 +325,7 @@ class DynamicQuestioningEngine:
 
         if not target_field:
             # All available missing fields were already asked or addressed
-            logger.info(f"Case {state.case_id}: All prioritized missing fields have been addressed.")
+            logger.info(f"Case {state.case_id}: All prioritized missing fields have been addressed ({questions_asked} questions asked).")
             return QuestioningResponse(
                 next_question="All prioritized case parameters have been gathered. Ready to proceed with statutory analysis.",
                 detected_missing_info=missing_info,
@@ -275,6 +352,7 @@ You are the Dynamic Legal Intake Engine for an Ayurvedic Intellectual Property A
 
 Current Cumulative Case State:
 - Case ID: {state.case_id}
+- Questions Asked So Far: {questions_asked} / {self.MAX_QUESTIONS_CAP}
 - Jurisdiction: {state.jurisdiction} ({country_name})
 - Product Name: {state.product_name or 'Unspecified'}
 - Product Type / Dosage: {state.product_type or 'Unspecified'}
@@ -283,6 +361,10 @@ Current Cumulative Case State:
 - Ingredients: {', '.join(state.ingredients) if state.ingredients else 'None listed'}
 - Traditional Knowledge: {state.traditional_knowledge_involved}
 - Biological Resources (ABS): {state.biological_resources_involved}
+- Synergistic Efficacy Proven: {state.synergistic_efficacy_proven}
+- Applicant Entity: {state.applicant_entity_type or 'Unspecified'}
+- Intended Use: {state.intended_use or 'Unspecified'}
+- Manufacturing Process: {state.manufacturing_context or 'Unspecified'}
 - IP Objectives: {', '.join(state.intellectual_property_objective) if state.intellectual_property_objective else 'Unspecified'}
 - Target Missing Field to Collect: "{target_field}"
 - Active Contradictions: {contradiction_text}
@@ -293,7 +375,7 @@ Generate EXACTLY ONE clear, friendly follow-up question to collect the missing p
 
 RULES:
 1. Speak in plain, clear English understandable to an inventor or Ayurvedic practitioner.
-2. Avoid dense legal or Ayurvedic jargon. If a legal term (e.g. Prior Art, ABS clearance) is essential, explain it briefly and simply.
+2. Avoid dense legal or Ayurvedic jargon. If a legal term (e.g. Prior Art, ABS clearance, Synergistic Efficacy) is essential, explain it briefly and simply.
 3. If jurisdiction is International and country is {country_name}, make the question relevant to {country_name}.
 4. Provide 2 to 4 realistic, clickable answer options / chips.
 5. NEVER ask about a field that is already known in the Case State.
