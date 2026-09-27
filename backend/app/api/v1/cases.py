@@ -1,11 +1,17 @@
 import uuid
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
+from typing import List, Optional
+from fastapi import APIRouter, HTTPException, Query
 from app.schemas.case import CaseState, CaseStateUpdate
 from app.db.firestore import firestore_service
 from app.modules.questioning.engine import questioning_engine
 
 router = APIRouter(tags=["Cases"])
+
+@router.get("/cases", response_model=List[CaseState])
+async def list_cases(user_id: Optional[str] = Query(None, description="Filter cases by user ID")):
+    cases = await firestore_service.list_cases(user_id=user_id)
+    return [CaseState(**c) for c in cases]
 
 @router.post("/cases", response_model=CaseState)
 async def create_case(state_init: CaseStateUpdate):
@@ -14,7 +20,7 @@ async def create_case(state_init: CaseStateUpdate):
     
     new_state = CaseState(
         case_id=case_id,
-        user_id="guest_user",
+        user_id=state_init.user_id or "guest_user",
         language=state_init.language or "en",
         jurisdiction=state_init.jurisdiction or "India",
         country=state_init.country,

@@ -49,9 +49,14 @@ export interface EvidenceReference {
 
 export interface ConversationHistoryItem {
   id?: string;
-  sender: 'user' | 'assistant';
+  sender?: 'user' | 'assistant';
   content?: string;
   text?: string;
+  user_message?: string;
+  assistant_answer?: string;
+  next_question?: string;
+  suggested_options?: string[];
+  citations?: Citation[];
   timestamp?: string;
   data?: ChatResponse;
 }

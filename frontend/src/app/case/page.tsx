@@ -1,12 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { getCase, updateCase } from '@/lib/api';
-import { CaseState, ConversationHistoryItem } from '@/types';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { getCase, updateCase, listCases } from '@/lib/api';
+import { CaseState, ConversationHistoryItem, ChatResponse } from '@/types';
 import { FORMULATION_TIERS, getTierFromClassification } from '@/lib/formulationTaxonomy';
 import FormulationPathwayModal from '@/components/FormulationPathwayModal';
 import OfficialFormsModal from '@/components/OfficialFormsModal';
 import DossierExportModal from '@/components/DossierExportModal';
+import { useAuth } from '@/components/AuthProvider';
 
 interface ExtendedHistoryItem extends ConversationHistoryItem {
   user_message?: string;
@@ -16,18 +19,37 @@ interface ExtendedHistoryItem extends ConversationHistoryItem {
 }
 
 export default function CaseWorkspacePage() {
+  const router = useRouter();
+  const { user } = useAuth();
+
   const [caseIdInput, setCaseIdInput] = useState<string>('');
   const [caseState, setCaseState] = useState<CaseState | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [localHistory, setLocalHistory] = useState<ExtendedHistoryItem[]>([]);
 
+  // List of all user cases
+  const [savedCases, setSavedCases] = useState<CaseState[]>([]);
+  const [loadingCasesList, setLoadingCasesList] = useState<boolean>(false);
+
   // Modals state
   const [showPathwayModal, setShowPathwayModal] = useState<boolean>(false);
   const [showFormsModal, setShowFormsModal] = useState<boolean>(false);
   const [showDossierModal, setShowDossierModal] = useState<boolean>(false);
 
-  const handleFetchCase = async (id: string) => {
+  const fetchUserCases = useCallback(async () => {
+    setLoadingCasesList(true);
+    try {
+      const cases = await listCases(user?.uid || undefined);
+      setSavedCases(cases);
+    } catch (e) {
+      console.error('Failed to list user cases:', e);
+    } finally {
+      setLoadingCasesList(false);
+    }
+  }, [user]);
+
+  const handleFetchCase = useCallback(async (id: string) => {
     if (!id.trim()) return;
     setLoading(true);
     setError(null);
@@ -40,7 +62,11 @@ export default function CaseWorkspacePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchUserCases();
+  }, [fetchUserCases]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -62,7 +88,48 @@ export default function CaseWorkspacePage() {
     }, 0);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [handleFetchCase]);
+
+  const handleContinueChatting = (targetCase: CaseState) => {
+    // Set active case ID in localStorage
+    localStorage.setItem('ip_sakti_active_case_id', targetCase.case_id);
+
+    // If conversation history exists on the case object, restore it for chat
+    if (targetCase.conversation_history && targetCase.conversation_history.length > 0) {
+      const restoredChat: Array<{ sender: 'user' | 'assistant'; text?: string; data?: ChatResponse }> = [];
+      targetCase.conversation_history.forEach((h, idx) => {
+        if (h.user_message) {
+          restoredChat.push({ sender: 'user', text: h.user_message });
+        } else if (h.sender === 'user') {
+          restoredChat.push({ sender: 'user', text: h.text || h.content || '' });
+        }
+
+        if (h.assistant_answer || h.sender === 'assistant') {
+          const assistantData: ChatResponse = h.data || {
+            case_id: targetCase.case_id,
+            message_id: `restored_msg_${idx}`,
+            answer: h.assistant_answer || h.text || h.content || '',
+            jurisdiction: targetCase.jurisdiction || 'India',
+            country: targetCase.country,
+            relevant_ip_domains: targetCase.intellectual_property_objective || ['patent'],
+            product_classification: targetCase.formulation_classification || 'unknown',
+            citations: h.citations || [],
+            confidence_score: targetCase.confidence || 0.85,
+            confidence_explanation: 'Loaded from previous consultation record.',
+            next_question: h.next_question || undefined,
+            suggested_options: h.suggested_options || undefined,
+            safe_abstention: false,
+            requires_human_escalation: false
+          };
+          restoredChat.push({ sender: 'assistant', data: assistantData });
+        }
+      });
+      localStorage.setItem('ip_sakti_chat_history', JSON.stringify(restoredChat));
+    }
+
+    // Navigate to /chat
+    router.push('/chat');
+  };
 
   const handleUpdateClassification = async (tierId: string) => {
     if (!caseState?.case_id) return;
@@ -72,6 +139,7 @@ export default function CaseWorkspacePage() {
         product_type: FORMULATION_TIERS[tierId]?.shortLabel || tierId,
       });
       setCaseState(updated);
+      fetchUserCases();
     } catch (e) {
       console.error(e);
     }
@@ -92,13 +160,13 @@ export default function CaseWorkspacePage() {
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto pb-10">
-      
+
       {/* Header and Controls */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-6">
         <div>
           <h1 className="text-3xl font-black text-slate-900 dark:text-white">Case State Workspace</h1>
           <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">
-            Persisted state parameters, 6-tier formulation classification, and official pre-filing dossier.
+            Persisted state parameters, 6-tier formulation classification, previous sessions, and official pre-filing dossier.
           </p>
         </div>
 
@@ -144,21 +212,154 @@ export default function CaseWorkspacePage() {
         </div>
       </div>
 
+      {/* ========================================================================= */}
+      {/* SAVED PREVIOUS CASES SECTION */}
+      {/* ========================================================================= */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">📁</span>
+            <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
+              {user ? `Saved Consultations (${savedCases.length})` : 'Recent Consultation Cases'}
+            </h2>
+          </div>
+          {!user && (
+            <Link
+              href="/auth?redirect=/case"
+              className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-bold"
+            >
+              Sign In to save cases to your account →
+            </Link>
+          )}
+        </div>
+
+        {loadingCasesList ? (
+          <div className="text-xs text-slate-500 flex items-center gap-2 p-4">
+            <div className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+            <span>Loading previous cases...</span>
+          </div>
+        ) : savedCases.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {savedCases.map((c) => {
+              const tier = getTierFromClassification(c.formulation_classification || c.product_type);
+              const isCurrent = caseState?.case_id === c.case_id;
+
+              return (
+                <div
+                  key={c.case_id}
+                  className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between space-y-2.5 ${
+                    isCurrent
+                      ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-700 shadow-xs'
+                      : 'glass-panel bg-white/90 dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 hover:border-emerald-500/50'
+                  }`}
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
+                        #{c.case_id}
+                      </span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                        {c.updated_at ? new Date(c.updated_at).toLocaleDateString() : 'Active'}
+                      </span>
+                    </div>
+
+                    <div className="font-semibold text-xs text-emerald-800 dark:text-emerald-300">
+                      {tier.shortLabel || tier.label}
+                    </div>
+
+                    <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                      <span>{c.jurisdiction === 'International' ? '🌐' : '🇮🇳'} {c.jurisdiction} {c.country ? `(${c.country})` : ''}</span>
+                      <span>•</span>
+                      <span>{c.language.toUpperCase()}</span>
+                    </div>
+
+                    {c.ingredients && c.ingredients.length > 0 && (
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                        🌿 {c.ingredients.slice(0, 3).join(', ')}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                      onClick={() => {
+                        setCaseIdInput(c.case_id);
+                        handleFetchCase(c.case_id);
+                      }}
+                      className="flex-1 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all cursor-pointer text-center"
+                    >
+                      Inspect
+                    </button>
+                    <button
+                      onClick={() => handleContinueChatting(c)}
+                      className="flex-1 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white dark:text-slate-950 text-xs font-bold transition-all shadow-xs cursor-pointer text-center"
+                    >
+                      💬 Chat ➔
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-xs text-slate-500 text-center">
+            No saved consultations found. Start a consultation in <Link href="/chat" className="text-emerald-600 font-bold hover:underline">AI Chat</Link> to create your first case.
+          </div>
+        )}
+      </div>
+
       {loading && <div className="text-slate-600 dark:text-slate-400 text-sm">Loading Case State...</div>}
       {error && <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs">{error}</div>}
 
       {!caseState && !loading && (
-        <div className="glass-panel p-12 text-center text-slate-500 dark:text-slate-400 space-y-3 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">
-          <div className="text-4xl">📁</div>
-          <h3 className="text-lg font-bold text-slate-800 dark:text-slate-300">No Case Loaded</h3>
-          <p className="text-xs text-slate-600 dark:text-slate-400">
-            Start a chat session to create an active case or load an existing Case ID above.
+        <div className="glass-panel p-10 text-center text-slate-500 dark:text-slate-400 space-y-3 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="text-4xl">📂</div>
+          <h3 className="text-lg font-bold text-slate-800 dark:text-slate-300">Select or Load a Case</h3>
+          <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+            Choose a case from your saved consultations above, enter a Case ID, or start a new consultation session in AI Chat.
           </p>
+          <div className="pt-2">
+            <Link
+              href="/chat"
+              className="inline-flex px-4 py-2 rounded-xl bg-emerald-500 text-white dark:text-slate-950 font-bold text-xs hover:bg-emerald-400 transition-all shadow-xs"
+            >
+              ➕ Start New AI Consultation
+            </Link>
+          </div>
         </div>
       )}
 
       {caseState && (
         <div className="space-y-6">
+
+          {/* ACTIVE CASE QUICK ACTIONS BANNER */}
+          <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-slate-900/10 dark:from-emerald-950/60 dark:via-teal-950/40 dark:to-slate-900 border border-emerald-400/40 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white dark:text-slate-950 flex items-center justify-center text-xl font-bold shadow-xs">
+                ⚖️
+              </div>
+              <div>
+                <div className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>Active Consultation: Case #{caseState.case_id}</span>
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 text-[10px] font-bold border border-emerald-300 dark:border-emerald-800">
+                    {activeTier.shortLabel || activeTier.label}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  Ready to continue interactive questioning and statutory RAG citations in AI Chat.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => handleContinueChatting(caseState)}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white dark:text-slate-950 text-xs font-extrabold hover:from-emerald-400 hover:to-teal-500 transition-all flex items-center gap-2 shadow-xs cursor-pointer active:scale-95"
+            >
+              <span>💬 Continue Chatting in AI Chat</span>
+              <span>➔</span>
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             {/* Case Parameters Card */}
@@ -343,7 +544,31 @@ export default function CaseWorkspacePage() {
         isOpen={showDossierModal}
         onClose={() => setShowDossierModal(false)}
         caseState={caseState}
-        chatHistory={effectiveRecords}
+        chatHistory={effectiveRecords.flatMap((r, idx) => {
+          const items: Array<{ sender: 'user' | 'assistant'; data?: ChatResponse; text?: string }> = [];
+          if (r.user_message || r.sender === 'user') {
+            items.push({ sender: 'user', text: r.user_message || r.text || r.content || '' });
+          }
+          if (r.assistant_answer || r.sender === 'assistant') {
+            items.push({
+              sender: 'assistant',
+              data: r.data || {
+                case_id: caseState?.case_id || 'IP-SAKTI-SESSION',
+                message_id: `rec_${idx}`,
+                answer: r.assistant_answer || r.text || r.content || '',
+                jurisdiction: caseState?.jurisdiction || 'India',
+                product_classification: caseState?.formulation_classification || 'unknown',
+                relevant_ip_domains: caseState?.intellectual_property_objective || ['patent'],
+                citations: r.citations || [],
+                confidence_score: caseState?.confidence || 0.85,
+                confidence_explanation: 'Historical consultation record',
+                requires_human_escalation: false,
+                safe_abstention: false,
+              },
+            });
+          }
+          return items;
+        })}
         jurisdiction={caseState?.jurisdiction || 'India'}
         country={caseState?.country || undefined}
       />

@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import Link from 'next/link';
 import { createCase, sendChatMessage, getCase, uploadDocument, updateCase } from '@/lib/api';
 import { ChatResponse, CaseState } from '@/types';
 import { FORMULATION_TIERS, getTierFromClassification } from '@/lib/formulationTaxonomy';
 import FormulationPathwayModal from '@/components/FormulationPathwayModal';
 import OfficialFormsModal from '@/components/OfficialFormsModal';
 import DossierExportModal from '@/components/DossierExportModal';
+import { useAuth } from '@/components/AuthProvider';
+import { listCases } from '@/lib/api';
 
 interface SpeechRecognitionResultItem {
   transcript: string;
@@ -43,6 +46,7 @@ interface WindowWithSpeech extends Window {
 }
 
 export default function ChatPage() {
+  const { user } = useAuth();
   const [caseId, setCaseId] = useState<string>('');
   const [caseState, setCaseState] = useState<CaseState | null>(null);
   const [jurisdiction, setJurisdiction] = useState<'India' | 'International'>('India');
@@ -53,6 +57,10 @@ export default function ChatPage() {
   const [chatHistory, setChatHistory] = useState<Array<{ sender: 'user' | 'assistant'; data?: ChatResponse; text?: string }>>([]);
   const [latestResponse, setLatestResponse] = useState<ChatResponse | null>(null);
 
+  // Saved user cases list for quick switching
+  const [userCases, setUserCases] = useState<CaseState[]>([]);
+  const [casePickerOpen, setCasePickerOpen] = useState<boolean>(false);
+
   // Modals state
   const [showPathwayModal, setShowPathwayModal] = useState<boolean>(false);
   const [showFormsModal, setShowFormsModal] = useState<boolean>(false);
@@ -62,6 +70,7 @@ export default function ChatPage() {
   const [actionsDropdownOpen, setActionsDropdownOpen] = useState<boolean>(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState<boolean>(false);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
+  const casePickerRef = useRef<HTMLDivElement>(null);
 
   // Sidebar Accordions State
   const [isParamsOpen, setIsParamsOpen] = useState<boolean>(false);
@@ -106,6 +115,19 @@ export default function ChatPage() {
     { id: 'regulatory', label: 'AYUSH / FSSAI Regulatory', icon: '⚕️' },
   ];
 
+  const fetchUserCases = useCallback(async () => {
+    try {
+      const cases = await listCases(user?.uid || undefined);
+      setUserCases(cases);
+    } catch (e) {
+      console.error('Failed to list user cases:', e);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchUserCases();
+  }, [fetchUserCases]);
+
   const refreshCaseState = useCallback(async (id: string) => {
     try {
       const state = await getCase(id);
@@ -115,6 +137,58 @@ export default function ChatPage() {
     }
   }, []);
 
+  const switchActiveCase = (targetCase: CaseState) => {
+    setCaseId(targetCase.case_id);
+    setCaseState(targetCase);
+    setJurisdiction((targetCase.jurisdiction as 'India' | 'International') || 'India');
+    if (targetCase.country) setCountry(targetCase.country);
+    if (targetCase.language) setLanguage(targetCase.language);
+    localStorage.setItem('ip_sakti_active_case_id', targetCase.case_id);
+
+    if (targetCase.conversation_history && targetCase.conversation_history.length > 0) {
+      const restoredChat: Array<{ sender: 'user' | 'assistant'; text?: string; data?: ChatResponse }> = [];
+      targetCase.conversation_history.forEach((h, idx) => {
+        if (h.user_message) {
+          restoredChat.push({ sender: 'user', text: h.user_message });
+        } else if (h.sender === 'user') {
+          restoredChat.push({ sender: 'user', text: h.text || h.content || '' });
+        }
+
+        if (h.assistant_answer || h.sender === 'assistant') {
+          const assistantData: ChatResponse = h.data || {
+            case_id: targetCase.case_id,
+            message_id: `restored_msg_${idx}`,
+            answer: h.assistant_answer || h.text || h.content || '',
+            jurisdiction: targetCase.jurisdiction || 'India',
+            country: targetCase.country,
+            relevant_ip_domains: targetCase.intellectual_property_objective || ['patent'],
+            product_classification: targetCase.formulation_classification || 'unknown',
+            citations: h.citations || [],
+            confidence_score: targetCase.confidence || 0.85,
+            confidence_explanation: 'Loaded from previous consultation record.',
+            next_question: h.next_question || undefined,
+            suggested_options: h.suggested_options || undefined,
+            safe_abstention: false,
+            requires_human_escalation: false
+          };
+          restoredChat.push({ sender: 'assistant', data: assistantData });
+        }
+      });
+      setChatHistory(restoredChat);
+      localStorage.setItem('ip_sakti_chat_history', JSON.stringify(restoredChat));
+      const lastAssistant = [...restoredChat].reverse().find((m) => m.sender === 'assistant' && m.data);
+      if (lastAssistant && lastAssistant.data) {
+        setLatestResponse(lastAssistant.data);
+      }
+    } else {
+      setChatHistory([]);
+      setLatestResponse(null);
+      localStorage.removeItem('ip_sakti_chat_history');
+    }
+
+    setCasePickerOpen(false);
+  };
+
   const startNewConsultation = useCallback(() => {
     localStorage.removeItem('ip_sakti_active_case_id');
     localStorage.removeItem('ip_sakti_chat_history');
@@ -122,14 +196,15 @@ export default function ChatPage() {
     setLatestResponse(null);
     setCaseState(null);
 
-    createCase({ jurisdiction, country, language })
+    createCase({ jurisdiction, country, language, user_id: user?.uid || undefined })
       .then((res) => {
         setCaseId(res.case_id);
         setCaseState(res);
         localStorage.setItem('ip_sakti_active_case_id', res.case_id);
+        fetchUserCases();
       })
       .catch((err) => console.error('Failed to init case:', err));
-  }, [jurisdiction, country, language]);
+  }, [jurisdiction, country, language, user, fetchUserCases]);
 
   // Load Persisted Session or Create New Case
   useEffect(() => {
@@ -446,6 +521,49 @@ export default function ChatPage() {
             <span>➕</span>
             <span className="hidden sm:inline">New Case</span>
           </button>
+
+          {/* Switch Saved Case Dropdown */}
+          {userCases.length > 0 && (
+            <div className="relative" ref={casePickerRef}>
+              <button
+                onClick={() => setCasePickerOpen(!casePickerOpen)}
+                className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+                title="Switch between your ongoing consultations"
+              >
+                <span>📂</span>
+                <span className="hidden sm:inline">Cases</span>
+                <span className="text-[9px]">▼</span>
+              </button>
+
+              {casePickerOpen && (
+                <div className="absolute left-0 mt-1.5 w-64 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl z-50 py-1.5 text-xs max-h-60 overflow-y-auto">
+                  <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span>Saved Cases ({userCases.length})</span>
+                    <Link href="/case" className="text-emerald-600 hover:underline text-[9px] font-bold">Workspace →</Link>
+                  </div>
+                  {userCases.map((c) => {
+                    const tier = getTierFromClassification(c.formulation_classification || c.product_type);
+                    const isSelected = c.case_id === caseId;
+                    return (
+                      <button
+                        key={c.case_id}
+                        onClick={() => switchActiveCase(c)}
+                        className={`w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                          isSelected ? 'bg-emerald-50/70 dark:bg-emerald-950/60 font-bold text-emerald-800 dark:text-emerald-300' : 'text-slate-700 dark:text-slate-200'
+                        }`}
+                      >
+                        <div className="truncate">
+                          <div className="font-mono text-[11px]">#{c.case_id}</div>
+                          <div className="text-[10px] text-slate-500 truncate">{tier.shortLabel || tier.label}</div>
+                        </div>
+                        {isSelected && <span className="text-emerald-500 font-bold text-xs">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Regime Switcher */}
           <div className="inline-flex p-0.5 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs">

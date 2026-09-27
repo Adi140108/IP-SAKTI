@@ -3,6 +3,7 @@ import './globals.css';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { AuthProvider } from '@/components/AuthProvider';
 
 export const metadata: Metadata = {
   title: 'IP-SAKTI Sahayak | Multilingual Ayurvedic IP AI Assistant',
@@ -28,11 +29,13 @@ export default function RootLayout({
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className="flex flex-col min-h-screen">
         <ThemeProvider>
-          <Navbar />
-          <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
-            {children}
-          </main>
-          <Footer />
+          <AuthProvider>
+            <Navbar />
+            <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
+              {children}
+            </main>
+            <Footer />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

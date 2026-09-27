@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from app.case.models import CaseState
 
 class CaseStateUpdate(BaseModel):
+    user_id: Optional[str] = None
     language: Optional[str] = None
     jurisdiction: Optional[str] = None
     country: Optional[str] = None

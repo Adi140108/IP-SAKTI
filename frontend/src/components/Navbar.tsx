@@ -6,11 +6,14 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { fetchHealth } from '@/lib/api';
 import { useTheme } from './ThemeProvider';
+import { useAuth } from './AuthProvider';
 
 export default function Navbar() {
   const pathname = usePathname();
   const [isHealthy, setIsHealthy] = useState<boolean | null>(null);
   const { theme, toggleTheme } = useTheme();
+  const { user, signOutUser } = useAuth();
+  const [userDropdownOpen, setUserDropdownOpen] = useState<boolean>(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -82,20 +85,71 @@ export default function Navbar() {
           })}
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {/* THEME TOGGLE BUTTON (Dark / Light) */}
           <button
             onClick={toggleTheme}
-            className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-900/90 text-slate-800 dark:text-slate-200 text-xs font-bold hover:border-emerald-500/50 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
+            className="px-2.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-900/90 text-slate-800 dark:text-slate-200 text-xs font-bold hover:border-emerald-500/50 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all flex items-center gap-1.5 shadow-xs active:scale-95 cursor-pointer"
             title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
           >
             <span className="text-sm">{theme === 'dark' ? '☀️' : '🌙'}</span>
-            <span className="hidden sm:inline font-medium">{theme === 'dark' ? 'Light' : 'Dark'}</span>
           </button>
+
+          {/* AUTH STATUS / USER MENU */}
+          {user ? (
+            <div className="relative">
+              <button
+                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-slate-900 border border-emerald-300 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-slate-200 hover:border-emerald-500 transition-all cursor-pointer shadow-xs"
+              >
+                <span className="w-5 h-5 rounded-full bg-emerald-500 text-white dark:text-slate-950 flex items-center justify-center text-[10px] font-extrabold uppercase">
+                  {user.displayName ? user.displayName.slice(0, 1) : user.email ? user.email.slice(0, 1) : 'U'}
+                </span>
+                <span className="hidden sm:inline max-w-[100px] truncate text-[11px]">
+                  {user.displayName || user.email?.split('@')[0] || 'User'}
+                </span>
+                <span className="text-[9px] text-slate-400">▼</span>
+              </button>
+
+              {userDropdownOpen && (
+                <div className="absolute right-0 mt-1.5 w-48 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl z-50 py-1.5 text-xs">
+                  <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Signed in as</p>
+                    <p className="font-semibold text-slate-900 dark:text-slate-100 truncate text-[11px]">
+                      {user.email || 'User'}
+                    </p>
+                  </div>
+                  <Link
+                    href="/case"
+                    onClick={() => setUserDropdownOpen(false)}
+                    className="block px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 transition-colors"
+                  >
+                    📁 My Saved Cases
+                  </Link>
+                  <button
+                    onClick={() => {
+                      signOutUser();
+                      setUserDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors font-semibold"
+                  >
+                    🚪 Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link
+              href="/auth"
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white dark:text-slate-950 text-xs font-extrabold hover:from-emerald-400 hover:to-teal-500 transition-all shadow-xs"
+            >
+              Sign In
+            </Link>
+          )}
 
           <Link
             href="/diagnostics"
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-xs shadow-xs"
+            className="hidden sm:flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-xs shadow-xs"
           >
             <span
               className={`w-2 h-2 rounded-full ${
@@ -107,7 +161,7 @@ export default function Navbar() {
               }`}
             />
             <span className="text-slate-700 dark:text-slate-300 font-mono text-[11px] font-medium">
-              {isHealthy === true ? 'Gateway Active' : isHealthy === false ? 'Offline' : 'Connecting...'}
+              {isHealthy === true ? 'Active' : isHealthy === false ? 'Offline' : '...'}
             </span>
           </Link>
         </div>

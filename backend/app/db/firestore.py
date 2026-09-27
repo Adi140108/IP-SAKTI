@@ -186,6 +186,39 @@ class FirestoreService:
                 logger.error(f"Local DB read error: {type(e).__name__}")
         return None
 
+    async def list_cases(self, user_id: Optional[str] = None, limit: int = 50) -> list[Dict[str, Any]]:
+        """List case states, optionally filtered by user_id."""
+        results: list[Dict[str, Any]] = []
+        if self.db:
+            try:
+                coll_ref = self.db.collection("case_states")
+                if user_id:
+                    query = coll_ref.where("user_id", "==", user_id).limit(limit)
+                else:
+                    query = coll_ref.limit(limit)
+                for doc in query.stream():
+                    data = doc.to_dict()
+                    if data:
+                        results.append(data)
+                return results
+            except Exception as e:
+                logger.warning(f"Firestore list cases error: {e}")
+                if self.is_production_mode():
+                    raise RuntimeError(f"PRODUCTION DATABASE FAILURE: Firestore list failed: {type(e).__name__}")
+
+        if os.path.exists(self.local_storage_dir):
+            try:
+                for fname in os.listdir(self.local_storage_dir):
+                    if fname.startswith("case_") and fname.endswith(".json"):
+                        fpath = os.path.join(self.local_storage_dir, fname)
+                        with open(fpath, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                            if not user_id or data.get("user_id") == user_id:
+                                results.append(data)
+            except Exception as e:
+                logger.error(f"Local DB list cases error: {e}")
+        return results
+
     async def save_document_metadata(self, file_id: str, metadata: Dict[str, Any]) -> bool:
         """Save document metadata."""
         clean_id = self._sanitize_id(file_id)

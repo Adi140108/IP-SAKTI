@@ -76,6 +76,13 @@ export async function createCase(initialData: Partial<CaseState>): Promise<CaseS
   return handleResponse<CaseState>(res);
 }
 
+export async function listCases(userId?: string): Promise<CaseState[]> {
+  const baseUrl = getApiBaseUrl();
+  const url = userId ? `${baseUrl}/cases?user_id=${encodeURIComponent(userId)}` : `${baseUrl}/cases`;
+  const res = await fetch(url);
+  return handleResponse<CaseState[]>(res);
+}
+
 export async function getCase(caseId: string): Promise<CaseState> {
   const baseUrl = getApiBaseUrl();
   const res = await fetch(`${baseUrl}/cases/${encodeURIComponent(caseId)}`);
