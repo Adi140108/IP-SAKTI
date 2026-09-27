@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getCase, updateCase, listCases } from '@/lib/api';
 import { CaseState, ConversationHistoryItem, ChatResponse } from '@/types';
 import { FORMULATION_TIERS, getTierFromClassification } from '@/lib/formulationTaxonomy';
+import { getPersistedCases, persistCase, mergeAndPersistCases } from '@/lib/caseRegistry';
 import FormulationPathwayModal from '@/components/FormulationPathwayModal';
 import OfficialFormsModal from '@/components/OfficialFormsModal';
 import DossierExportModal from '@/components/DossierExportModal';
@@ -28,8 +29,10 @@ export default function CaseWorkspacePage() {
   const [error, setError] = useState<string | null>(null);
   const [localHistory, setLocalHistory] = useState<ExtendedHistoryItem[]>([]);
 
-  // List of all user cases
-  const [savedCases, setSavedCases] = useState<CaseState[]>([]);
+  // List of all user cases (seeded immediately from persistent storage)
+  const [savedCases, setSavedCases] = useState<CaseState[]>(() => {
+    return getPersistedCases();
+  });
   const [loadingCasesList, setLoadingCasesList] = useState<boolean>(false);
 
   // Modals state
@@ -40,10 +43,12 @@ export default function CaseWorkspacePage() {
   const fetchUserCases = useCallback(async () => {
     setLoadingCasesList(true);
     try {
-      const cases = await listCases(user?.uid || undefined);
-      setSavedCases(cases);
+      const apiCases = await listCases(user?.uid || undefined);
+      const merged = mergeAndPersistCases(apiCases);
+      setSavedCases(merged);
     } catch (e) {
       console.error('Failed to list user cases:', e);
+      setSavedCases(getPersistedCases());
     } finally {
       setLoadingCasesList(false);
     }
@@ -56,9 +61,17 @@ export default function CaseWorkspacePage() {
     try {
       const data = await getCase(id);
       setCaseState(data);
+      persistCase(data);
+      setSavedCases(getPersistedCases());
     } catch {
-      setError('Case ID not found in Firestore / Local DB repository.');
-      setCaseState(null);
+      // Check if found in local registry
+      const local = getPersistedCases().find((c) => c.case_id === id);
+      if (local) {
+        setCaseState(local);
+      } else {
+        setError('Case ID not found in Firestore / Local DB repository.');
+        setCaseState(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -240,9 +253,10 @@ export default function CaseWorkspacePage() {
           </div>
         ) : savedCases.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {savedCases.map((c) => {
+            {savedCases.map((c, idx) => {
               const tier = getTierFromClassification(c.formulation_classification || c.product_type);
               const isCurrent = caseState?.case_id === c.case_id;
+              const caseNumber = savedCases.length - idx;
 
               return (
                 <div
@@ -255,9 +269,14 @@ export default function CaseWorkspacePage() {
                 >
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
-                        #{c.case_id}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 font-bold text-[10px] font-mono border border-emerald-300 dark:border-emerald-800/60">
+                          Case #{caseNumber}
+                        </span>
+                        <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                          #{c.case_id.slice(0, 8)}
+                        </span>
+                      </div>
                       <span className="text-[10px] text-slate-500 dark:text-slate-400">
                         {c.updated_at ? new Date(c.updated_at).toLocaleDateString() : 'Active'}
                       </span>

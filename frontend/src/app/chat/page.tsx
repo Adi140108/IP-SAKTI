@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { createCase, sendChatMessage, getCase, uploadDocument, updateCase } from '@/lib/api';
 import { ChatResponse, CaseState } from '@/types';
 import { FORMULATION_TIERS, getTierFromClassification } from '@/lib/formulationTaxonomy';
+import { getPersistedCases, persistCase, mergeAndPersistCases } from '@/lib/caseRegistry';
 import FormulationPathwayModal from '@/components/FormulationPathwayModal';
 import OfficialFormsModal from '@/components/OfficialFormsModal';
 import DossierExportModal from '@/components/DossierExportModal';
@@ -58,8 +59,8 @@ export default function ChatPage() {
   const [chatHistory, setChatHistory] = useState<Array<{ sender: 'user' | 'assistant'; data?: ChatResponse; text?: string }>>([]);
   const [latestResponse, setLatestResponse] = useState<ChatResponse | null>(null);
 
-  // Saved user cases list for quick switching
-  const [userCases, setUserCases] = useState<CaseState[]>([]);
+  // Saved user cases list for quick switching (seeded immediately from persistent storage)
+  const [userCases, setUserCases] = useState<CaseState[]>(() => getPersistedCases());
   const [casePickerOpen, setCasePickerOpen] = useState<boolean>(false);
 
   // Modals state
@@ -120,9 +121,11 @@ export default function ChatPage() {
   const fetchUserCases = useCallback(async () => {
     try {
       const cases = await listCases(user?.uid || undefined);
-      setUserCases(cases);
+      const merged = mergeAndPersistCases(cases);
+      setUserCases(merged);
     } catch (e) {
       console.error('Failed to list user cases:', e);
+      setUserCases(getPersistedCases());
     }
   }, [user]);
 
@@ -134,6 +137,8 @@ export default function ChatPage() {
     try {
       const state = await getCase(id);
       setCaseState(state);
+      persistCase(state);
+      setUserCases(getPersistedCases());
     } catch (e) {
       console.error('Failed to refresh case state:', e);
     }
@@ -142,6 +147,7 @@ export default function ChatPage() {
   const switchActiveCase = (targetCase: CaseState) => {
     setCaseId(targetCase.case_id);
     setCaseState(targetCase);
+    persistCase(targetCase);
     setJurisdiction((targetCase.jurisdiction as 'India' | 'International') || 'India');
     if (targetCase.country) setCountry(targetCase.country);
     if (targetCase.language) setLanguage(targetCase.language);
@@ -203,6 +209,7 @@ export default function ChatPage() {
         setCaseId(res.case_id);
         setCaseState(res);
         localStorage.setItem('ip_sakti_active_case_id', res.case_id);
+        persistCase(res);
         fetchUserCases();
       })
       .catch((err) => console.error('Failed to init case:', err));
@@ -618,9 +625,10 @@ export default function ChatPage() {
                     <span>Saved Cases ({userCases.length})</span>
                     <Link href="/case" className="text-emerald-600 hover:underline text-[9px] font-bold">Workspace →</Link>
                   </div>
-                  {userCases.map((c) => {
+                  {userCases.map((c, idx) => {
                     const tier = getTierFromClassification(c.formulation_classification || c.product_type);
                     const isSelected = c.case_id === caseId;
+                    const caseNumber = userCases.length - idx;
                     return (
                       <button
                         key={c.case_id}
@@ -630,7 +638,10 @@ export default function ChatPage() {
                         }`}
                       >
                         <div className="truncate">
-                          <div className="font-mono text-[11px]">#{c.case_id}</div>
+                          <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">Case #{caseNumber}</span>
+                            <span className="text-slate-400">#{c.case_id.slice(0, 8)}</span>
+                          </div>
                           <div className="text-[10px] text-slate-500 truncate">{tier.shortLabel || tier.label}</div>
                         </div>
                         {isSelected && <span className="text-emerald-500 font-bold text-xs">✓</span>}
