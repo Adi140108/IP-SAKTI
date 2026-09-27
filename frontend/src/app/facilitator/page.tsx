@@ -61,9 +61,21 @@ export default function FacilitatorDashboardPage() {
     }
   };
 
-  // Filter dossiers by search query
+  // Filter dossiers by search query and selected status tab
   const filteredDossiers = dossiers.filter((d) => {
-    const q = searchQuery.toLowerCase();
+    // 1. Status Tab Filter
+    if (selectedStatus !== 'all') {
+      if (selectedStatus === 'submitted') {
+        const isPending = !d.status || d.status === 'submitted' || d.status === 'draft' || d.status === 'ready_for_submission';
+        if (!isPending) return false;
+      } else if (d.status !== selectedStatus) {
+        return false;
+      }
+    }
+
+    // 2. Search Query Filter
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
     return (
       (d.product_name && d.product_name.toLowerCase().includes(q)) ||
       (d.product_type && d.product_type.toLowerCase().includes(q)) ||
@@ -71,7 +83,7 @@ export default function FacilitatorDashboardPage() {
       (d.dossier_id && d.dossier_id.toLowerCase().includes(q)) ||
       (d.escalation_reason && d.escalation_reason.toLowerCase().includes(q)) ||
       (d.user_note && d.user_note.toLowerCase().includes(q)) ||
-      (d.ingredients && d.ingredients.some((ing) => ing.toLowerCase().includes(q)))
+      (d.ingredients && Array.isArray(d.ingredients) && d.ingredients.some((ing: string) => ing.toLowerCase().includes(q)))
     );
   });
 
