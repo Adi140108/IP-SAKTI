@@ -79,6 +79,7 @@ export default function ChatPage() {
   const [transcript, setTranscript] = useState<string>('');
 
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
 
   const languages = [
     { code: 'en', name: 'English' },
@@ -296,6 +297,41 @@ export default function ChatPage() {
     utterance.onerror = () => setSpeakingIdx(null);
 
     window.speechSynthesis.speak(utterance);
+  };
+
+  const handleOptionChipClick = (option: string) => {
+    const lower = option.toLowerCase();
+    const isTypingAction =
+      lower.includes('type') ||
+      lower.includes('write') ||
+      lower.includes('custom') ||
+      lower.includes('manual') ||
+      lower.includes('list each') ||
+      lower.includes('specify') ||
+      lower.includes('percentage') ||
+      lower.includes('exact weight') ||
+      lower.includes('composition');
+
+    if (isTypingAction) {
+      if (lower.includes('ingredient')) {
+        setInputMessage('Ingredients: ');
+      } else if (lower.includes('test') || lower.includes('lab') || lower.includes('efficacy')) {
+        setInputMessage('Efficacy Lab Data: ');
+      } else if (lower.includes('sourcing') || lower.includes('location')) {
+        setInputMessage('Sourced from: ');
+      } else if (lower.includes('product') || lower.includes('form')) {
+        setInputMessage('Product form: ');
+      } else if (lower.includes('basis') || lower.includes('classical')) {
+        setInputMessage('Classical text / formulation basis: ');
+      } else {
+        setInputMessage('');
+      }
+      setTimeout(() => {
+        chatInputRef.current?.focus();
+      }, 50);
+    } else {
+      handleSendMessage(option);
+    }
   };
 
   const handleSendMessage = async (customMessage?: string) => {
@@ -718,21 +754,26 @@ export default function ChatPage() {
                           {item.data.next_question}
                         </p>
 
-                        {/* Clickable Option Chips */}
-                        {item.data.suggested_options && item.data.suggested_options.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 pt-0.5">
-                            {item.data.suggested_options.map((option, optIdx) => (
-                              <button
-                                key={optIdx}
-                                onClick={() => handleSendMessage(option)}
-                                className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-500 dark:hover:text-slate-950 transition-all shadow-2xs active:scale-95 flex items-center gap-1 cursor-pointer"
-                              >
-                                <span>👉</span>
-                                <span>{option}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                        {/* Clickable Option Chips + Custom Type Support */}
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {item.data.suggested_options && item.data.suggested_options.length > 0 && item.data.suggested_options.map((option, optIdx) => (
+                            <button
+                              key={optIdx}
+                              onClick={() => handleOptionChipClick(option)}
+                              className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-500 dark:hover:text-slate-950 transition-all shadow-2xs active:scale-95 flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>{option.startsWith('✍️') ? '✍️' : '👉'}</span>
+                              <span>{option.replace(/^✍️\s*/, '')}</span>
+                            </button>
+                          ))}
+                          <button
+                            onClick={() => handleOptionChipClick('✍️ Type Custom Answer')}
+                            className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-950 hover:border-emerald-500/50 transition-all shadow-2xs active:scale-95 flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>✍️</span>
+                            <span>Type custom details...</span>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -797,6 +838,7 @@ export default function ChatPage() {
 
               {/* Query Text Input */}
               <input
+                ref={chatInputRef}
                 type="text"
                 placeholder="Ask an Ayurvedic IP question or upload a document..."
                 value={inputMessage}

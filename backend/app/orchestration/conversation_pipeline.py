@@ -228,6 +228,17 @@ Return JSON:
         q_res = await questioning_engine.generate_next_question(case_state)
         next_question = q_res.next_question if not q_res.is_clarification_complete else None
 
+        # If clarification is complete or cap reached, but essential parameters remain missing, attach Incomplete Information Notice
+        if q_res.is_clarification_complete and case_state.missing_information:
+            missing_labels = [case_state_manager.MANDATORY_FIELDS.get(f, f.replace('_', ' ')) for f in case_state.missing_information]
+            insufficient_info_notice = (
+                f"\n\n> ⚠️ **Notice on Incomplete Formulation Information**:\n"
+                f"> Key parameters ({', '.join(missing_labels)}) were not fully disclosed. "
+                f"Without these specific details, a definitive statutory determination under patent and biodiversity laws (e.g. Section 3(p) TKDL prior art bar or Section 3(e) synergistic efficacy defense) cannot be finalized. "
+                f"The assessment above provides general statutory legal frameworks."
+            )
+            final_answer += insufficient_info_notice
+
         # Record complete turn into conversation_history
         turn_record = {
             "user_message": user_text,
