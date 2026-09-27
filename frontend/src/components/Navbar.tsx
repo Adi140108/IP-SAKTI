@@ -141,9 +141,10 @@ export default function Navbar() {
           ) : (
             <Link
               href="/auth"
-              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white dark:text-slate-950 text-xs font-extrabold hover:from-emerald-400 hover:to-teal-500 transition-all shadow-xs"
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-extrabold text-xs hover:from-emerald-400 hover:to-teal-400 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
             >
-              Sign In
+              <span>🔑</span>
+              <span>Sign In</span>
             </Link>
           )}
 
