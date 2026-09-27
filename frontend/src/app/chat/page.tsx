@@ -6,6 +6,7 @@ import { createCase, sendChatMessage, getCase, uploadDocument, updateCase } from
 import { ChatResponse, CaseState } from '@/types';
 import { FORMULATION_TIERS, getTierFromClassification } from '@/lib/formulationTaxonomy';
 import { getPersistedCases, persistCase, mergeAndPersistCases } from '@/lib/caseRegistry';
+import { getTranslation } from '@/lib/translations';
 import FormulationPathwayModal from '@/components/FormulationPathwayModal';
 import OfficialFormsModal from '@/components/OfficialFormsModal';
 import DossierExportModal from '@/components/DossierExportModal';
@@ -53,7 +54,12 @@ export default function ChatPage() {
   const [caseState, setCaseState] = useState<CaseState | null>(null);
   const [jurisdiction, setJurisdiction] = useState<'India' | 'International'>('India');
   const [country, setCountry] = useState<string>('');
-  const [language, setLanguage] = useState<string>('en');
+  const [language, setLanguage] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('ip_sakti_chat_language') || 'en';
+    }
+    return 'en';
+  });
   const [inputMessage, setInputMessage] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [chatHistory, setChatHistory] = useState<Array<{ sender: 'user' | 'assistant'; data?: ChatResponse; text?: string }>>([]);
@@ -564,6 +570,16 @@ export default function ChatPage() {
     }
   };
 
+  const handleLanguageChange = (newLang: string) => {
+    setLanguage(newLang);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ip_sakti_chat_language', newLang);
+    }
+    if (caseId) {
+      updateCase(caseId, { language: newLang }).catch(() => {});
+    }
+  };
+
   // Parameters count
   const knownCount = caseState?.known_information?.length || 0;
   const missingCount = caseState?.missing_information?.length || 0;
@@ -573,6 +589,7 @@ export default function ChatPage() {
   const activeTier = getTierFromClassification(caseState?.formulation_classification || caseState?.product_type);
   const activeDomainsCount = latestResponse?.relevant_ip_domains?.length || 0;
   const citationsCount = latestResponse?.citations?.length || 0;
+  const t = getTranslation(language);
 
   return (
     <div className="flex flex-col h-[calc(100vh-6.5rem)] overflow-hidden space-y-2.5">
@@ -591,7 +608,7 @@ export default function ChatPage() {
             title="Start New Case Session"
           >
             <span>➕</span>
-            <span className="hidden sm:inline">New Case</span>
+            <span className="hidden sm:inline">{t.newCaseButton}</span>
           </button>
 
           {/* Sign In Prompt if not logged in */}
@@ -602,7 +619,7 @@ export default function ChatPage() {
               title="Sign in to save your consultations to your account"
             >
               <span>🔑</span>
-              <span>Sign In to Save</span>
+              <span>{t.signInToSave}</span>
             </button>
           )}
 
@@ -615,7 +632,7 @@ export default function ChatPage() {
                 title="Switch between your ongoing consultations"
               >
                 <span>📂</span>
-                <span className="hidden sm:inline">Cases</span>
+                <span className="hidden sm:inline">{t.casesButton}</span>
                 <span className="text-[9px]">▼</span>
               </button>
 
@@ -715,7 +732,7 @@ export default function ChatPage() {
               onClick={() => setActionsDropdownOpen(!actionsDropdownOpen)}
               className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
-              <span>⚙️ Actions</span>
+              <span>⚙️ {t.actionsButton}</span>
               <span className="text-[9px]">▼</span>
             </button>
 
@@ -796,7 +813,7 @@ export default function ChatPage() {
           {/* Language Selector */}
           <select
             value={language}
-            onChange={(e) => setLanguage(e.target.value)}
+            onChange={(e) => handleLanguageChange(e.target.value)}
             className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-md px-2 py-1 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500 font-medium"
           >
             {languages.map((l) => (
@@ -831,15 +848,15 @@ export default function ChatPage() {
             <div>
               <h2 className="text-sm font-extrabold text-slate-900 dark:text-slate-100 tracking-tight flex items-center gap-1.5">
                 <span>⚖️</span>
-                <span>AI Consultation</span>
+                <span>{t.aiConsultationTitle}</span>
               </h2>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Source-cited IP & regulatory guidance under Indian statutory frameworks
+                {t.aiConsultationSubtitle}
               </p>
             </div>
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>RAG Sources Ready</span>
+              <span>{t.ragSourcesReady}</span>
             </div>
           </div>
 
@@ -863,32 +880,32 @@ export default function ChatPage() {
                 </div>
                 <div className="space-y-1.5 max-w-md">
                   <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                    AI Consultation
+                    {t.emptyStateTitle}
                   </h3>
                   <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Ask about patents, traditional knowledge, ABS, GI, trademarks, regulatory classification, or international IP requirements.
+                    {t.emptyStateSubtitle}
                   </p>
                 </div>
 
                 {/* 3 Compact Suggested Prompts */}
                 <div className="flex flex-wrap justify-center gap-2 pt-2 max-w-lg">
                   <button
-                    onClick={() => handleSendMessage('Can I patent this Ayurvedic formulation?')}
+                    onClick={() => handleSendMessage(t.starterPrompt1)}
                     className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 hover:border-emerald-500/60 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50/30 transition-all cursor-pointer shadow-2xs"
                   >
-                    💡 &ldquo;Can I patent this Ayurvedic formulation?&rdquo;
+                    💡 &ldquo;{t.starterPrompt1}&rdquo;
                   </button>
                   <button
-                    onClick={() => handleSendMessage('Does this formulation require ABS clearance from NBA?')}
+                    onClick={() => handleSendMessage(t.starterPrompt2)}
                     className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 hover:border-cyan-500/60 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-50/30 transition-all cursor-pointer shadow-2xs"
                   >
-                    🌿 &ldquo;Does this require ABS clearance?&rdquo;
+                    🌿 &ldquo;{t.starterPrompt2}&rdquo;
                   </button>
                   <button
-                    onClick={() => handleSendMessage('What IP protection is available for our Ayurvedic product?')}
+                    onClick={() => handleSendMessage(t.starterPrompt3)}
                     className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 hover:border-amber-500/60 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50/30 transition-all cursor-pointer shadow-2xs"
                   >
-                    📜 &ldquo;What IP protection is available?&rdquo;
+                    📜 &ldquo;{t.starterPrompt3}&rdquo;
                   </button>
                 </div>
               </div>
@@ -1103,7 +1120,7 @@ export default function ChatPage() {
                             className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-950 hover:border-emerald-500/50 transition-all shadow-2xs active:scale-95 flex items-center gap-1 cursor-pointer"
                           >
                             <span>✍️</span>
-                            <span>Type custom details...</span>
+                            <span>{t.typeCustomAnswer}</span>
                           </button>
                         </div>
                       </div>
@@ -1121,9 +1138,7 @@ export default function ChatPage() {
               <div className="flex items-center gap-2.5 text-emerald-700 dark:text-emerald-400 text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-emerald-500/30">
                 <div className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
                 <span className="font-semibold">
-                  {isUploadingDoc
-                    ? 'Extracting document text via OCR and updating case state...'
-                    : 'Retrieving statutory RAG context & running Groq reasoning...'}
+                  {isUploadingDoc ? t.extractingDoc : t.retrievingSources}
                 </span>
               </div>
             )}
@@ -1138,7 +1153,7 @@ export default function ChatPage() {
               <div className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-950/60 border border-rose-400 dark:border-rose-500/50 text-rose-800 dark:text-rose-300 text-[11px] flex items-center justify-between animate-pulse">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                  <span>Listening... Speak your query clearly.</span>
+                  <span>{t.listeningText}</span>
                 </div>
                 <span className="font-mono text-[10px] text-rose-700 dark:text-rose-400">{transcript}</span>
               </div>
@@ -1149,7 +1164,7 @@ export default function ChatPage() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploadingDoc}
-                className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-slate-850 transition-all flex items-center justify-center cursor-pointer shrink-0 shadow-2xs"
+                className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-slate-800 transition-all flex items-center justify-center cursor-pointer shrink-0 shadow-2xs"
                 title="Upload Document / PDF / Image (Inline OCR)"
               >
                 <svg className="w-4 h-4 text-current" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1163,7 +1178,7 @@ export default function ChatPage() {
                 className={`p-2.5 rounded-xl border transition-all flex items-center justify-center cursor-pointer shrink-0 shadow-2xs ${
                   isListening
                     ? 'bg-rose-500 text-white border-rose-400 shadow-md ring-2 ring-rose-400/50 animate-pulse'
-                    : 'bg-slate-100 dark:bg-slate-900 border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-slate-850'
+                    : 'bg-slate-100 dark:bg-slate-900 border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-slate-800'
                 }`}
                 title={isListening ? 'Click to stop listening' : 'Voice Input (Speech-to-Text)'}
               >
@@ -1176,7 +1191,7 @@ export default function ChatPage() {
               <input
                 ref={chatInputRef}
                 type="text"
-                placeholder="Ask an Ayurvedic IP question or upload a document..."
+                placeholder={t.inputPlaceholder}
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
@@ -1189,13 +1204,13 @@ export default function ChatPage() {
                 disabled={loading || !inputMessage.trim()}
                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white dark:text-slate-950 font-bold text-xs hover:from-emerald-400 hover:to-teal-500 disabled:opacity-50 transition-all shadow-xs cursor-pointer shrink-0"
               >
-                Send ➔
+                {t.sendButton}
               </button>
             </div>
 
             {/* Clean Disclaimer Footnote */}
             <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center truncate">
-              <strong className="text-slate-600 dark:text-slate-300">Disclaimer:</strong> IP-SAKTI Sahayak provides statutory information under SIH PS-26045. It does not replace professional legal counsel.
+              {t.disclaimer}
             </p>
           </div>
         </div>
@@ -1211,7 +1226,7 @@ export default function ChatPage() {
           <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800 shrink-0">
             <div className="flex items-center gap-1.5">
               <span className="font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px]">
-                Case Context
+                {t.caseContextTitle}
               </span>
               {showMobileSidebar && (
                 <button
@@ -1225,7 +1240,7 @@ export default function ChatPage() {
 
             {/* Coverage Confidence Badge */}
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Coverage:</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{t.coverageLabel}:</span>
               <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
                 latestResponse?.confidence_score && latestResponse.confidence_score >= 0.5
                   ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800'
@@ -1240,7 +1255,7 @@ export default function ChatPage() {
           <div className="space-y-1.5 bg-slate-50/70 dark:bg-slate-950/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80 shrink-0">
             {/* Jurisdiction */}
             <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">Jurisdiction</span>
+              <span className="text-slate-500 dark:text-slate-400 font-medium">{t.jurisdictionLabel}</span>
               <span className="font-bold text-slate-800 dark:text-slate-200">
                 {jurisdiction} {country ? `(${country})` : ''}
               </span>
@@ -1248,7 +1263,7 @@ export default function ChatPage() {
 
             {/* Formulation Tier */}
             <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">Formulation</span>
+              <span className="text-slate-500 dark:text-slate-400 font-medium">{t.formulationLabel}</span>
               <button
                 onClick={() => setShowPathwayModal(true)}
                 className="font-bold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer truncate max-w-[140px]"
@@ -1261,41 +1276,41 @@ export default function ChatPage() {
 
             {/* Classical Basis */}
             <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">Classical Basis</span>
+              <span className="text-slate-500 dark:text-slate-400 font-medium">{t.classicalBasisLabel}</span>
               <span className={`font-medium ${caseState?.classical_reference ? 'text-slate-800 dark:text-slate-200' : 'text-amber-700 dark:text-amber-400'}`}>
-                {caseState?.classical_reference || 'Unspecified'}
+                {caseState?.classical_reference || t.unspecified}
               </span>
             </div>
 
             {/* Active Herbs */}
             <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">Active Herbs</span>
+              <span className="text-slate-500 dark:text-slate-400 font-medium">{t.activeHerbsLabel}</span>
               <span className={`font-medium truncate max-w-[130px] ${caseState?.ingredients && caseState.ingredients.length > 0 ? 'text-slate-800 dark:text-slate-200' : 'text-amber-700 dark:text-amber-400'}`}>
-                {caseState?.ingredients && caseState.ingredients.length > 0 ? caseState.ingredients.join(', ') : 'Not specified'}
+                {caseState?.ingredients && caseState.ingredients.length > 0 ? caseState.ingredients.join(', ') : t.notSpecified}
               </span>
             </div>
 
             {/* TK Involved */}
             <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">TK Involved</span>
+              <span className="text-slate-500 dark:text-slate-400 font-medium">{t.tkInvolvedLabel}</span>
               <span className="font-semibold text-slate-800 dark:text-slate-200">
                 {caseState?.traditional_knowledge_involved === true
-                  ? 'Yes (Prior Art)'
+                  ? t.tkYes
                   : caseState?.traditional_knowledge_involved === false
-                  ? 'No (Novel)'
-                  : 'Uncertain'}
+                  ? t.tkNo
+                  : t.tkUncertain}
               </span>
             </div>
 
             {/* Biological Resources */}
             <div className="flex items-center justify-between py-1 text-[11px]">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">Bio Resources (ABS)</span>
+              <span className="text-slate-500 dark:text-slate-400 font-medium">{t.bioResourcesLabel}</span>
               <span className="font-semibold text-slate-800 dark:text-slate-200">
                 {caseState?.biological_resources_involved === true
-                  ? 'Yes (NBA Clearance)'
+                  ? t.bioYes
                   : caseState?.biological_resources_involved === false
-                  ? 'No Indian Bio'
-                  : 'Uncertain'}
+                  ? t.bioNo
+                  : t.bioUncertain}
               </span>
             </div>
           </div>
@@ -1308,10 +1323,10 @@ export default function ChatPage() {
             >
               <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] flex items-center gap-1.5">
                 <span>{isParamsOpen ? '▾' : '▸'}</span>
-                <span>Case Parameters</span>
+                <span>{t.caseParametersTitle}</span>
               </span>
               <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                {isParamsOpen ? `${knownCount}/${totalParams} gathered` : `${missingCount} needed`}
+                {isParamsOpen ? `${knownCount}/${totalParams} ${t.gatheredCount}` : `${missingCount} ${t.neededCount}`}
               </span>
             </button>
 
@@ -1320,7 +1335,7 @@ export default function ChatPage() {
                 {/* Progress bar */}
                 <div className="space-y-1 pb-1">
                   <div className="flex justify-between text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
-                    <span>Progress</span>
+                    <span>{t.progressLabel}</span>
                     <span>{completionPct}%</span>
                   </div>
                   <div className="w-full bg-slate-100 dark:bg-slate-950 rounded-full h-1 overflow-hidden">
@@ -1335,7 +1350,7 @@ export default function ChatPage() {
                 {caseState?.known_information && caseState.known_information.length > 0 && (
                   <div className="space-y-1">
                     <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                      Gathered:
+                      {t.gatheredLabel}
                     </span>
                     {caseState.known_information.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-1 text-slate-700 dark:text-slate-300">
@@ -1350,7 +1365,7 @@ export default function ChatPage() {
                 {caseState?.missing_information && caseState.missing_information.length > 0 && (
                   <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-slate-800">
                     <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
-                      Pending Clarification:
+                      {t.pendingClarificationLabel}
                     </span>
                     {caseState.missing_information.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
@@ -1372,14 +1387,14 @@ export default function ChatPage() {
             >
               <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] flex items-center gap-1.5">
                 <span>{isIpDomainsOpen ? '▾' : '▸'}</span>
-                <span>IP Domains</span>
+                <span>{t.ipDomainsTitle}</span>
               </span>
               <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
                 activeDomainsCount > 0
                   ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400'
                   : 'text-slate-400 dark:text-slate-500'
               }`}>
-                {activeDomainsCount} active
+                {activeDomainsCount} {t.activeCount}
               </span>
             </button>
 
@@ -1422,7 +1437,7 @@ export default function ChatPage() {
             >
               <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] flex items-center gap-1.5">
                 <span>{isSourcesOpen ? '▾' : '▸'}</span>
-                <span>Verified Sources</span>
+                <span>{t.verifiedSourcesTitle}</span>
               </span>
               <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
                 citationsCount > 0
@@ -1445,7 +1460,7 @@ export default function ChatPage() {
                             ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400'
                             : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                         }`}>
-                          {c.is_authoritative ? '✓ Auth' : 'Ref'}
+                          {c.is_authoritative ? t.authBadge : t.refBadge}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400 font-mono text-[9px]">
@@ -1465,7 +1480,7 @@ export default function ChatPage() {
                   ))
                 ) : (
                   <div className="text-slate-500 text-[10px] italic p-2 text-center">
-                    Citations appear when a query is submitted.
+                    {t.citationsEmpty}
                   </div>
                 )}
               </div>
