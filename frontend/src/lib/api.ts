@@ -100,8 +100,17 @@ export async function createCase(initialData: Partial<CaseState>): Promise<CaseS
 export async function listCases(userId?: string): Promise<CaseState[]> {
   const baseUrl = getApiBaseUrl();
   const url = userId ? `${baseUrl}/cases?user_id=${encodeURIComponent(userId)}` : `${baseUrl}/cases`;
-  const res = await fetch(url);
-  return handleResponse<CaseState[]>(res);
+  try {
+    const res = await fetch(url);
+    if (res.status === 405 || res.status === 404) {
+      // Deployed backend does not yet have the GET /cases route enabled (only POST is allowed);
+      // return empty array so client merges with locally persisted cases
+      return [];
+    }
+    return await handleResponse<CaseState[]>(res);
+  } catch {
+    return [];
+  }
 }
 
 export async function getCase(caseId: string): Promise<CaseState> {
@@ -247,8 +256,17 @@ export async function fetchEscalationRequests(limit: number = 50, status?: strin
   const url = status
     ? `${baseUrl}/escalation/requests?limit=${limit}&status=${encodeURIComponent(status)}`
     : `${baseUrl}/escalation/requests?limit=${limit}`;
-  const res = await fetch(url);
-  return handleResponse<EscalationDossier[]>(res);
+  try {
+    const res = await fetch(url);
+    if (res.status === 404 || res.status === 405) {
+      // Remote deployment does not have /escalation/requests endpoint enabled yet (404);
+      // return empty array so client merges with locally persisted dossiers seamlessly
+      return [];
+    }
+    return await handleResponse<EscalationDossier[]>(res);
+  } catch {
+    return [];
+  }
 }
 
 export async function updateEscalationStatus(dossierId: string, status: string, facilitatorNote?: string): Promise<EscalationDossier> {

@@ -10,6 +10,18 @@ import { getPersistedCases, persistCase, mergeAndPersistCases } from '@/lib/case
 import FormulationPathwayModal from '@/components/FormulationPathwayModal';
 import OfficialFormsModal from '@/components/OfficialFormsModal';
 import DossierExportModal from '@/components/DossierExportModal';
+import {
+  ScalesIcon,
+  LandmarkIcon,
+  FileTextIcon,
+  FolderIcon,
+  MessageIcon,
+  UserIcon,
+  LeafIcon,
+  SearchIcon,
+  PencilIcon,
+  PlusIcon,
+} from '@/components/Icons';
 import { useAuth } from '@/components/AuthProvider';
 
 interface ExtendedHistoryItem extends ConversationHistoryItem {
@@ -29,10 +41,8 @@ export default function CaseWorkspacePage() {
   const [error, setError] = useState<string | null>(null);
   const [localHistory, setLocalHistory] = useState<ExtendedHistoryItem[]>([]);
 
-  // List of all user cases (seeded immediately from persistent storage)
-  const [savedCases, setSavedCases] = useState<CaseState[]>(() => {
-    return getPersistedCases();
-  });
+  // List of all user cases (hydrated from local/remote on mount)
+  const [savedCases, setSavedCases] = useState<CaseState[]>([]);
   const [loadingCasesList, setLoadingCasesList] = useState<boolean>(false);
 
   // Modals state
@@ -47,7 +57,7 @@ export default function CaseWorkspacePage() {
       const merged = mergeAndPersistCases(apiCases);
       setSavedCases(merged);
     } catch (e) {
-      console.error('Failed to list user cases:', e);
+      console.warn('Failed to list user cases from remote API, falling back to local registry:', e);
       setSavedCases(getPersistedCases());
     } finally {
       setLoadingCasesList(false);
@@ -171,54 +181,79 @@ export default function CaseWorkspacePage() {
   const effectiveRecords = getEffectiveRecords();
   const activeTier = getTierFromClassification(caseState?.formulation_classification || caseState?.product_type);
 
+  const parameters = [
+    {
+      label: 'Jurisdiction',
+      value: `${caseState?.jurisdiction || ''} ${caseState?.country ? `(${caseState.country})` : ''}`.trim(),
+    },
+    { label: 'Language', value: caseState?.language?.toUpperCase() || '' },
+    { label: 'Product Type', value: caseState?.product_type || 'Unspecified' },
+    { label: 'Classical Basis (TK)', value: caseState?.classical_reference || 'None specified' },
+    {
+      label: 'Traditional Knowledge',
+      value: caseState?.traditional_knowledge_involved ? 'Yes' : 'No / Uncertain',
+    },
+    {
+      label: 'Indian Bio-Resources (ABS)',
+      value: caseState?.biological_resources_involved ? 'Yes (NBA Clearance)' : 'No / Exempt',
+    },
+  ];
+
   return (
     <div className="space-y-8 max-w-5xl mx-auto pb-10">
 
       {/* Header and Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-6">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white">Case State Workspace</h1>
-          <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">
+          <h1 className="font-display text-[clamp(1.75rem,3.5vw,2.5rem)] leading-tight text-ink">
+            Case State Workspace
+          </h1>
+          <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted">
             Persisted state parameters, 6-tier formulation classification, previous sessions, and official pre-filing dossier.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setShowPathwayModal(true)}
-            className="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-xs font-bold hover:bg-amber-100 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-subtle"
           >
-            <span>⚖️ 6-Tier Pathway</span>
+            <ScalesIcon size={13} />
+            6-Tier Pathway
           </button>
 
           <button
             onClick={() => setShowFormsModal(true)}
-            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold hover:text-emerald-600 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-subtle"
           >
-            <span>🏛️ Official Forms</span>
+            <LandmarkIcon size={13} />
+            Official Forms
           </button>
 
           {caseState && (
             <button
               onClick={() => setShowDossierModal(true)}
-              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white dark:text-slate-950 text-xs font-extrabold hover:from-emerald-400 hover:to-teal-500 transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
+              className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-accent-fg transition-colors hover:bg-accent-hover"
             >
-              <span>📄 Export Dossier</span>
+              <FileTextIcon size={13} />
+              Export Dossier
             </button>
           )}
 
-          <div className="flex items-center gap-2 pl-2">
+          <div className="flex items-center gap-1.5 pl-1">
             <input
               type="text"
               placeholder="Enter Case ID..."
               value={caseIdInput}
               onChange={(e) => setCaseIdInput(e.target.value)}
-              className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-1.5 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:border-emerald-500 shadow-xs"
+              aria-label="Case ID"
+              className="mono-caps w-44 rounded-md border border-line bg-surface px-2.5 py-1.5 text-ink placeholder:text-faint"
             />
             <button
               onClick={() => handleFetchCase(caseIdInput)}
-              className="px-3.5 py-1.5 rounded-xl bg-emerald-500 text-white dark:text-slate-950 font-bold text-xs hover:bg-emerald-400 transition-all shadow-xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-subtle"
             >
+              <SearchIcon size={13} />
               Load Case
             </button>
           </div>
@@ -231,24 +266,24 @@ export default function CaseWorkspacePage() {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-lg">📁</span>
-            <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
+            <FolderIcon size={20} className="text-accent" />
+            <h2 className="text-base font-bold text-ink">
               {user ? `Saved Consultations (${savedCases.length})` : 'Recent Consultation Cases'}
             </h2>
           </div>
           {!user && (
             <Link
               href="/auth?redirect=/case"
-              className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-bold"
+              className="text-xs text-accent-ink hover:underline font-bold"
             >
-              Sign In to save cases to your account →
+              Sign In to save cases to your account &rarr;
             </Link>
           )}
         </div>
 
         {loadingCasesList ? (
-          <div className="text-xs text-slate-500 flex items-center gap-2 p-4">
-            <div className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+          <div className="text-xs text-muted flex items-center gap-2 p-4">
+            <div className="w-3.5 h-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
             <span>Loading previous cases...</span>
           </div>
         ) : savedCases.length > 0 ? (
@@ -261,59 +296,60 @@ export default function CaseWorkspacePage() {
               return (
                 <div
                   key={c.case_id}
-                  className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between space-y-2.5 ${
+                  className={`p-4 rounded-xl border transition-all flex flex-col justify-between space-y-3 ${
                     isCurrent
-                      ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-700 shadow-xs'
-                      : 'glass-panel bg-white/90 dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 hover:border-emerald-500/50'
+                      ? 'bg-accent-soft border-accent shadow-soft'
+                      : 'bg-surface border-line hover:border-accent/50'
                   }`}
                 >
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 font-bold text-[10px] font-mono border border-emerald-300 dark:border-emerald-800/60">
+                        <span className="px-1.5 py-0.5 rounded bg-accent-soft text-accent-ink font-bold text-[10px] font-mono border border-accent-line">
                           Case #{caseNumber}
                         </span>
-                        <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                        <span className="font-mono text-[11px] text-muted">
                           #{c.case_id.slice(0, 8)}
                         </span>
                       </div>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                      <span className="text-[10px] text-faint">
                         {c.updated_at ? new Date(c.updated_at).toLocaleDateString() : 'Active'}
                       </span>
                     </div>
 
-                    <div className="font-semibold text-xs text-emerald-800 dark:text-emerald-300">
+                    <div className="font-semibold text-xs text-accent-ink">
                       {tier.shortLabel || tier.label}
                     </div>
 
-                    <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                    <div className="text-[11px] text-muted flex items-center gap-2">
                       <span>{c.jurisdiction === 'International' ? '🌐' : '🇮🇳'} {c.jurisdiction} {c.country ? `(${c.country})` : ''}</span>
-                      <span>•</span>
+                      <span>&bull;</span>
                       <span>{c.language.toUpperCase()}</span>
                     </div>
 
                     {c.ingredients && c.ingredients.length > 0 && (
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                      <div className="text-[10px] text-faint truncate">
                         🌿 {c.ingredients.slice(0, 3).join(', ')}
                       </div>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2 pt-2 border-t border-line">
                     <button
                       onClick={() => {
                         setCaseIdInput(c.case_id);
                         handleFetchCase(c.case_id);
                       }}
-                      className="flex-1 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all cursor-pointer text-center"
+                      className="flex-1 py-1.5 rounded-lg border border-line bg-surface text-ink text-xs font-semibold transition-all cursor-pointer text-center"
                     >
                       Inspect
                     </button>
                     <button
                       onClick={() => handleContinueChatting(c)}
-                      className="flex-1 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white dark:text-slate-950 text-xs font-bold transition-all shadow-xs cursor-pointer text-center"
+                      className="flex-1 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold transition-all shadow-xs cursor-pointer text-center"
                     >
-                      💬 Chat ➔
+                      <MessageIcon size={12} className="mr-1" />
+                      Chat &rarr;
                     </button>
                   </div>
                 </div>
@@ -321,216 +357,175 @@ export default function CaseWorkspacePage() {
             })}
           </div>
         ) : (
-          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-xs text-slate-500 text-center">
-            No saved consultations found. Start a consultation in <Link href="/chat" className="text-emerald-600 font-bold hover:underline">AI Chat</Link> to create your first case.
+          <div className="p-4 rounded-xl bg-surface border border-line text-xs text-muted text-center">
+            No saved consultations found. Start a consultation in <Link href="/chat" className="text-accent-ink font-bold hover:underline">AI Chat</Link> to create your first case.
           </div>
         )}
       </div>
 
-      {loading && <div className="text-slate-600 dark:text-slate-400 text-sm">Loading Case State...</div>}
-      {error && <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs">{error}</div>}
+      {loading && <p className="py-6 text-[13px] text-muted">Loading Case State...</p>}
+      {error && (
+        <p className="mt-6 rounded-md border border-danger-line bg-danger-soft px-3 py-2 text-[12px] text-danger">
+          {error}
+        </p>
+      )}
 
       {!caseState && !loading && (
-        <div className="glass-panel p-10 text-center text-slate-500 dark:text-slate-400 space-y-3 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">
-          <div className="text-4xl">📂</div>
-          <h3 className="text-lg font-bold text-slate-800 dark:text-slate-300">Select or Load a Case</h3>
-          <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+        <div className="p-10 text-center text-muted space-y-3 border border-dashed border-line-strong rounded-lg bg-surface">
+          <FolderIcon size={32} className="mx-auto text-faint" />
+          <h3 className="text-lg font-bold text-ink">Select or Load a Case</h3>
+          <p className="text-[12px] leading-relaxed text-muted max-w-sm mx-auto">
             Choose a case from your saved consultations above, enter a Case ID, or start a new consultation session in AI Chat.
           </p>
           <div className="pt-2">
             <Link
               href="/chat"
-              className="inline-flex px-4 py-2 rounded-xl bg-emerald-500 text-white dark:text-slate-950 font-bold text-xs hover:bg-emerald-400 transition-all shadow-xs"
+              className="inline-flex px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:bg-accent-hover transition-all shadow-xs"
             >
-              ➕ Start New AI Consultation
+              <PlusIcon size={12} className="mr-1" />
+              Start New AI Consultation
             </Link>
           </div>
         </div>
       )}
 
       {caseState && (
-        <div className="space-y-6">
-
-          {/* ACTIVE CASE QUICK ACTIONS BANNER */}
-          <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-slate-900/10 dark:from-emerald-950/60 dark:via-teal-950/40 dark:to-slate-900 border border-emerald-400/40 flex flex-wrap items-center justify-between gap-3 shadow-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white dark:text-slate-950 flex items-center justify-center text-xl font-bold shadow-xs">
-                ⚖️
-              </div>
-              <div>
-                <div className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                  <span>Active Consultation: Case #{caseState.case_id}</span>
-                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 text-[10px] font-bold border border-emerald-300 dark:border-emerald-800">
-                    {activeTier.shortLabel || activeTier.label}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Ready to continue interactive questioning and statutory RAG citations in AI Chat.
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => handleContinueChatting(caseState)}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white dark:text-slate-950 text-xs font-extrabold hover:from-emerald-400 hover:to-teal-500 transition-all flex items-center gap-2 shadow-xs cursor-pointer active:scale-95"
-            >
-              <span>💬 Continue Chatting in AI Chat</span>
-              <span>➔</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* Case Parameters Card */}
-            <div className="glass-panel p-6 space-y-4 lg:col-span-2 border-t-4 border-emerald-500 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-                <span className="text-xs font-mono text-emerald-800 dark:text-emerald-400 font-bold">
-                  CASE ID: #{caseState.case_id}
-                </span>
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                  {caseState.updated_at || 'Active Session'}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div className="space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Jurisdiction:</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.jurisdiction} {caseState.country ? `(${caseState.country})` : ''}</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Language:</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.language.toUpperCase()}</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Product Type:</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.product_type || 'Unspecified'}</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Classical Basis (TK):</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.classical_reference || 'None specified'}</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Traditional Knowledge:</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.traditional_knowledge_involved ? 'Yes' : 'No / Uncertain'}</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 uppercase font-bold">Indian Bio-Resources (ABS):</span>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">{caseState.biological_resources_involved ? 'Yes (NBA Clearance)' : 'No / Exempt'}</p>
-                </div>
-              </div>
-
-              {/* Active Herbs */}
-              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
-                <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold">Active Herbs & Biological Ingredients:</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {caseState.ingredients && caseState.ingredients.length > 0 ? (
-                    caseState.ingredients.map((ing, i) => (
-                      <span key={i} className="px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/60 text-xs font-semibold">
-                        🌿 {ing}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-slate-500 italic">No specific herbs extracted yet.</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Classification & Pathway Summary Sidebar */}
-            <div className="glass-panel p-6 space-y-4 border-t-4 border-amber-500 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-amber-700 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <span>🏛️</span> Classification
-                  </span>
-                  <button
-                    onClick={() => setShowPathwayModal(true)}
-                    className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
-                  >
-                    Modify ➔
-                  </button>
-                </div>
-
-                <div className="font-black text-slate-900 dark:text-white text-base">
-                  {activeTier.label}
-                </div>
-
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  {activeTier.ipPosture}
-                </p>
-
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5 text-xs">
-                  <div className="font-bold text-slate-700 dark:text-slate-300">Statutory Authority:</div>
-                  <div className="text-[11px] font-mono text-emerald-700 dark:text-emerald-400">{activeTier.statutoryBasis}</div>
-                </div>
-              </div>
-
-              {/* One-Click Action in Sidebar */}
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  onClick={() => setShowDossierModal(true)}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white dark:text-slate-950 text-xs font-extrabold hover:from-emerald-400 hover:to-teal-500 transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-                >
-                  <span>📄 Generate Pre-Filing Dossier</span>
-                  <span>➔</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* FULL QUESTIONING & CONSULTATION HISTORY LOG */}
-          <div className="glass-panel p-6 space-y-4 border-t-4 border-emerald-500 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                <span>💬</span> Questioning Records & Consultation Transcript ({effectiveRecords.length})
-              </h3>
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                Case #{caseState.case_id}
+        <div className="mt-10 grid grid-cols-1 gap-7 lg:grid-cols-3">
+          {/* Case Parameters */}
+          <div className="panel p-7 lg:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-4">
+              <span className="mono-caps text-accent-ink">CASE ID: #{caseState.case_id}</span>
+              <span className="mono-caps text-faint">
+                {caseState.updated_at || 'Active Session'}
               </span>
             </div>
 
+            <dl className="grid grid-cols-1 gap-x-10 gap-y-5 pt-6 sm:grid-cols-2">
+              {parameters.map((p) => (
+                <div key={p.label}>
+                  <dt className="eyebrow">{p.label}</dt>
+                  <dd className="mt-1.5 text-[13.5px] font-medium text-ink">{p.value}</dd>
+                </div>
+              ))}
+            </dl>
+
+            {/* Active Herbs */}
+            <div className="mt-6 border-t border-line pt-5">
+              <span className="eyebrow">Active Herbs &amp; Biological Ingredients</span>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {caseState.ingredients && caseState.ingredients.length > 0 ? (
+                  caseState.ingredients.map((ing, i) => (
+                    <span key={i} className="chip chip-accent">
+                      <LeafIcon size={10} />
+                      {ing}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-[12.5px] text-faint italic">
+                    No specific herbs extracted yet.
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Classification & Pathway Summary */}
+          <div className="panel flex flex-col justify-between p-7">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <span className="eyebrow">Classification</span>
+                <button
+                  onClick={() => setShowPathwayModal(true)}
+                  className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-accent-ink hover:underline"
+                >
+                  <PencilIcon size={11} />
+                  Modify
+                </button>
+              </div>
+
+              <h3 className="font-display text-[19px] leading-snug text-ink">{activeTier.label}</h3>
+
+              <p className="text-[13px] leading-relaxed text-muted">{activeTier.ipPosture}</p>
+
+              <div className="panel-sunken space-y-2 p-4">
+                <div className="eyebrow">Statutory Authority</div>
+                <p className="text-[11.5px] leading-relaxed text-accent-ink">{activeTier.statutoryBasis}</p>
+              </div>
+            </div>
+
+            <div className="mt-6 border-t border-line pt-5">
+              <button
+                onClick={() => setShowDossierModal(true)}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-3 py-3 text-[12.5px] font-medium text-accent-fg transition-colors hover:bg-accent-hover"
+              >
+                <FileTextIcon size={14} />
+                Generate Pre-Filing Dossier
+              </button>
+            </div>
+          </div>
+
+          {/* Questioning & Consultation History */}
+          <div className="panel p-7 lg:col-span-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-4">
+              <h3 className="inline-flex items-center gap-2.5 font-display text-[17px] text-ink">
+                <MessageIcon size={16} className="text-accent" />
+                Questioning Records &amp; Consultation Transcript ({effectiveRecords.length})
+              </h3>
+              <span className="mono-caps text-faint">Case #{caseState.case_id}</span>
+            </div>
+
             {effectiveRecords.length > 0 ? (
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+              <div className="mt-5 max-h-96 space-y-4 overflow-y-auto pr-1">
                 {effectiveRecords.map((item, idx: number) => {
                   const isUser = item.sender === 'user' || Boolean(item.user_message);
-                  const textContent = item.text || item.user_message || item.data?.answer || item.assistant_answer || item.question || item.content;
-                  const questionAsked = item.data?.next_question || item.next_question || item.question;
+                  const textContent =
+                    item.text ||
+                    item.user_message ||
+                    item.data?.answer ||
+                    item.assistant_answer ||
+                    item.question ||
+                    item.content;
+                  const questionAsked =
+                    item.data?.next_question || item.next_question || item.question;
 
                   return (
-                    <div key={idx} className={`p-3.5 rounded-xl border text-xs leading-relaxed space-y-2 ${
-                      isUser && item.user_message
-                        ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200'
-                        : isUser
-                        ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800/40 text-emerald-900 dark:text-emerald-200'
-                        : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-300'
-                    }`}>
-                      <div className="flex items-center justify-between font-bold text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                        <span>{isUser ? '👤 User Input / Answer' : '⚖️ IP-SAKTI Legal Response'}</span>
-                        {item.timestamp && <span className="font-mono text-[9px]">{new Date(item.timestamp).toLocaleTimeString()}</span>}
+                    <div
+                      key={idx}
+                      className={`space-y-2.5 rounded-md border p-4 text-[12.5px] leading-relaxed ${
+                        isUser
+                          ? 'border-line bg-sunken text-ink'
+                          : 'border-line bg-surface text-muted'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="eyebrow inline-flex items-center gap-2">
+                          {isUser ? <UserIcon size={12} /> : <ScalesIcon size={12} />}
+                          {isUser ? 'User Input / Answer' : 'IP-SAKTI Legal Response'}
+                        </span>
+                        {item.timestamp && (
+                          <span className="mono-caps text-faint">
+                            {new Date(item.timestamp).toLocaleTimeString()}
+                          </span>
+                        )}
                       </div>
 
                       {item.user_message && (
-                        <div className="p-2 rounded-lg bg-emerald-50 dark:bg-slate-900 text-emerald-800 dark:text-emerald-300 font-medium">
-                          👤 {item.user_message}
+                        <div className="rounded-md bg-accent-soft px-3 py-2.5 font-medium text-accent-ink">
+                          {item.user_message}
                         </div>
                       )}
 
                       {item.assistant_answer && (
-                        <div className="whitespace-pre-wrap font-sans text-slate-800 dark:text-slate-200">
-                          {item.assistant_answer}
-                        </div>
+                        <div className="whitespace-pre-wrap text-ink">{item.assistant_answer}</div>
                       )}
 
                       {!item.user_message && !item.assistant_answer && (
-                        <div className="whitespace-pre-wrap font-sans text-slate-800 dark:text-slate-200">
-                          {textContent}
-                        </div>
+                        <div className="whitespace-pre-wrap">{textContent}</div>
                       )}
 
                       {questionAsked && (
-                        <div className="p-2 rounded-lg bg-emerald-100/80 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-300 text-[11px] font-semibold flex items-center gap-1.5">
-                          <span>❓</span>
-                          <span>Target Question Asked: {questionAsked}</span>
+                        <div className="rounded-md border border-accent-line bg-accent-soft px-3 py-2 text-[11.5px] font-medium text-accent-ink">
+                          Target Question Asked: {questionAsked}
                         </div>
                       )}
                     </div>
@@ -538,9 +533,10 @@ export default function CaseWorkspacePage() {
                 })}
               </div>
             ) : (
-              <div className="text-xs text-slate-500 italic p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 text-center">
-                No previous questioning records stored for this case session yet. Submit a message in AI Chat to start recording.
-              </div>
+              <p className="mt-5 rounded-md border border-dashed border-line-strong px-3 py-8 text-center text-[12.5px] text-faint">
+                No previous questioning records stored for this case session yet. Submit a message
+                in AI Chat to start recording.
+              </p>
             )}
           </div>
         </div>

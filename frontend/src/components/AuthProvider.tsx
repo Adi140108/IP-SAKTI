@@ -10,7 +10,7 @@ import {
   signOut,
   updateProfile
 } from 'firebase/auth';
-import { auth, googleProvider } from '@/lib/firebase';
+import { auth, googleProvider, firebaseConfigured } from '@/lib/firebase';
 
 export type UserRole = 'practitioner' | 'facilitator';
 
@@ -59,6 +59,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    if (!firebaseConfigured || !auth) {
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
@@ -77,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInWithEmail = async (email: string, pass: string): Promise<User> => {
+    if (!auth) throw new Error('Authentication is not configured (missing Firebase API key). Contact the administrator.');
     const res = await signInWithEmailAndPassword(auth, email, pass);
     return res.user;
   };
@@ -87,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     displayName?: string,
     role: UserRole = 'practitioner'
   ): Promise<User> => {
+    if (!auth) throw new Error('Authentication is not configured (missing Firebase API key). Contact the administrator.');
     const res = await createUserWithEmailAndPassword(auth, email, pass);
     if (displayName && res.user) {
       await updateProfile(res.user, { displayName });
@@ -96,12 +103,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithGoogle = async (role: UserRole = 'practitioner'): Promise<User> => {
+    if (!auth || !googleProvider) throw new Error('Authentication is not configured (missing Firebase API key). Contact the administrator.');
     const res = await signInWithPopup(auth, googleProvider);
     setUserRole(role);
     return res.user;
   };
 
   const signOutUser = async (): Promise<void> => {
+    if (!auth) return;
     await signOut(auth);
   };
 

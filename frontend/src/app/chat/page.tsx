@@ -1,19 +1,49 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import Link from 'next/link';
-import { createCase, sendChatMessage, getCase, uploadDocument, updateCase } from '@/lib/api';
+import { createCase, sendChatMessage, getCase, uploadDocument, updateCase, listCases } from '@/lib/api';
 import { ChatResponse, CaseState } from '@/types';
 import { FORMULATION_TIERS, getTierFromClassification } from '@/lib/formulationTaxonomy';
 import { getPersistedCases, persistCase, mergeAndPersistCases } from '@/lib/caseRegistry';
 import { getTranslation } from '@/lib/translations';
+import { findClientMatchingPatents } from '@/lib/patents';
 import FormulationPathwayModal from '@/components/FormulationPathwayModal';
 import OfficialFormsModal from '@/components/OfficialFormsModal';
 import DossierExportModal from '@/components/DossierExportModal';
 import AuthModal from '@/components/AuthModal';
 import { useAuth } from '@/components/AuthProvider';
-import { listCases } from '@/lib/api';
-import { findClientMatchingPatents } from '@/lib/patents';
+import {
+  ScalesIcon,
+  LandmarkIcon,
+  GlobeIcon,
+  PlusIcon,
+  SlidersIcon,
+  VolumeIcon,
+  MuteIcon,
+  MicIcon,
+  PaperclipIcon,
+  ArrowRightIcon,
+  ChevronDownIcon,
+  CheckIcon,
+  CircleIcon,
+  StopIcon,
+  XIcon,
+  PencilIcon,
+  FileTextIcon,
+  ClipboardIcon,
+  ScrollIcon,
+  TagIcon,
+  MapIcon,
+  CopyrightIcon,
+  PaletteIcon,
+  SproutIcon,
+  LockIcon,
+  LibraryIcon,
+  LeafIcon,
+  PillIcon,
+  AlertIcon,
+  FolderIcon,
+} from '@/components/Icons';
 
 interface SpeechRecognitionResultItem {
   transcript: string;
@@ -66,8 +96,8 @@ export default function ChatPage() {
   const [chatHistory, setChatHistory] = useState<Array<{ sender: 'user' | 'assistant'; data?: ChatResponse; text?: string }>>([]);
   const [latestResponse, setLatestResponse] = useState<ChatResponse | null>(null);
 
-  // Saved user cases list for quick switching (seeded immediately from persistent storage)
-  const [userCases, setUserCases] = useState<CaseState[]>(() => getPersistedCases());
+  // Saved user cases list for quick switching (hydrated on mount)
+  const [userCases, setUserCases] = useState<CaseState[]>([]);
   const [casePickerOpen, setCasePickerOpen] = useState<boolean>(false);
 
   // Modals state
@@ -118,16 +148,16 @@ export default function ChatPage() {
   ];
 
   const allIpDomains = [
-    { id: 'patent', label: 'Patent', icon: '📜' },
-    { id: 'trademark', label: 'Trademark', icon: '🏷️' },
-    { id: 'gi', label: 'Geographical Indication', icon: '🗺️' },
-    { id: 'copyright', label: 'Copyright', icon: '©️' },
-    { id: 'design', label: 'Industrial Design', icon: '🎨' },
-    { id: 'plant_variety', label: 'Plant Variety', icon: '🌱' },
-    { id: 'trade_secret', label: 'Trade Secret', icon: '🔒' },
-    { id: 'tkdl_prior_art', label: 'TKDL / Prior Art', icon: '📚' },
-    { id: 'abs', label: 'Access & Benefit Sharing (ABS)', icon: '🌿' },
-    { id: 'regulatory', label: 'AYUSH / FSSAI Regulatory', icon: '⚕️' },
+    { id: 'patent', label: 'Patent', icon: ScrollIcon },
+    { id: 'trademark', label: 'Trademark', icon: TagIcon },
+    { id: 'gi', label: 'Geographical Indication', icon: MapIcon },
+    { id: 'copyright', label: 'Copyright', icon: CopyrightIcon },
+    { id: 'design', label: 'Industrial Design', icon: PaletteIcon },
+    { id: 'plant_variety', label: 'Plant Variety', icon: SproutIcon },
+    { id: 'trade_secret', label: 'Trade Secret', icon: LockIcon },
+    { id: 'tkdl_prior_art', label: 'TKDL / Prior Art', icon: LibraryIcon },
+    { id: 'abs', label: 'Access & Benefit Sharing (ABS)', icon: LeafIcon },
+    { id: 'regulatory', label: 'AYUSH / FSSAI Regulatory', icon: PillIcon },
   ];
 
   const fetchUserCases = useCallback(async () => {
@@ -136,7 +166,7 @@ export default function ChatPage() {
       const merged = mergeAndPersistCases(cases);
       setUserCases(merged);
     } catch (e) {
-      console.error('Failed to list user cases:', e);
+      console.warn('Failed to list user cases from remote API, falling back to local registry:', e);
       setUserCases(getPersistedCases());
     }
   }, [user]);
@@ -261,6 +291,9 @@ export default function ChatPage() {
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
         setActionsDropdownOpen(false);
       }
+      if (casePickerRef.current && !casePickerRef.current.contains(event.target as Node)) {
+        setCasePickerOpen(false);
+      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -276,6 +309,16 @@ export default function ChatPage() {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory, loading]);
+
+  // Escape closes the mobile context drawer
+  useEffect(() => {
+    if (!showMobileSidebar) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setShowMobileSidebar(false);
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [showMobileSidebar]);
 
   // Pre-load SpeechSynthesis voices
   useEffect(() => {
@@ -312,6 +355,42 @@ export default function ChatPage() {
     ml: 'ml-IN',
   };
 
+  const handleLanguageChange = (code: string) => {
+    setLanguage(code);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ip_sakti_chat_language', code);
+    }
+  };
+
+  // Helper: Find Natural Female Voice (preferring a voice for the active language)
+  const getFemaleVoice = (targetLangCode?: string): SpeechSynthesisVoice | null => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices || voices.length === 0) return null;
+
+    const prefix = (targetLangCode || language).slice(0, 2);
+    const langVoices = voices.filter((v) => v.lang.toLowerCase().startsWith(prefix));
+
+    const femaleKeywords = [
+      'female', 'zira', 'samantha', 'google us english', 'victoria', 'karen',
+      'veena', 'swara', 'kalpana', 'hazel', 'susan', 'aria', 'jenny', 'heera', 'anita'
+    ];
+
+    const foundInLang = langVoices.find((v) => {
+      const n = v.name.toLowerCase();
+      return femaleKeywords.some((k) => n.includes(k));
+    });
+    if (foundInLang) return foundInLang;
+    if (langVoices.length > 0) return langVoices[0];
+
+    const foundGeneral = voices.find((v) => {
+      const n = v.name.toLowerCase();
+      return femaleKeywords.some((k) => n.includes(k));
+    });
+
+    return foundGeneral || voices[0];
+  };
+
   // Extract clean 2-sentence conversational executive summary for speech
   const extractSpokenSummary = (rawText: string, nextQuestion?: string): string => {
     if (!rawText) return '';
@@ -341,35 +420,6 @@ export default function ChatPage() {
     }
 
     return summary;
-  };
-
-  // Helper: Find Natural Female Voice
-  const getFemaleVoice = (targetLangCode?: string): SpeechSynthesisVoice | null => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
-    const voices = window.speechSynthesis.getVoices();
-    if (!voices || voices.length === 0) return null;
-
-    const prefix = (targetLangCode || 'en').slice(0, 2);
-    const langVoices = voices.filter((v) => v.lang.toLowerCase().startsWith(prefix));
-
-    const femaleKeywords = [
-      'female', 'zira', 'samantha', 'google us english', 'victoria', 'karen',
-      'veena', 'swara', 'kalpana', 'hazel', 'susan', 'aria', 'jenny', 'heera', 'anita'
-    ];
-
-    const foundInLang = langVoices.find((v) => {
-      const n = v.name.toLowerCase();
-      return femaleKeywords.some((k) => n.includes(k));
-    });
-    if (foundInLang) return foundInLang;
-    if (langVoices.length > 0) return langVoices[0];
-
-    const foundGeneral = voices.find((v) => {
-      const n = v.name.toLowerCase();
-      return femaleKeywords.some((k) => n.includes(k));
-    });
-
-    return foundGeneral || voices[0];
   };
 
   // Speech Recognition (Speech-to-Text)
@@ -579,12 +629,7 @@ export default function ChatPage() {
   // Document Upload & Inline OCR Processing
   const handleDocumentSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    const effectiveCaseId = caseId || `case_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-    if (!caseId) {
-      setCaseId(effectiveCaseId);
-    }
+    if (!file || !caseId) return;
 
     if (file.size === 0) {
       alert('Selected file is empty. Please choose a valid document.');
@@ -615,16 +660,6 @@ export default function ChatPage() {
     }
   };
 
-  const handleLanguageChange = (newLang: string) => {
-    setLanguage(newLang);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ip_sakti_chat_language', newLang);
-    }
-    if (caseId) {
-      updateCase(caseId, { language: newLang }).catch(() => {});
-    }
-  };
-
   // Parameters count
   const knownCount = caseState?.known_information?.length || 0;
   const missingCount = caseState?.missing_information?.length || 0;
@@ -634,108 +669,63 @@ export default function ChatPage() {
   const activeTier = getTierFromClassification(caseState?.formulation_classification || caseState?.product_type);
   const activeDomainsCount = latestResponse?.relevant_ip_domains?.length || 0;
   const citationsCount = latestResponse?.citations?.length || 0;
+
+  // Only the newest few messages stagger in; older ones never re-animate.
+  const staggerFor = (idx: number) => {
+    const fromEnd = chatHistory.length - 1 - idx;
+    if (fromEnd < 0 || fromEnd > 2) return undefined;
+    return { animationDelay: `${fromEnd * 70}ms` };
+  };
+
   const t = getTranslation(language);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-6.5rem)] overflow-hidden space-y-2.5">
+    <div className="app-fill flex flex-col gap-3 sm:gap-4">
 
       {/* ========================================================================= */}
       {/* 1. COMPACT CASE CONTEXT BAR */}
       {/* ========================================================================= */}
-      <div className="glass-panel px-3.5 py-2 rounded-xl flex flex-wrap items-center justify-between gap-2.5 border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 shadow-xs transition-colors shrink-0">
-
-        {/* Left: Regime, Case ID, Formulation Type, Jurisdiction */}
-        <div className="flex items-center flex-wrap gap-2">
+      <div className="panel flex shrink-0 flex-wrap items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-4">
+        <div className="flex flex-wrap items-center gap-2.5">
           {/* New Case Button */}
           <button
             onClick={startNewConsultation}
-            className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-slate-950 border border-emerald-500/40 text-emerald-700 dark:text-emerald-400 font-bold text-xs hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-500 dark:hover:text-slate-950 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
             title="Start New Case Session"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1.5 text-[12px] font-medium text-ink transition-colors hover:border-accent hover:bg-accent hover:text-accent-fg"
           >
-            <span>➕</span>
-            <span className="hidden sm:inline">{t.newCaseButton}</span>
+            <PlusIcon size={13} />
+            <span className="hidden sm:inline">New Case</span>
           </button>
 
-          {/* Sign In Prompt if not logged in */}
-          {!user && (
-            <button
-              onClick={() => setShowAuthModal(true)}
-              className="px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 text-amber-800 dark:text-amber-300 font-bold text-xs hover:bg-amber-100 transition-all flex items-center gap-1 cursor-pointer shadow-xs active:scale-95"
-              title="Sign in to save your consultations to your account"
-            >
-              <span>🔑</span>
-              <span>{t.signInToSave}</span>
-            </button>
-          )}
-
-          {/* Switch Saved Case Dropdown */}
-          {userCases.length > 0 && (
-            <div className="relative" ref={casePickerRef}>
-              <button
-                onClick={() => setCasePickerOpen(!casePickerOpen)}
-                className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
-                title="Switch between your ongoing consultations"
-              >
-                <span>📂</span>
-                <span className="hidden sm:inline">{t.casesButton}</span>
-                <span className="text-[9px]">▼</span>
-              </button>
-
-              {casePickerOpen && (
-                <div className="absolute left-0 mt-1.5 w-64 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl z-50 py-1.5 text-xs max-h-60 overflow-y-auto">
-                  <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <span>Saved Cases ({userCases.length})</span>
-                    <Link href="/case" className="text-emerald-600 hover:underline text-[9px] font-bold">Workspace →</Link>
-                  </div>
-                  {userCases.map((c, idx) => {
-                    const tier = getTierFromClassification(c.formulation_classification || c.product_type);
-                    const isSelected = c.case_id === caseId;
-                    const caseNumber = userCases.length - idx;
-                    return (
-                      <button
-                        key={c.case_id}
-                        onClick={() => switchActiveCase(c)}
-                        className={`w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                          isSelected ? 'bg-emerald-50/70 dark:bg-emerald-950/60 font-bold text-emerald-800 dark:text-emerald-300' : 'text-slate-700 dark:text-slate-200'
-                        }`}
-                      >
-                        <div className="truncate">
-                          <div className="flex items-center gap-1.5 font-mono text-[11px]">
-                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">Case #{caseNumber}</span>
-                            <span className="text-slate-400">#{c.case_id.slice(0, 8)}</span>
-                          </div>
-                          <div className="text-[10px] text-slate-500 truncate">{tier.shortLabel || tier.label}</div>
-                        </div>
-                        {isSelected && <span className="text-emerald-500 font-bold text-xs">✓</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Regime Switcher */}
-          <div className="inline-flex p-0.5 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs">
+          <div
+            className="inline-flex items-center gap-0.5 rounded-md border border-line bg-sunken p-0.5"
+            role="group"
+            aria-label="Regime"
+          >
             <button
               onClick={() => setJurisdiction('India')}
-              className={`px-2.5 py-0.5 rounded-md font-bold transition-all cursor-pointer ${
+              aria-pressed={jurisdiction === 'India'}
+              className={`inline-flex items-center gap-1.5 rounded-[3px] px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
                 jurisdiction === 'India'
-                  ? 'bg-emerald-500 text-white dark:text-slate-950 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  ? 'bg-surface text-ink shadow-soft'
+                  : 'text-muted hover:text-ink'
               }`}
             >
-              🇮🇳 India
+              <LandmarkIcon size={13} />
+              India
             </button>
             <button
               onClick={() => setJurisdiction('International')}
-              className={`px-2.5 py-0.5 rounded-md font-bold transition-all cursor-pointer ${
+              aria-pressed={jurisdiction === 'International'}
+              className={`inline-flex items-center gap-1.5 rounded-[3px] px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
                 jurisdiction === 'International'
-                  ? 'bg-cyan-500 text-white dark:text-slate-950 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  ? 'bg-surface text-ink shadow-soft'
+                  : 'text-muted hover:text-ink'
               }`}
             >
-              🌐 International
+              <GlobeIcon size={13} />
+              International
             </button>
           </div>
 
@@ -746,55 +736,193 @@ export default function ChatPage() {
               placeholder="Country (e.g. USA, Germany)"
               value={country}
               onChange={(e) => setCountry(e.target.value)}
-              className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-md px-2 py-0.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-cyan-500 w-32"
+              className="w-40 rounded-md border border-line bg-surface px-2.5 py-1.5 text-[12px] text-ink placeholder:text-faint"
             />
           )}
 
-          {/* Case ID Badge */}
-          {caseId && (
-            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 text-[11px] font-mono font-bold">
-              Case #{caseId.slice(0, 8)}
-            </span>
+          {/* Case Switcher — lets the user jump between their saved consultations */}
+          {userCases.length > 0 && (
+            <div className="relative" ref={casePickerRef}>
+              <button
+                onClick={() => setCasePickerOpen((v) => !v)}
+                aria-expanded={casePickerOpen}
+                aria-haspopup="true"
+                title="Switch between your saved consultations"
+                className="mono-caps inline-flex items-center gap-1.5 rounded-md border border-line bg-sunken px-2.5 py-1.5 text-faint transition-colors hover:border-accent-line hover:text-ink"
+              >
+                <FolderIcon size={12} />
+                Case #{caseId ? caseId.slice(0, 8) : 'new'}
+                <ChevronDownIcon
+                  size={11}
+                  className={`opacity-50 transition-transform duration-200 ${
+                    casePickerOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {casePickerOpen && (
+                <div className="animate-liftIn absolute left-0 z-50 mt-2 max-h-80 w-[300px] overflow-y-auto rounded-lg border border-line bg-surface p-1.5 shadow-lift">
+                  <div className="eyebrow px-2.5 pb-1 pt-1.5">Your Consultations</div>
+                  {userCases.map((c, idx) => {
+                    const isActive = c.case_id === caseId;
+                    const tierLabel = getTierFromClassification(
+                      c.formulation_classification || c.product_type
+                    ).shortLabel;
+                    return (
+                      <button
+                        key={c.case_id}
+                        onClick={() => switchActiveCase(c)}
+                        className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${
+                          isActive ? 'bg-accent-soft' : 'hover:bg-subtle'
+                        }`}
+                      >
+                        <span className="min-w-0">
+                          <span className="mono-caps block text-[11px] text-faint">
+                            #{c.case_id.slice(0, 8)} · {c.jurisdiction}
+                          </span>
+                          <span
+                            className={`block truncate text-[12px] ${
+                              isActive ? 'font-medium text-accent-ink' : 'text-ink'
+                            }`}
+                          >
+                            {tierLabel}
+                          </span>
+                        </span>
+                        {isActive ? (
+                          <CheckIcon size={13} className="shrink-0 text-accent" />
+                        ) : (
+                          <span className="shrink-0 text-[10px] text-faint">
+                            {c.updated_at ? new Date(c.updated_at).toLocaleDateString() : 'Active'}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                  <div className="mt-1 border-t border-line pt-1">
+                    <button
+                      onClick={() => {
+                        setCasePickerOpen(false);
+                        startNewConsultation();
+                      }}
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[12px] font-medium text-accent-ink transition-colors hover:bg-accent-soft"
+                    >
+                      <PlusIcon size={13} />
+                      Start New Consultation
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Formulation Badge with Quick Change Modal Trigger */}
           <button
             onClick={() => setShowPathwayModal(true)}
-            className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/60 text-[11px] font-semibold hover:border-emerald-500 transition-colors flex items-center gap-1 cursor-pointer"
             title="Click to change 6-Tier formulation classification"
+            className="inline-flex max-w-[150px] items-center gap-2 rounded-md border border-accent-line bg-accent-soft px-2.5 py-1.5 text-[12px] font-medium text-accent-ink transition-colors hover:border-accent sm:max-w-[220px]"
           >
-            <span>🏛️ {activeTier.shortLabel || activeTier.label}</span>
-            <span className="text-[9px] text-emerald-600 dark:text-emerald-400">✎</span>
+            <span className="truncate">{activeTier.shortLabel || activeTier.label}</span>
+            <PencilIcon size={11} className="shrink-0 opacity-60" />
           </button>
         </div>
 
-        {/* Right: Actions Dropdown, Sound, Language & Mobile Sidebar Trigger */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          {/* Mobile Case Context Toggle Button */}
+          <button
+            onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1.5 text-[12px] font-medium text-ink lg:hidden"
+          >
+            <ClipboardIcon size={13} />
+            Context
+          </button>
 
-          {/* Actions Dropdown Menu (6-Tier Pathway, Official Forms, Export Dossier) */}
+          {/* Everything else lives behind one menu — sound, language, and the
+              three action modals. Reuses actionsDropdownOpen so the existing
+              outside-click handler applies unchanged. */}
           <div className="relative" ref={actionsMenuRef}>
             <button
               onClick={() => setActionsDropdownOpen(!actionsDropdownOpen)}
-              className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+              aria-expanded={actionsDropdownOpen}
+              aria-haspopup="true"
+              className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-subtle"
             >
-              <span>⚙️ {t.actionsButton}</span>
-              <span className="text-[9px]">▼</span>
+              <SlidersIcon size={13} />
+              Options
+              <ChevronDownIcon
+                size={12}
+                className={`opacity-50 transition-transform duration-200 ${
+                  actionsDropdownOpen ? 'rotate-180' : ''
+                }`}
+              />
             </button>
 
             {actionsDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-52 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl z-50 py-1.5 text-xs">
+              <div className="animate-liftIn absolute right-0 z-50 mt-2 w-[264px] rounded-lg border border-line bg-surface p-1.5 shadow-lift">
+                {/* Spoken responses toggle */}
+                <button
+                  onClick={() => setSoundEnabled(!soundEnabled)}
+                  role="switch"
+                  aria-checked={soundEnabled}
+                  className="flex w-full items-center justify-between gap-3 rounded-md px-2.5 py-2.5 text-left transition-colors hover:bg-subtle"
+                >
+                  <span className="inline-flex items-center gap-2.5 text-[12.5px] text-ink">
+                    {soundEnabled ? (
+                      <VolumeIcon size={14} className="text-accent" />
+                    ) : (
+                      <MuteIcon size={14} className="text-faint" />
+                    )}
+                    Spoken responses
+                  </span>
+                  <span
+                    className={`relative h-[18px] w-8 shrink-0 rounded-full border transition-colors duration-200 ${
+                      soundEnabled ? 'border-accent bg-accent' : 'border-line bg-sunken'
+                    }`}
+                    aria-hidden="true"
+                  >
+                    <span
+                      className={`absolute top-[2px] h-[12px] w-[12px] rounded-full transition-all duration-200 ease-out ${
+                        soundEnabled ? 'left-[16px] bg-accent-fg' : 'left-[2px] bg-faint'
+                      }`}
+                    />
+                  </span>
+                </button>
+
+                {/* Language */}
+                <div className="px-2.5 pt-1 pb-2.5">
+                  <label
+                    htmlFor="chat-language"
+                    className="eyebrow mb-1.5 block"
+                  >
+                    Response language
+                  </label>
+                  <select
+                    id="chat-language"
+                    value={language}
+                    onChange={(e) => handleLanguageChange(e.target.value)}
+                    className="w-full rounded-md border border-line bg-sunken px-2.5 py-2 text-[12.5px] text-ink"
+                  >
+                    {languages.map((l) => (
+                      <option key={l.code} value={l.code}>
+                        {l.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <hr className="rule my-1" />
+
                 <button
                   onClick={() => {
                     setShowPathwayModal(true);
                     setActionsDropdownOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-700 dark:hover:text-emerald-400 flex items-center gap-2 transition-colors cursor-pointer"
+                  className="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2.5 text-left transition-colors hover:bg-subtle"
                 >
-                  <span>⚖️</span>
-                  <div>
-                    <div className="font-bold">6-Tier Legal Pathway</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400">Formulation roadmap & ABS</div>
-                  </div>
+                  <ScalesIcon size={15} className="mt-0.5 shrink-0 text-accent" />
+                  <span>
+                    <span className="block text-[12.5px] font-medium text-ink">6-Tier Legal Pathway</span>
+                    <span className="mt-0.5 block text-[11px] text-faint">Formulation roadmap &amp; ABS</span>
+                  </span>
                 </button>
 
                 <button
@@ -802,113 +930,60 @@ export default function ChatPage() {
                     setShowFormsModal(true);
                     setActionsDropdownOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-700 dark:hover:text-emerald-400 flex items-center gap-2 transition-colors cursor-pointer"
+                  className="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2.5 text-left transition-colors hover:bg-subtle"
                 >
-                  <span>🏛️</span>
-                  <div>
-                    <div className="font-bold">Official Forms & Portals</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400">IPO, NBA, FSSAI, AYUSH</div>
-                  </div>
+                  <LandmarkIcon size={15} className="mt-0.5 shrink-0 text-accent" />
+                  <span>
+                    <span className="block text-[12.5px] font-medium text-ink">Official Forms &amp; Portals</span>
+                    <span className="mt-0.5 block text-[11px] text-faint">IPO, NBA, FSSAI, AYUSH</span>
+                  </span>
                 </button>
-
-                <div className="border-t border-slate-200 dark:border-slate-800 my-1" />
 
                 <button
                   onClick={() => {
                     setShowDossierModal(true);
                     setActionsDropdownOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-700 dark:hover:text-emerald-400 flex items-center gap-2 transition-colors cursor-pointer"
+                  className="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2.5 text-left transition-colors hover:bg-subtle"
                 >
-                  <span>📄</span>
-                  <div>
-                    <div className="font-bold text-emerald-700 dark:text-emerald-400">Export Legal Dossier</div>
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400">Download diagnostic report</div>
-                  </div>
+                  <FileTextIcon size={15} className="mt-0.5 shrink-0 text-accent" />
+                  <span>
+                    <span className="block text-[12.5px] font-medium text-ink">Export Legal Dossier</span>
+                    <span className="mt-0.5 block text-[11px] text-faint">Download diagnostic report</span>
+                  </span>
                 </button>
               </div>
             )}
           </div>
-
-          {/* Master Global Audio ON/OFF Toggle */}
-          <button
-            onClick={toggleGlobalSound}
-            className={`px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
-              soundEnabled
-                ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-400 dark:border-emerald-500/40 shadow-xs'
-                : 'bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-800 hover:text-slate-900 dark:hover:text-slate-200 hover:border-emerald-500/40'
-            }`}
-            title={soundEnabled ? 'Overall Voice is ON (Click to mute everywhere)' : 'Overall Voice is OFF (Click to unmute and listen)'}
-          >
-            {soundEnabled ? (
-              <>
-                <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
-                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                </svg>
-                <span className="text-[11px] font-bold">Voice ON</span>
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
-                  <line x1="23" y1="9" x2="17" y2="15" />
-                  <line x1="17" y1="9" x2="23" y2="15" />
-                </svg>
-                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Muted</span>
-              </>
-            )}
-          </button>
-
-          {/* Language Selector */}
-          <select
-            value={language}
-            onChange={(e) => handleLanguageChange(e.target.value)}
-            className="bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-md px-2 py-1 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500 font-medium"
-          >
-            {languages.map((l) => (
-              <option key={l.code} value={l.code}>
-                {l.name}
-              </option>
-            ))}
-          </select>
-
-          {/* Mobile Case Context Toggle Button */}
-          <button
-            onClick={() => setShowMobileSidebar(!showMobileSidebar)}
-            className="lg:hidden px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-400 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-1 cursor-pointer"
-          >
-            <span>📋 Context</span>
-          </button>
         </div>
       </div>
 
       {/* ========================================================================= */}
       {/* 2. MAIN 2-PANE WORKSPACE (CHAT ~72% | COMPACT SIDEBAR ~28%) */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1 overflow-hidden min-h-0">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-12">
 
         {/* ===================================================================== */}
         {/* DOMINANT CHAT AREA (Col 8 / ~72% on desktop) */}
         {/* ===================================================================== */}
-        <div className="lg:col-span-8 xl:col-span-9 flex flex-col glass-panel p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 overflow-hidden shadow-xs relative">
-
+        <div className="panel relative flex flex-col overflow-hidden lg:col-span-8 xl:col-span-9">
           {/* Chat Card Header */}
-          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800 shrink-0">
-            <div>
-              <h2 className="text-sm font-extrabold text-slate-900 dark:text-slate-100 tracking-tight flex items-center gap-1.5">
-                <span>⚖️</span>
-                <span>{t.aiConsultationTitle}</span>
-              </h2>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                {t.aiConsultationSubtitle}
-              </p>
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-4 sm:px-6 sm:py-5 lg:px-7">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line bg-sunken">
+                <ScalesIcon size={17} className="text-accent" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="font-display text-[17px] leading-tight text-ink">AI Consultation</h2>
+                <p className="mt-1 truncate text-[11.5px] text-faint">
+                  Source-cited IP &amp; regulatory guidance under Indian statutory frameworks
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>{t.ragSourcesReady}</span>
-            </div>
+            <span className="chip chip-ok">
+              <span className="status-dot status-dot-ok animate-pulse-soft" aria-hidden="true" />
+              RAG Sources Ready
+            </span>
           </div>
 
           {/* Hidden File Input for Document Upload */}
@@ -920,283 +995,164 @@ export default function ChatPage() {
             className="hidden"
           />
 
-          {/* Scrollable Message History Area */}
-          <div className="flex-1 overflow-y-auto space-y-3.5 pr-2 py-3 min-h-0">
+          {/* Scrollable Message History Area — scrollbar stays at the panel
+              edge while the conversation itself is centred to a readable
+              measure, so wide monitors don't get a lopsided left gutter. */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto flex min-h-full w-full max-w-[860px] flex-col gap-5 px-4 py-5 sm:gap-7 sm:px-6 sm:py-7 xl:max-w-[960px] lg:px-8">
 
-            {/* Clean Minimal Empty State */}
+{/* Clean Minimal Empty State — no duplicate title, the panel
+                header above already says "AI Consultation". */}
             {chatHistory.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-4 text-slate-500 dark:text-slate-400 my-auto">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-2xl shadow-xs">
-                  ⚖️
-                </div>
-                <div className="space-y-1.5 max-w-md">
-                  <h3 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                    {t.emptyStateTitle}
-                  </h3>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                    {t.emptyStateSubtitle}
-                  </p>
+              <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-line bg-sunken">
+                  <ScalesIcon size={20} className="text-accent" />
                 </div>
 
-                {/* 3 Compact Suggested Prompts */}
-                <div className="flex flex-wrap justify-center gap-2 pt-2 max-w-lg">
-                  <button
-                    onClick={() => handleSendMessage(t.starterPrompt1)}
-                    className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 hover:border-emerald-500/60 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50/30 transition-all cursor-pointer shadow-2xs"
-                  >
-                    💡 &ldquo;{t.starterPrompt1}&rdquo;
-                  </button>
-                  <button
-                    onClick={() => handleSendMessage(t.starterPrompt2)}
-                    className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 hover:border-cyan-500/60 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-50/30 transition-all cursor-pointer shadow-2xs"
-                  >
-                    🌿 &ldquo;{t.starterPrompt2}&rdquo;
-                  </button>
-                  <button
-                    onClick={() => handleSendMessage(t.starterPrompt3)}
-                    className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 hover:border-amber-500/60 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50/30 transition-all cursor-pointer shadow-2xs"
-                  >
-                    📜 &ldquo;{t.starterPrompt3}&rdquo;
-                  </button>
+                {!user && (
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <p className="text-[12.5px] text-muted">
+                      {t.aiConsultationSubtitle || 'Sign in to save & resume AI consultations.'}
+                    </p>
+                    <button
+                      onClick={() => setShowAuthModal(true)}
+                      className="rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-accent-fg transition-colors hover:bg-accent-hover"
+                    >
+                      Sign In
+                    </button>
+                  </div>
+                )}
+
+                <div className="rounded-lg border border-line bg-sunken px-4 py-2 text-[11.5px] font-medium text-muted">
+                  {t.emptyStateTitle || 'Query the 9-language Ayurvedic IP assistant'}
                 </div>
-              </div>
-            )}
+
+                <p className="max-w-sm text-[13px] leading-relaxed text-muted">
+                  {t.emptyStateSubtitle ||
+                    'Ask about patents, traditional knowledge, ABS, GI, trademarks, regulatory classification, or international IP requirements.'}
+                </p>
+
+                {/* Suggested prompts */}
+                <div className="flex w-full max-w-2xl flex-wrap justify-center gap-2">
+                  {[
+                    t.starterPrompt1 || 'Can I patent this Ayurvedic formulation?',
+                    t.starterPrompt2 || 'Does this formulation require ABS clearance from NBA?',
+                    t.starterPrompt3 || 'What IP protection is available for our Ayurvedic product?',
+                  ].map((prompt, i) => (
+              <button
+                key={i}
+                onClick={() => handleSendMessage(prompt)}
+                className="rounded-md border border-line bg-sunken px-3.5 py-2 text-[12px] leading-snug text-muted transition-colors hover:border-accent-line hover:bg-accent-soft hover:text-ink"
+              >
+                {prompt}
+              </button>
+            ))}
+        </div>
+      </div>
+    )}
 
             {/* Chat Messages */}
             {chatHistory.map((item, idx) => (
-              <div key={idx} className={`flex ${item.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div
+                key={idx}
+                className={`animate-enter flex ${item.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                style={staggerFor(idx)}
+              >
                 {item.sender === 'user' ? (
-                  <div className="max-w-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl px-4 py-2.5 shadow-sm text-xs font-medium leading-relaxed">
+                  <div className="max-w-[88%] whitespace-pre-wrap rounded-lg bg-accent px-4 py-2.5 text-[13.5px] leading-relaxed text-accent-fg sm:max-w-[42ch]">
                     {item.text}
                   </div>
                 ) : item.data ? (
-                  <div className="w-full glass-panel p-4 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800/80 border-l-4 border-l-emerald-500 bg-white/95 dark:bg-slate-950/90 shadow-sm text-xs">
+                  <div className="w-full space-y-4 rounded-lg border border-line border-l-2 border-l-accent bg-surface p-4 sm:space-y-5 sm:p-5 lg:p-6">
 
-                    {/* Message Header Bar */}
-                    <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                        <span className="font-extrabold text-slate-900 dark:text-slate-200 uppercase tracking-wider text-[10px]">
-                          IP-SAKTI Legal Guidance
-                        </span>
-                      </div>
-                      
+                    {/* Message Header Bar with Voice Button */}
+                    <div className="flex items-center justify-between gap-3 border-b border-line-subtle pb-3.5">
                       <div className="flex items-center gap-2">
-                        {speakingIdx === idx && (
-                          <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold text-[9px] flex items-center gap-1 animate-pulse border border-emerald-300 dark:border-emerald-800">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                            <span>Voice Playing</span>
-                          </span>
-                        )}
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
-                          Statutory Assessment
-                        </span>
+                        <span className="status-dot status-dot-ok" aria-hidden="true" />
+                        <span className="eyebrow">IP-SAKTI Legal Guidance</span>
                       </div>
+                      <button
+                        onClick={() => speakText(item.data!.answer, idx)}
+                        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                          speakingIdx === idx
+                            ? 'border-danger-line bg-danger-soft text-danger'
+                            : 'border-line text-muted hover:border-line-strong hover:text-ink'
+                        }`}
+                      >
+                        {speakingIdx === idx ? <StopIcon size={12} /> : <VolumeIcon size={12} />}
+                        {speakingIdx === idx ? 'Stop' : 'Listen (TTS)'}
+                      </button>
                     </div>
 
-                    {/* Safe Abstention / Insufficient Evidence Warning */}
+                    {/* Safe Abstention Warning */}
                     {item.data.safe_abstention && (
-                      <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-900 dark:text-rose-200 text-xs space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 font-bold">
-                            <span className="text-sm">⚠️</span>
-                            <span>Safe Abstention — Insufficient Authoritative Evidence</span>
-                          </div>
-                          <span className="px-2 py-0.5 rounded-full bg-rose-200/80 dark:bg-rose-900/80 text-rose-800 dark:text-rose-200 text-[10px] font-bold">
-                            Confidence: Low
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-rose-800/90 dark:text-rose-300/90 leading-relaxed">
-                          {item.data.confidence_explanation || "I don't have enough authoritative evidence to provide a reliable answer for this specific case."}
-                        </p>
+                      <div className="flex items-start gap-2.5 rounded-md border border-danger-line bg-danger-soft px-4 py-3.5 text-[12.5px] leading-relaxed text-danger">
+                        <AlertIcon size={15} className="mt-0.5 shrink-0" />
+                        <div>{item.data.confidence_explanation}</div>
                       </div>
                     )}
 
-                    {/* Human IP Facilitator Escalation Card */}
-                    {(item.data.requires_human_escalation || item.data.safe_abstention || (item.data.confidence_score !== undefined && item.data.confidence_score < 0.75)) && (
-                      <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-emerald-500/5 to-teal-500/10 border border-amber-500/30 dark:border-amber-500/25 space-y-2.5 shadow-2xs">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div className="flex items-start sm:items-center gap-2">
-                            <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 text-sm">
-                              ⚖️
-                            </div>
-                            <div>
-                              <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                                <span>Need expert assistance?</span>
-                                {item.data.confidence_score !== undefined && (
-                                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
-                                    item.data.confidence_score >= 0.75
-                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                      : item.data.confidence_score >= 0.45
-                                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                                      : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                                  }`}>
-                                    Confidence: {item.data.confidence_score >= 0.75 ? 'High' : item.data.confidence_score >= 0.45 ? 'Medium' : 'Low'}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-tight mt-0.5">
-                                This case contains questions or evidence that may benefit from review by an IP facilitator.
-                              </p>
-                            </div>
+                    {/* Human Escalation Warning */}
+                    {item.data.requires_human_escalation && (
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-warn-line bg-warn-soft px-4 py-3.5 text-[12.5px] leading-relaxed text-warn">
+                        <div className="flex items-start gap-2.5">
+                          <ScalesIcon size={15} className="mt-0.5 shrink-0" />
+                          <div>
+                            <strong className="font-semibold">Human Legal Review Recommended:</strong>{' '}
+                            Novel biological claims or cross-border statutory considerations.
                           </div>
-                          <button
-                            onClick={() => setShowDossierModal(true)}
-                            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 text-white font-bold text-[11px] shadow-sm hover:shadow transition-all cursor-pointer whitespace-nowrap self-start sm:self-center flex items-center gap-1.5 active:scale-95"
-                          >
-                            <span>Request Human Review</span>
-                            <span>➔</span>
-                          </button>
                         </div>
+                        <button
+                          onClick={() => setShowDossierModal(true)}
+                          className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-warn px-2.5 py-1.5 text-[11px] font-semibold text-canvas transition-opacity hover:opacity-90"
+                        >
+                          Export Dossier
+                          <ArrowRightIcon size={12} />
+                        </button>
                       </div>
                     )}
 
                     {/* Rendered Guidance Payload */}
-                    <div className="prose dark:prose-invert max-w-none text-xs leading-relaxed text-slate-800 dark:text-slate-200 whitespace-pre-wrap font-sans">
-                      {item.data.answer}
-                    </div>
-
-                    {/* Potential Prior-Art & Similar Patent Matches Section */}
-                    {item.data.prior_art_matches && item.data.prior_art_matches.length > 0 && (
-                      <div className="p-3.5 rounded-xl bg-gradient-to-r from-slate-50 via-teal-50/20 to-slate-50 dark:from-slate-900/90 dark:via-teal-950/20 dark:to-slate-900/90 border border-teal-500/30 dark:border-teal-500/25 space-y-3 shadow-2xs">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-teal-500/20 pb-2">
-                          <div className="text-xs font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-md bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center text-xs">
-                              🔬
-                            </span>
-                            <span>Matching Patents & Prior-Art Disclosures ({item.data.prior_art_matches.length})</span>
-                          </div>
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                            {t.priorArtNotice}
-                          </span>
-                        </div>
-
-                        <div className="space-y-2.5">
-                          {item.data.prior_art_matches.map((match, mIdx) => (
-                            <div
-                              key={mIdx}
-                              className="p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200/90 dark:border-slate-800/90 space-y-2 shadow-xs hover:border-teal-500/40 transition-all"
-                            >
-                              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                                <div className="space-y-1">
-                                  {match.publication_number && (
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="px-2 py-0.5 rounded-md bg-teal-100 dark:bg-teal-950 text-teal-900 dark:text-teal-300 font-mono font-black text-[10px] border border-teal-300 dark:border-teal-800/60">
-                                        📜 {match.publication_number}
-                                      </span>
-                                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
-                                        {match.jurisdiction} {match.country ? `(${match.country})` : ''}
-                                      </span>
-                                      {match.filing_date && (
-                                        <span className="text-[9px] text-slate-400 dark:text-slate-500">
-                                          • Filed: {match.filing_date}
-                                        </span>
-                                      )}
-                                    </div>
-                                  )}
-                                  <div className="font-bold text-xs text-slate-900 dark:text-slate-100 leading-snug">
-                                    {match.title}
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                    match.match_category === 'Strong potential prior-art relevance'
-                                      ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800/60'
-                                      : match.match_category === 'Related traditional knowledge'
-                                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800/60'
-                                      : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/60'
-                                  }`}>
-                                    {match.match_category}
-                                  </span>
-                                  <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-[10px] font-mono font-bold">
-                                    {Math.round(match.relevance_score * 100)}% Match
-                                  </span>
-                                </div>
-                              </div>
-
-                              {match.matched_features && match.matched_features.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Overlap:</span>
-                                  {match.matched_features.map((feat, fIdx) => (
-                                    <span
-                                      key={fIdx}
-                                      className="px-2 py-0.5 rounded-md bg-teal-50 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800/50 text-teal-800 dark:text-teal-300 text-[9px] font-medium"
-                                    >
-                                      {feat}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-
-                              {match.explanation && (
-                                <div className="text-[11px] text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/80 p-2.5 rounded-lg border border-slate-200/70 dark:border-slate-800/80 leading-relaxed">
-                                  {match.explanation}
-                                </div>
-                              )}
-
-                              {match.source_url && (
-                                <div className="pt-1 flex justify-end">
-                                  <a
-                                    href={match.source_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-900 hover:bg-teal-50 dark:hover:bg-teal-950/60 border border-slate-200 dark:border-slate-800 hover:border-teal-500/50 text-teal-700 dark:text-teal-400 text-[10px] font-bold flex items-center gap-1.5 transition-all shadow-2xs"
-                                  >
-                                    <span>🔍 View Official Patent Record on Google Patents / InPASS</span>
-                                    <span>↗</span>
-                                  </a>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
+                    <div className="legal-prose">{item.data.answer}</div>
 
                     {/* Prominent Dynamic Question Box with 1-Click Option Chips */}
                     {item.data.next_question && (
-                      <div className="p-3 rounded-xl bg-emerald-50/90 dark:bg-gradient-to-r dark:from-emerald-950/70 dark:via-teal-950/50 dark:to-slate-950 border border-emerald-500/40 space-y-2 shadow-2xs">
-                        <div className="flex items-center justify-between">
-                          <div className="text-[10px] font-extrabold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                            <span>⚡ {t.caseClarification}</span>
-                          </div>
-                          <span className="text-[9px] text-amber-800 dark:text-amber-400 font-mono font-bold bg-amber-100 dark:bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-300 dark:border-amber-800/50">
-                            {t.selectToProceed}
-                          </span>
+                      <div className="space-y-3.5 rounded-md border border-accent-line bg-accent-soft p-5">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="eyebrow text-accent-ink">Case Clarification</span>
+                          <span className="mono-caps text-faint">Select to proceed</span>
                         </div>
 
-                        <p className="text-xs font-bold text-slate-900 dark:text-slate-100 leading-snug">
+                        <p className="text-[14px] font-medium leading-relaxed text-ink">
                           {item.data.next_question}
                         </p>
 
-                        {/* Clickable Option Chips + Custom Type Support */}
-                        <div className="flex flex-wrap gap-1.5 pt-0.5">
-                          {item.data.suggested_options && item.data.suggested_options.length > 0 && item.data.suggested_options.map((option, optIdx) => (
+                        {/* Clickable Option Chips */}
+                        {item.data.suggested_options && item.data.suggested_options.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {item.data.suggested_options.map((option, optIdx) => (
+                              <button
+                                key={optIdx}
+                                onClick={() => handleOptionChipClick(option)}
+                                className="rounded-md border border-accent-line bg-surface px-3.5 py-2 text-[12px] font-medium text-accent-ink transition-colors hover:border-accent hover:bg-accent hover:text-accent-fg"
+                              >
+                                {option}
+                              </button>
+                            ))}
                             <button
-                              key={optIdx}
-                              onClick={() => handleOptionChipClick(option)}
-                              className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-500 dark:hover:text-slate-950 transition-all shadow-2xs active:scale-95 flex items-center gap-1 cursor-pointer"
+                              onClick={() => handleOptionChipClick('✏️ Type Custom Answer')}
+                              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-dashed border-line-strong bg-surface px-3.5 py-2 text-[12px] font-medium text-muted transition-colors hover:border-accent-line hover:bg-accent-soft hover:text-ink"
                             >
-                              <span>{option.startsWith('✍️') ? '✍️' : '👉'}</span>
-                              <span>{option.replace(/^✍️\s*/, '')}</span>
+                              <PencilIcon size={13} />
+                              {t.typeCustomAnswer || 'Type Custom Answer'}
                             </button>
-                          ))}
-                          <button
-                            onClick={() => handleOptionChipClick('✍️ Type Custom Answer')}
-                            className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-950 hover:border-emerald-500/50 transition-all shadow-2xs active:scale-95 flex items-center gap-1 cursor-pointer"
-                          >
-                            <span>✍️</span>
-                            <span>{t.typeCustomAnswer}</span>
-                          </button>
-                        </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="max-w-md glass-panel p-2.5 text-xs text-rose-600 dark:text-rose-400 border-rose-300 dark:border-rose-800">
+                  <div className="max-w-md rounded-md border border-danger-line bg-danger-soft px-4 py-3 text-[12.5px] leading-relaxed text-danger">
                     {item.text}
                   </div>
                 )}
@@ -1204,358 +1160,346 @@ export default function ChatPage() {
             ))}
 
             {(loading || isUploadingDoc) && (
-              <div className="flex items-center gap-2.5 text-emerald-700 dark:text-emerald-400 text-xs p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-emerald-500/30">
-                <div className="w-3.5 h-3.5 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
-                <span className="font-semibold">
-                  {isUploadingDoc ? t.extractingDoc : t.retrievingSources}
-                </span>
+              <div className="animate-liftIn space-y-3 rounded-md border border-line bg-sunken px-5 py-5">
+                <div className="flex items-center gap-3 text-[12.5px] text-muted">
+                  <span
+                    className="h-3.5 w-3.5 shrink-0 animate-spin-slow rounded-full border-2 border-line-strong border-t-accent"
+                    aria-hidden="true"
+                  />
+                  <span>
+                    {isUploadingDoc
+                      ? 'Extracting document text via OCR and updating case state...'
+                      : 'Retrieving statutory RAG context & running Groq reasoning...'}
+                  </span>
+                </div>
+                <div className="space-y-2" aria-hidden="true">
+                  <div className="skeleton h-2.5 w-11/12 rounded-full" />
+                  <div className="skeleton h-2.5 w-full rounded-full" />
+                  <div className="skeleton h-2.5 w-7/12 rounded-full" />
+                </div>
               </div>
             )}
             <div ref={chatBottomRef} />
+            </div>
           </div>
 
           {/* =================================================================== */}
           {/* STICKY CHAT INPUT BAR */}
           {/* =================================================================== */}
-          <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 space-y-1.5 shrink-0">
+          <div className="shrink-0 border-t border-line px-4 py-4 sm:px-6 sm:py-5 lg:px-7">
+            <div className="mx-auto w-full max-w-[860px] xl:max-w-[960px]">
             {isListening && (
-              <div className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-950/60 border border-rose-400 dark:border-rose-500/50 text-rose-800 dark:text-rose-300 text-[11px] flex items-center justify-between animate-pulse">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                  <span>{t.listeningText}</span>
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-danger-line bg-danger-soft px-4 py-3 text-[12px] text-danger">
+                <div className="flex items-center gap-2">
+                  <span className="status-dot status-dot-danger animate-pulse-soft" aria-hidden="true" />
+                  <span>Listening... Speak your query clearly.</span>
                 </div>
-                <span className="font-mono text-[10px] text-rose-700 dark:text-rose-400">{transcript}</span>
+                <span className="mono-caps truncate opacity-80">{transcript}</span>
               </div>
             )}
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               {/* Document Upload Button */}
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploadingDoc}
-                className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-slate-800 transition-all flex items-center justify-center cursor-pointer shrink-0 shadow-2xs"
                 title="Upload Document / PDF / Image (Inline OCR)"
+                aria-label="Upload document"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-line bg-sunken text-muted transition-colors hover:border-line-strong hover:text-ink disabled:opacity-50 sm:h-10 sm:w-10"
               >
-                <svg className="w-4 h-4 text-current" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                </svg>
+                <PaperclipIcon size={16} />
               </button>
 
               {/* Speech-to-Text Microphone Button */}
               <button
                 onClick={toggleListening}
-                className={`p-2.5 rounded-xl border transition-all flex items-center justify-center cursor-pointer shrink-0 shadow-2xs ${
+                title="Voice Input (Speech-to-Text)"
+                aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-md border transition-colors sm:h-10 sm:w-10 ${
                   isListening
-                    ? 'bg-rose-500 text-white border-rose-400 shadow-md ring-2 ring-rose-400/50 animate-pulse'
-                    : 'bg-slate-100 dark:bg-slate-900 border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-slate-800'
+                    ? 'border-danger-line bg-danger-soft text-danger'
+                    : 'border-line bg-sunken text-muted hover:border-line-strong hover:text-ink'
                 }`}
-                title={isListening ? 'Click to stop listening' : 'Voice Input (Speech-to-Text)'}
               >
-                <svg className="w-4 h-4 text-current" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                </svg>
+                <MicIcon size={16} />
               </button>
 
               {/* Query Text Input */}
               <input
-                ref={chatInputRef}
                 type="text"
-                placeholder={t.inputPlaceholder}
+                placeholder="Ask an Ayurvedic IP question or upload a document..."
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                className="flex-1 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-medium"
+                className="min-w-0 flex-1 rounded-md border border-line bg-surface px-4 py-2.5 text-[13.5px] text-ink placeholder:text-faint"
               />
 
               {/* Send Button */}
               <button
                 onClick={() => handleSendMessage()}
                 disabled={loading || !inputMessage.trim()}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white dark:text-slate-950 font-bold text-xs hover:from-emerald-400 hover:to-teal-500 disabled:opacity-50 transition-all shadow-xs cursor-pointer shrink-0"
+                className="inline-flex h-11 shrink-0 items-center gap-2 rounded-md bg-accent px-5 text-[13px] font-medium text-accent-fg transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40 sm:h-10"
               >
-                {t.sendButton}
+                Send
+                <ArrowRightIcon size={14} />
               </button>
             </div>
 
             {/* Clean Disclaimer Footnote */}
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center truncate">
-              {t.disclaimer}
+            <p className="mt-3.5 truncate text-center text-[10.5px] text-faint">
+              <strong className="font-semibold text-muted">Disclaimer:</strong> IP-SAKTI Sahayak
+              provides statutory information under SIH PS-26045. It does not replace professional
+              legal counsel.
             </p>
+            </div>
           </div>
         </div>
 
         {/* ===================================================================== */}
         {/* COMPACT CASE CONTEXT SIDEBAR (Col 4 / ~28% on desktop) */}
         {/* ===================================================================== */}
-        <div className={`lg:col-span-4 xl:col-span-3 flex flex-col glass-panel p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 overflow-y-auto space-y-3 shadow-xs text-xs min-h-0 h-full max-h-full ${
-          showMobileSidebar ? 'flex fixed inset-x-4 top-20 bottom-4 z-40 bg-white dark:bg-slate-900' : 'hidden lg:flex'
-        }`}>
+        {/* Mobile backdrop for the context drawer */}
+        {showMobileSidebar && (
+          <div
+            onClick={() => setShowMobileSidebar(false)}
+            aria-hidden="true"
+            className="animate-fadeIn fixed inset-0 z-40 bg-ink/40 lg:hidden"
+          />
+        )}
 
+        <div
+          className={`panel overflow-y-auto pb-[env(safe-area-inset-bottom)] lg:col-span-4 lg:flex lg:rounded-lg xl:col-span-3 ${
+            showMobileSidebar
+              ? 'animate-liftIn fixed inset-y-0 right-0 z-50 flex w-[min(380px,92vw)] rounded-l-lg border-y-0 border-r-0 p-4'
+              : 'hidden lg:flex'
+          } flex-col gap-4 p-4 text-[12.5px] sm:p-5`}
+        >
           {/* Sidebar Header with Coverage Confidence */}
-          <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800 shrink-0">
-            <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px]">
-                {t.caseContextTitle}
-              </span>
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line pb-4">
+            <div className="flex items-center gap-2.5">
+              <h3 className="eyebrow">Case Context</h3>
               {showMobileSidebar && (
                 <button
                   onClick={() => setShowMobileSidebar(false)}
-                  className="lg:hidden ml-2 px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-[10px] font-bold"
+                  aria-label="Close case context"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[11px] text-muted lg:hidden"
                 >
-                  ✕ Close
+                  <XIcon size={11} /> Close
                 </button>
               )}
             </div>
 
             {/* Coverage Confidence Badge */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{t.coverageLabel}:</span>
-              <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
-                latestResponse?.confidence_score && latestResponse.confidence_score >= 0.5
-                  ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800'
-                  : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
-              }`}>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-faint">Coverage</span>
+              <span
+                className={`chip ${
+                  latestResponse?.confidence_score && latestResponse.confidence_score >= 0.5
+                    ? 'chip-ok'
+                    : 'chip-warn'
+                }`}
+              >
                 {latestResponse ? `${Math.round(latestResponse.confidence_score * 100)}%` : 'N/A'}
               </span>
             </div>
           </div>
 
           {/* SECTION 1: COMPACT CASE CONTEXT ROWS */}
-          <div className="space-y-1.5 bg-slate-50/70 dark:bg-slate-950/60 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800/80 shrink-0">
-            {/* Jurisdiction */}
-            <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">{t.jurisdictionLabel}</span>
-              <span className="font-bold text-slate-800 dark:text-slate-200">
-                {jurisdiction} {country ? `(${country})` : ''}
-              </span>
-            </div>
-
-            {/* Formulation Tier */}
-            <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">{t.formulationLabel}</span>
+          <div className="panel-sunken p-4">
+            <Row label="Jurisdiction">
+              {jurisdiction} {country ? `(${country})` : ''}
+            </Row>
+            <Row label="Formulation" last={false}>
               <button
                 onClick={() => setShowPathwayModal(true)}
-                className="font-bold text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer truncate max-w-[140px]"
+                className="inline-flex max-w-[150px] items-center gap-1.5 text-left font-medium text-accent-ink hover:underline"
                 title="Change formulation tier"
               >
                 <span className="truncate">{activeTier.shortLabel || activeTier.label}</span>
-                <span className="text-[9px]">✎</span>
+                <PencilIcon size={10} className="shrink-0 opacity-60" />
               </button>
-            </div>
-
-            {/* Classical Basis */}
-            <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">{t.classicalBasisLabel}</span>
-              <span className={`font-medium ${caseState?.classical_reference ? 'text-slate-800 dark:text-slate-200' : 'text-amber-700 dark:text-amber-400'}`}>
-                {caseState?.classical_reference || t.unspecified}
-              </span>
-            </div>
-
-            {/* Active Herbs */}
-            <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">{t.activeHerbsLabel}</span>
-              <span className={`font-medium truncate max-w-[130px] ${caseState?.ingredients && caseState.ingredients.length > 0 ? 'text-slate-800 dark:text-slate-200' : 'text-amber-700 dark:text-amber-400'}`}>
-                {caseState?.ingredients && caseState.ingredients.length > 0 ? caseState.ingredients.join(', ') : t.notSpecified}
-              </span>
-            </div>
-
-            {/* TK Involved */}
-            <div className="flex items-center justify-between py-1 text-[11px] border-b border-slate-200/50 dark:border-slate-800/50">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">{t.tkInvolvedLabel}</span>
-              <span className="font-semibold text-slate-800 dark:text-slate-200">
-                {caseState?.traditional_knowledge_involved === true
-                  ? t.tkYes
-                  : caseState?.traditional_knowledge_involved === false
-                  ? t.tkNo
-                  : t.tkUncertain}
-              </span>
-            </div>
-
-            {/* Biological Resources */}
-            <div className="flex items-center justify-between py-1 text-[11px]">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">{t.bioResourcesLabel}</span>
-              <span className="font-semibold text-slate-800 dark:text-slate-200">
-                {caseState?.biological_resources_involved === true
-                  ? t.bioYes
-                  : caseState?.biological_resources_involved === false
-                  ? t.bioNo
-                  : t.bioUncertain}
-              </span>
-            </div>
+            </Row>
+            <Row label="Classical Basis" warn={!caseState?.classical_reference}>
+              {caseState?.classical_reference || 'Unspecified'}
+            </Row>
+            <Row label="Active Herbs" warn={!caseState?.ingredients?.length}>
+              {caseState?.ingredients && caseState.ingredients.length > 0
+                ? caseState.ingredients.join(', ')
+                : 'Not specified'}
+            </Row>
+            <Row label="TK Involved" last={false}>
+              {caseState?.traditional_knowledge_involved === true
+                ? 'Yes (Prior Art)'
+                : caseState?.traditional_knowledge_involved === false
+                  ? 'No (Novel)'
+                  : 'Uncertain'}
+            </Row>
+            <Row label="Bio Resources (ABS)" last>
+              {caseState?.biological_resources_involved === true
+                ? 'Yes (NBA Clearance)'
+                : caseState?.biological_resources_involved === false
+                  ? 'No Indian Bio'
+                  : 'Uncertain'}
+            </Row>
           </div>
 
           {/* SECTION 2: COLLAPSIBLE CASE PARAMETERS ACCORDION */}
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 overflow-hidden shrink-0">
-            <button
-              onClick={() => setIsParamsOpen(!isParamsOpen)}
-              className="w-full px-3 py-2 bg-slate-50/90 dark:bg-slate-950/80 flex items-center justify-between text-left hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors cursor-pointer"
-            >
-              <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] flex items-center gap-1.5">
-                <span>{isParamsOpen ? '▾' : '▸'}</span>
-                <span>{t.caseParametersTitle}</span>
+          <Accordion
+            open={isParamsOpen}
+            onToggle={() => setIsParamsOpen(!isParamsOpen)}
+            title="Case Parameters"
+            trailing={
+              <span className="text-[11px] text-faint">
+                {isParamsOpen ? `${knownCount}/${totalParams} gathered` : `${missingCount} needed`}
               </span>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                {isParamsOpen ? `${knownCount}/${totalParams} ${t.gatheredCount}` : `${missingCount} ${t.neededCount}`}
-              </span>
-            </button>
-
-            {isParamsOpen && (
-              <div className="p-2.5 space-y-2 bg-white dark:bg-slate-900/40 text-[10px] border-t border-slate-200 dark:border-slate-800">
-                {/* Progress bar */}
-                <div className="space-y-1 pb-1">
-                  <div className="flex justify-between text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
-                    <span>{t.progressLabel}</span>
-                    <span>{completionPct}%</span>
-                  </div>
-                  <div className="w-full bg-slate-100 dark:bg-slate-950 rounded-full h-1 overflow-hidden">
-                    <div
-                      className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-300"
-                      style={{ width: `${completionPct}%` }}
-                    />
-                  </div>
+            }
+          >
+            <div className="space-y-3.5 p-4">
+              {/* Progress bar */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="eyebrow">Progress</span>
+                  <span className="mono-caps text-muted">{completionPct}%</span>
                 </div>
-
-                {/* Known items */}
-                {caseState?.known_information && caseState.known_information.length > 0 && (
-                  <div className="space-y-1">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                      {t.gatheredLabel}
-                    </span>
-                    {caseState.known_information.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-1 text-slate-700 dark:text-slate-300">
-                        <span className="text-emerald-500">✓</span>
-                        <span className="truncate">{item}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Missing items */}
-                {caseState?.missing_information && caseState.missing_information.length > 0 && (
-                  <div className="space-y-1 pt-1 border-t border-slate-100 dark:border-slate-800">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
-                      {t.pendingClarificationLabel}
-                    </span>
-                    {caseState.missing_information.map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-1 text-slate-600 dark:text-slate-400">
-                        <span className="text-amber-500">○</span>
-                        <span className="truncate">{item}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <div
+                  className="h-1.5 w-full overflow-hidden rounded-full bg-line"
+                  role="progressbar"
+                  aria-valuenow={completionPct}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Case parameter coverage"
+                >
+                  <div
+                    className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out"
+                    style={{ width: `${completionPct}%` }}
+                  />
+                </div>
               </div>
-            )}
-          </div>
+
+              {/* Known items */}
+              {caseState?.known_information && caseState.known_information.length > 0 && (
+                <div className="space-y-1.5">
+                  <span className="eyebrow text-ok">Gathered</span>
+                  {caseState.known_information.map((item, idx) => (
+                    <div key={idx} className="flex items-start gap-2 text-[12px] leading-snug text-muted">
+                      <CheckIcon size={12} className="mt-0.5 shrink-0 text-ok" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Missing items */}
+              {caseState?.missing_information && caseState.missing_information.length > 0 && (
+                <div className="space-y-1.5 border-t border-line-subtle pt-3">
+                  <span className="eyebrow text-warn">Pending Clarification</span>
+                  {caseState.missing_information.map((item, idx) => (
+                    <div key={idx} className="flex items-start gap-2 text-[12px] leading-snug text-faint">
+                      <CircleIcon size={12} className="mt-0.5 shrink-0 text-warn" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Accordion>
 
           {/* SECTION 3: COLLAPSIBLE IP DOMAINS ACCORDION */}
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 overflow-hidden shrink-0">
-            <button
-              onClick={() => setIsIpDomainsOpen(!isIpDomainsOpen)}
-              className="w-full px-3 py-2 bg-slate-50/90 dark:bg-slate-950/80 flex items-center justify-between text-left hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors cursor-pointer"
-            >
-              <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] flex items-center gap-1.5">
-                <span>{isIpDomainsOpen ? '▾' : '▸'}</span>
-                <span>{t.ipDomainsTitle}</span>
+          <Accordion
+            open={isIpDomainsOpen}
+            onToggle={() => setIsIpDomainsOpen(!isIpDomainsOpen)}
+            title="IP Domains"
+            trailing={
+              <span className={activeDomainsCount > 0 ? 'chip chip-accent' : 'chip chip-neutral'}>
+                {activeDomainsCount} active
               </span>
-              <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                activeDomainsCount > 0
-                  ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400'
-                  : 'text-slate-400 dark:text-slate-500'
-              }`}>
-                {activeDomainsCount} {t.activeCount}
-              </span>
-            </button>
-
-            {isIpDomainsOpen && (
-              <div className="p-2 space-y-1 bg-white dark:bg-slate-900/40 border-t border-slate-200 dark:border-slate-800">
-                {allIpDomains.map((dom) => {
-                  const isRelevant = latestResponse?.relevant_ip_domains.includes(dom.id);
-                  return (
-                    <div
-                      key={dom.id}
-                      className={`px-2 py-1 rounded-md flex items-center justify-between text-[10px] transition-all ${
-                        isRelevant
-                          ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-200 font-semibold'
-                          : 'text-slate-500 dark:text-slate-400 opacity-70'
-                      }`}
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <span>{dom.icon}</span>
-                        <span>{dom.label}</span>
-                      </span>
-                      <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold ${
-                        isRelevant
-                          ? 'bg-emerald-500 text-white dark:text-slate-950 font-black'
-                          : 'text-slate-400 dark:text-slate-500'
-                      }`}>
-                        {isRelevant ? 'ON' : 'Off'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+            }
+          >
+            <div className="space-y-1 p-2.5">
+              {allIpDomains.map((dom) => {
+                const isRelevant = latestResponse?.relevant_ip_domains.includes(dom.id);
+                const Icon = dom.icon;
+                return (
+                  <div
+                    key={dom.id}
+                    className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-[12px] transition-colors ${
+                      isRelevant ? 'bg-accent-soft text-accent-ink' : 'text-faint'
+                    }`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <Icon size={13} className="shrink-0" />
+                      <span className="truncate">{dom.label}</span>
+                    </span>
+                    <span className="shrink-0">
+                      {isRelevant ? (
+                        <span className="chip chip-accent">ON</span>
+                      ) : (
+                        <span className="text-[11px] text-faint">Off</span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </Accordion>
 
           {/* SECTION 4: COLLAPSIBLE VERIFIED CITATIONS ACCORDION */}
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 overflow-hidden shrink-0">
-            <button
-              onClick={() => setIsSourcesOpen(!isSourcesOpen)}
-              className="w-full px-3 py-2 bg-slate-50/90 dark:bg-slate-950/80 flex items-center justify-between text-left hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors cursor-pointer"
-            >
-              <span className="font-bold text-slate-800 dark:text-slate-200 text-[11px] flex items-center gap-1.5">
-                <span>{isSourcesOpen ? '▾' : '▸'}</span>
-                <span>{t.verifiedSourcesTitle}</span>
-              </span>
-              <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                citationsCount > 0
-                  ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400'
-                  : 'text-slate-400 dark:text-slate-500'
-              }`}>
+          <Accordion
+            open={isSourcesOpen}
+            onToggle={() => setIsSourcesOpen(!isSourcesOpen)}
+            title="Verified Sources"
+            trailing={
+              <span className={citationsCount > 0 ? 'chip chip-accent' : 'chip chip-neutral'}>
                 {citationsCount}
               </span>
-            </button>
-
-            {isSourcesOpen && (
-              <div className="p-2 space-y-2 bg-white dark:bg-slate-900/40 text-[10px] border-t border-slate-200 dark:border-slate-800">
-                {latestResponse?.citations && latestResponse.citations.length > 0 ? (
-                  latestResponse.citations.map((c, cIdx) => (
-                    <div key={cIdx} className="p-2 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1">
-                      <div className="flex items-start justify-between gap-1">
-                        <span className="font-bold text-slate-900 dark:text-slate-200 truncate">{c.source}</span>
-                        <span className={`px-1 py-0.2 rounded text-[8px] font-extrabold uppercase shrink-0 ${
-                          c.is_authoritative
-                            ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400'
-                            : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                        }`}>
-                          {c.is_authoritative ? t.authBadge : t.refBadge}
+            }
+          >
+            <div className="max-h-72 space-y-2.5 overflow-y-auto p-3">
+              {latestResponse?.citations && latestResponse.citations.length > 0 ? (
+                latestResponse.citations.map((c, cIdx) => (
+                  <div key={cIdx} className="panel-sunken space-y-2 p-3.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-[12px] font-medium leading-snug text-ink">{c.source}</span>
+                      <span
+                        className={`chip shrink-0 ${c.is_authoritative ? 'chip-ok' : 'chip-neutral'}`}
+                      >
+                        {c.is_authoritative ? 'Auth' : 'Ref'}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="mono-caps truncate text-accent-ink">
+                        {c.section_or_rule || 'Statutory Section'}
+                      </span>
+                      {c.support_status && (
+                        <span
+                          className={`chip shrink-0 ${
+                            c.support_status === 'SUPPORTED'
+                              ? 'chip-ok'
+                              : c.support_status === 'PARTIALLY_SUPPORTED'
+                                ? 'chip-warn'
+                                : c.support_status === 'UNSUPPORTED'
+                                  ? 'chip-danger'
+                                  : 'chip-neutral'
+                          }`}
+                        >
+                          {c.support_status}
                         </span>
-                      </div>
-                      <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-400 font-mono text-[9px]">
-                        <span className="truncate">{c.section_or_rule || 'Statutory Section'}</span>
-                        {c.support_status && (
-                          <span className="text-[8px] font-bold text-emerald-700 dark:text-emerald-400">
-                            {c.support_status}
-                          </span>
-                        )}
-                      </div>
-                      {c.snippet && (
-                        <div className="text-slate-600 dark:text-slate-400 text-[9px] line-clamp-2 italic bg-white dark:bg-slate-900/60 p-1 rounded border border-slate-200/60 dark:border-slate-800/60">
-                          &ldquo;{c.snippet}&rdquo;
-                        </div>
                       )}
                     </div>
-                  ))
-                ) : (
-                  <div className="text-slate-500 text-[10px] italic p-2 text-center">
-                    {t.citationsEmpty}
+                    {c.snippet && (
+                      <p className="border-l-2 border-line-strong pl-2.5 text-[11.5px] leading-relaxed text-faint italic">
+                        &ldquo;{c.snippet}&rdquo;
+                      </p>
+                    )}
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-
+                ))
+              ) : (
+                <p className="p-3 text-center text-[11.5px] text-faint italic">
+                  Citations appear when a query is submitted.
+                </p>
+              )}
+            </div>
+          </Accordion>
         </div>
       </div>
 
@@ -1587,11 +1531,82 @@ export default function ChatPage() {
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         onSuccess={() => {
+          setShowAuthModal(false);
           fetchUserCases();
         }}
-        title="Sign In to Save Consultations"
-        subtitle="Sign in with Google or email so your consultations and case history are saved and accessible anytime."
+        title="Sign In to Save & Resume Consultations"
+        subtitle="Sign in so your cases and chat history are saved to your account and can be resumed across devices."
       />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Local presentational helpers                                       */
+/* ------------------------------------------------------------------ */
+
+function Row({
+  label,
+  children,
+  warn,
+  last,
+}: {
+  label: string;
+  children: React.ReactNode;
+  warn?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-start justify-between gap-3 py-2.5 text-[12px] ${
+        last ? '' : 'border-b border-line-subtle'
+      }`}
+    >
+      <span className="shrink-0 text-faint">{label}</span>
+      <span
+        className={`text-right font-medium leading-snug ${warn ? 'text-warn' : 'text-ink'}`}
+      >
+        {children}
+      </span>
+    </div>
+  );
+}
+
+function Accordion({
+  open,
+  onToggle,
+  title,
+  trailing,
+  children,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  title: string;
+  trailing: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-md border border-line">
+      <button
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 bg-sunken px-4 py-3 text-left transition-colors hover:bg-subtle"
+      >
+        <span className="flex items-center gap-2">
+          <span
+            className={`text-faint transition-transform duration-200 ${
+              open ? 'rotate-0' : '-rotate-90'
+            }`}
+          >
+            <ChevronDownIcon size={13} />
+          </span>
+          <span className="eyebrow">{title}</span>
+        </span>
+        {trailing}
+      </button>
+      <div className="disclosure" data-open={open}>
+        <div>{children}</div>
+      </div>
     </div>
   );
 }

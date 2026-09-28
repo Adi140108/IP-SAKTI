@@ -1,107 +1,531 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ==========================================================================
+   IP-SAKTI DESIGN TOKENS
+   Near-monochrome archival palette + a single accent. Warm neutrals rather
+   than cold slate, so the interface reads as legal/official rather than SaaS.
+   ========================================================================== */
+
 :root {
-  --bg-primary: #090d16;
-  --bg-secondary: #0f172a;
-  --bg-card: rgba(15, 23, 42, 0.8);
-  --bg-card-hover: rgba(30, 41, 59, 0.9);
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-subtle: rgba(255, 255, 255, 0.05);
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --input-bg: #030712;
-  --input-border: #1e293b;
-  --panel-bg: rgba(15, 23, 42, 0.7);
-  --nav-bg: rgba(3, 7, 18, 0.88);
-  --accent-gold: #fbbf24;
-  --accent-emerald: #10b981;
-  --accent-cyan: #06b6d4;
-  --accent-rose: #f43f5e;
+  /* Surfaces */
+  --bg-primary: #fbfaf8;
+  --bg-secondary: #f4f2ee;
+  --bg-card: #ffffff;
+  --bg-card-hover: #ffffff;
+  --bg-sunken: #f4f2ee;
+  --input-bg: #ffffff;
+  --panel-bg: #ffffff;
+  --nav-bg: rgba(251, 250, 248, 0.85);
+
+  /* Lines */
+  --border-color: #e5e1d9;
+  --border-subtle: #efebe4;
+  --border-strong: #d3cdc1;
+  --input-border: #d3cdc1;
+
+  /* Ink */
+  --text-primary: #1a1917;
+  --text-secondary: #57534e;
+  --text-muted: #8a8378;
+  --text-inverse: #ffffff;
+
+  /* Accent — archival green, desaturated */
+  --accent: #14624a;
+  --accent-hover: #0f4d3a;
+  --accent-fg: #ffffff;
+  --accent-soft: #eef4f1;
+  --accent-line: #bcd6cb;
+  --accent-ink: #0f4d3a;
+
+  /* Semantic — status only */
+  --ok: #14624a;
+  --ok-soft: #eef4f1;
+  --ok-line: #bcd6cb;
+  --warn: #8a5a0b;
+  --warn-soft: #fbf3e4;
+  --warn-line: #e6d2a8;
+  --danger: #9b2c2c;
+  --danger-soft: #fbeeee;
+  --danger-line: #e8c4c4;
+  --info: #2c5578;
+  --info-soft: #eef3f8;
+  --info-line: #c2d3e2;
+
+  /* Legacy accent names retained so existing utilities never break */
+  --accent-gold: #8a5a0b;
+  --accent-emerald: #14624a;
+  --accent-cyan: #2c5578;
+  --accent-rose: #9b2c2c;
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px rgba(26, 25, 23, 0.04);
+  --shadow-2: 0 4px 16px -4px rgba(26, 25, 23, 0.1);
+
+  --ring: rgba(20, 98, 74, 0.45);
 }
 
-html.light {
-  --bg-primary: #f8fafc;
-  --bg-secondary: #f1f5f9;
-  --bg-card: rgba(255, 255, 255, 0.92);
-  --bg-card-hover: #ffffff;
-  --border-color: rgba(0, 0, 0, 0.08);
-  --border-subtle: rgba(0, 0, 0, 0.04);
-  --text-primary: #0f172a;
-  --text-secondary: #334155;
-  --text-muted: #64748b;
-  --input-bg: #ffffff;
-  --input-border: #cbd5e1;
-  --panel-bg: rgba(255, 255, 255, 0.85);
-  --nav-bg: rgba(255, 255, 255, 0.92);
+html.dark {
+  --bg-primary: #0b0c0b;
+  --bg-secondary: #121413;
+  --bg-card: #121413;
+  --bg-card-hover: #171917;
+  --bg-sunken: #080908;
+  --input-bg: #0e100f;
+  --panel-bg: #121413;
+  --nav-bg: rgba(11, 12, 11, 0.82);
+
+  --border-color: #232622;
+  --border-subtle: #1a1d1a;
+  --border-strong: #343834;
+  --input-border: #2e322e;
+
+  --text-primary: #edeaE4;
+  --text-secondary: #a8a49b;
+  --text-muted: #77736a;
+  --text-inverse: #0b0c0b;
+
+  --accent: #58b892;
+  --accent-hover: #6ecaa6;
+  --accent-fg: #06120e;
+  --accent-soft: #12201b;
+  --accent-line: #244137;
+  --accent-ink: #8ed4b6;
+
+  --ok: #58b892;
+  --ok-soft: #12201b;
+  --ok-line: #244137;
+  --warn: #d9a441;
+  --warn-soft: #221c10;
+  --warn-line: #43371d;
+  --danger: #e0706e;
+  --danger-soft: #221313;
+  --danger-line: #462525;
+  --info: #7fa9ce;
+  --info-soft: #131c24;
+  --info-line: #253a4c;
+
+  --accent-gold: #d9a441;
+  --accent-emerald: #58b892;
+  --accent-cyan: #7fa9ce;
+  --accent-rose: #e0706e;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 6px 24px -6px rgba(0, 0, 0, 0.6);
+
+  --ring: rgba(88, 184, 146, 0.5);
+}
+
+/* ==========================================================================
+   THEME BRIDGE — maps Tailwind v4 utilities onto the runtime variables so
+   every utility auto-swaps with the theme. No tailwind.config.ts required.
+   ========================================================================== */
+
+@theme inline {
+  --color-canvas: var(--bg-primary);
+  --color-surface: var(--bg-card);
+  --color-raised: var(--bg-card-hover);
+  --color-sunken: var(--bg-sunken);
+  --color-subtle: var(--bg-secondary);
+  --color-line: var(--border-color);
+  --color-line-subtle: var(--border-subtle);
+  --color-line-strong: var(--border-strong);
+
+  --color-ink: var(--text-primary);
+  --color-muted: var(--text-secondary);
+  --color-faint: var(--text-muted);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-line: var(--accent-line);
+  --color-accent-ink: var(--accent-ink);
+
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-ok-line: var(--ok-line);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-line: var(--warn-line);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-line: var(--danger-line);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-line: var(--info-line);
+
+  /* Radii — deliberately small. Kills the rounded-2xl/3xl look app-wide. */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+  --radius-3xl: 14px;
+
+  --shadow-soft: var(--shadow-1);
+  --shadow-lift: var(--shadow-2);
+}
+
+/* ==========================================================================
+   BASE
+   ========================================================================== */
+
+/* Mobile browsers report 100vh as the *largest* viewport, so a full-height
+   app panel ends up taller than the visible area once the URL bar collapses.
+   dvh tracks the real visible height. */
+:root {
+  --app-vh: 100vh;
+  /* Navbar (4rem) + main vertical padding. main uses py-4 below sm, py-6 above. */
+  --chrome-h: 6rem;
+}
+@supports (height: 100dvh) {
+  :root {
+    --app-vh: 100dvh;
+  }
+}
+@media (min-width: 640px) {
+  :root {
+    --chrome-h: 7rem;
+  }
+}
+
+/* Full-height application shell (chat workspace). */
+.app-fill {
+  height: calc(var(--app-vh) - var(--chrome-h));
+}
+
+* {
+  border-color: var(--border-color);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
   margin: 0;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 160ms ease, color 160ms ease;
 }
 
-.glass-panel {
-  background: var(--bg-card);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+@layer base {
+  /* Default interaction feedback for anything without an explicit transition.
+     Tailwind utilities win on specificity where they are applied. */
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  [role='tab'],
+  [role='button'] {
+    transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Gentle press feedback. */
+  button:active:not(:disabled) {
+    transform: scale(0.985);
+  }
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+/* One consistent, visible focus treatment everywhere. */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Scrollbars — present but quiet. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-muted);
+  background-clip: content-box;
+}
+
+/* ==========================================================================
+   TYPE
+   ========================================================================== */
+
+.font-display {
+  font-family: var(--font-display), Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+/* Eyebrow / kicker label */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.mono-caps {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+/* Legal guidance body — replaces the non-functional `prose` utilities.
+   Measure is capped for readability but generous enough to fill a wide column. */
+.legal-prose {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-primary);
+  max-width: 74ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-sans);
+}
+
+@media (min-width: 640px) {
+  .legal-prose {
+    font-size: 15px;
+    line-height: 1.85;
+  }
+}
+
+/* ==========================================================================
+   SURFACES
+   ========================================================================== */
+
+/* Solid surface + hairline border. Replaces the old glassmorphism. */
+.panel {
+  background-color: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 1rem;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.12);
-  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  border-radius: 8px;
 }
 
-html.light .glass-panel {
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.03);
+.panel-sunken {
+  background-color: var(--bg-sunken);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
 }
 
-.glass-panel-interactive {
-  transition: all 0.2s ease-in-out;
-}
-.glass-panel-interactive:hover {
-  background: var(--bg-card-hover);
-  border-color: rgba(16, 185, 129, 0.4);
-  transform: translateY(-2px);
+/* Hairline rule */
+.rule {
+  height: 1px;
+  background-color: var(--border-color);
+  border: 0;
 }
 
-.gradient-text-gold {
-  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+/* Status pill — the only sanctioned pill shape. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  padding: 1px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
 }
 
-.gradient-text-emerald {
-  background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+.chip-ok {
+  background: var(--ok-soft);
+  border-color: var(--ok-line);
+  color: var(--ok);
+}
+.chip-warn {
+  background: var(--warn-soft);
+  border-color: var(--warn-line);
+  color: var(--warn);
+}
+.chip-danger {
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
+  color: var(--danger);
+}
+.chip-info {
+  background: var(--info-soft);
+  border-color: var(--info-line);
+  color: var(--info);
+}
+.chip-neutral {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+.chip-accent {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent-ink);
 }
 
-.badge-india {
-  background: rgba(245, 158, 11, 0.15);
-  color: #d97706;
-  border: 1px solid rgba(245, 158, 11, 0.3);
+/* Small square status marker */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex: none;
+  background-color: var(--text-muted);
+}
+.status-dot-ok { background-color: var(--ok); }
+.status-dot-warn { background-color: var(--warn); }
+.status-dot-danger { background-color: var(--danger); }
+
+/* ==========================================================================
+   MOTION
+   Micro-only: 160-280ms, ease-out, opacity + small translate. No springs,
+   no bounce. Every rule here is neutralised by prefers-reduced-motion below.
+   ========================================================================== */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.badge-international {
-  background: rgba(6, 182, 212, 0.15);
-  color: #0284c7;
-  border: 1px solid rgba(6, 182, 212, 0.3);
+@keyframes liftIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.badge-confidence-high {
-  background: rgba(16, 185, 129, 0.15);
-  color: #059669;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.975) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-.badge-confidence-low {
-  background: rgba(244, 63, 94, 0.15);
-  color: #e11d48;
-  border: 1px solid rgba(244, 63, 94, 0.3);
+@keyframes enterUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes pulseSoft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@keyframes spinSlow {
+  to { transform: rotate(360deg); }
+}
+
+.animate-fadeIn { animation: fadeIn 160ms ease-out both; }
+.animate-liftIn { animation: liftIn 180ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-scaleIn { animation: scaleIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-enter { animation: enterUp 280ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-shimmer { animation: shimmer 1.8s ease-in-out infinite; }
+.animate-pulse-soft { animation: pulseSoft 1.6s ease-in-out infinite; }
+.animate-spin-slow { animation: spinSlow 700ms linear infinite; }
+
+/* Loading placeholder */
+.skeleton {
+  background-image: linear-gradient(
+    90deg,
+    var(--bg-secondary) 25%,
+    var(--border-color) 37%,
+    var(--bg-secondary) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* Smooth height transition for disclosures. Content stays out of the tab
+   order when collapsed (visibility: hidden) so keyboard nav is unaffected.
+   NOTE: named `disclosure`, not `collapse` — `collapse` is a built-in Tailwind
+   utility (visibility: collapse) and would collide with it.
+   `min-height: 0` is required: as a flex item the default `min-height: auto`
+   refuses to shrink below content height, which leaves a clipped half-row. */
+.disclosure {
+  display: grid;
+  grid-template-rows: 0fr;
+  min-height: 0;
+  overflow: hidden;
+  transition: grid-template-rows 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.disclosure > * {
+  overflow: hidden;
+  min-height: 0;
+}
+.disclosure[data-open='true'] {
+  grid-template-rows: 1fr;
+}
+.disclosure[data-open='false'] > * {
+  visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .disclosure {
+    grid-template-rows: 1fr;
+  }
+  .disclosure[data-open='false'] > * {
+    visibility: hidden;
+  }
+}
+
+/* ==========================================================================
+   PRINT — the dossier must stay a clean legal document
+   ========================================================================== */
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-plain {
+    background: #ffffff !important;
+    border-color: #cccccc !important;
+    box-shadow: none !important;
+  }
+  a {
+    text-decoration: none;
+    color: #000000 !important;
+  }
+  table {
+    page-break-inside: auto;
+  }
+  tr {
+    page-break-inside: avoid;
+  }
+  h1,
+  h2,
+  h3 {
+    page-break-after: avoid;
+  }
+}

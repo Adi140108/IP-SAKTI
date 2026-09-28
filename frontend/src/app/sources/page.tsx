@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { fetchLegalSources } from '@/lib/api';
 import { LegalSourceItem } from '@/types';
+import { LandmarkIcon, GlobeIcon } from '@/components/Icons';
 
 export default function SourcesPage() {
   const [sources, setSources] = useState<LegalSourceItem[]>([]);
@@ -36,71 +37,82 @@ export default function SourcesPage() {
   };
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto pb-10">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-6">
+    <div className="pb-10">
+      <div className="flex flex-wrap items-end justify-between gap-5 border-b border-line pb-6">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white">Authoritative Legal Sources</h1>
-          <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">
-            Browse official statutes, acts, regulations, and treaties ingested into the IP-SAKTI RAG vector index.
+          <h1 className="font-display text-[clamp(1.75rem,3.5vw,2.5rem)] leading-tight text-ink">
+            Authoritative Legal Sources
+          </h1>
+          <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted">
+            Browse official statutes, acts, regulations, and treaties ingested into the IP-SAKTI RAG
+            vector index.
           </p>
         </div>
 
-        <div className="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+        <div
+          className="inline-flex items-center gap-0.5 rounded-md border border-line bg-sunken p-0.5"
+          role="group"
+          aria-label="Jurisdiction"
+        >
           <button
             onClick={() => handleSwitchJurisdiction('India')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              jurisdiction === 'India'
-                ? 'bg-amber-500 text-white dark:text-slate-950 shadow-md shadow-amber-500/20'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            aria-pressed={jurisdiction === 'India'}
+            className={`inline-flex items-center gap-1.5 rounded-[3px] px-3 py-1.5 text-[11px] font-medium transition-colors ${
+              jurisdiction === 'India' ? 'bg-surface text-ink shadow-soft' : 'text-muted hover:text-ink'
             }`}
           >
-            🇮🇳 INDIA LAW
+            <LandmarkIcon size={12} />
+            India Law
           </button>
           <button
             onClick={() => handleSwitchJurisdiction('International')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            aria-pressed={jurisdiction === 'International'}
+            className={`inline-flex items-center gap-1.5 rounded-[3px] px-3 py-1.5 text-[11px] font-medium transition-colors ${
               jurisdiction === 'International'
-                ? 'bg-cyan-500 text-white dark:text-slate-950 shadow-md shadow-cyan-500/20'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                ? 'bg-surface text-ink shadow-soft'
+                : 'text-muted hover:text-ink'
             }`}
           >
-            🌐 INTERNATIONAL TREATIES
+            <GlobeIcon size={12} />
+            International Treaties
           </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="text-slate-600 dark:text-slate-400 text-sm">Loading legal knowledge index...</div>
+        <p className="py-10 text-[13px] text-muted">Loading legal knowledge index...</p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <ul className="divide-y divide-line">
           {sources.map((src, idx) => (
-            <div key={idx} className="glass-panel p-6 space-y-4 border-t-4 border-emerald-500 bg-white/80 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 shadow-xs">
-              <div className="flex items-center justify-between">
-                <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800/50">
-                  {src.ip_domain}
-                </span>
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">{src.effective_date}</span>
+            <li key={idx} className="grid grid-cols-1 gap-4 py-9 lg:grid-cols-12 lg:gap-10">
+              <div className="lg:col-span-5">
+                <div className="flex items-center gap-2.5">
+                  <span className="chip chip-accent">{src.ip_domain}</span>
+                  <span className="mono-caps text-faint">{src.effective_date}</span>
+                </div>
+                <h2 className="font-display mt-3.5 text-[19px] leading-snug text-ink">
+                  {src.source_title}
+                </h2>
               </div>
 
-              <h3 className="font-bold text-lg text-slate-900 dark:text-white">{src.source_title}</h3>
-
-              <div className="space-y-1.5">
-                <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold">Key Sections / Articles:</span>
-                <div className="flex flex-wrap gap-1.5">
+              <div className="lg:col-span-7">
+                <div className="flex flex-wrap gap-2">
                   {src.sections.map((sec: string, sIdx: number) => (
-                    <span key={sIdx} className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-emerald-700 dark:text-emerald-400 font-mono text-[11px] font-medium">
+                    <span
+                      key={sIdx}
+                      className="mono-caps rounded border border-line bg-sunken px-2 py-1 text-muted"
+                    >
                       {sec}
                     </span>
                   ))}
                 </div>
+                <p className="mt-4 border-l-2 border-line-strong pl-4 text-[13.5px] leading-relaxed text-muted italic">
+                  &ldquo;{src.sample_content}&rdquo;
+                </p>
               </div>
-
-              <p className="text-xs text-slate-700 dark:text-slate-300 italic bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 leading-relaxed">
-                &ldquo;{src.sample_content}&rdquo;
-              </p>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );

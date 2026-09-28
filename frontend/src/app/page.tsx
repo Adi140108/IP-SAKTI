@@ -4,8 +4,30 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { ScalesIcon, ScrollIcon, GlobeIcon, ArrowRightIcon } from '@/components/Icons';
 import { useAuth } from '@/components/AuthProvider';
 import AuthModal from '@/components/AuthModal';
+
+const CAPABILITIES = [
+  {
+    id: 'questioning',
+    title: 'Dynamic Adaptive Questioning',
+    body: 'High-speed Groq 120B reasoning dynamically evaluates missing information parameters to ask context-aware legal questions with 1-click option chips.',
+    icon: ScalesIcon,
+  },
+  {
+    id: 'rag',
+    title: 'Authoritative RAG & Citations',
+    body: 'Evidence-verified answers against India Code, Patents Act 1970, NBA Biological Diversity Act, WIPO Treaties, EPC, and 35 U.S.C. with section citations.',
+    icon: ScrollIcon,
+  },
+  {
+    id: 'speech',
+    title: 'Multi-lingual Speech AI',
+    body: 'Hands-free voice consultation supporting Indian languages with speech-to-text input, clear voice synthesis, and inline document OCR ingestion.',
+    icon: GlobeIcon,
+  },
+];
 
 export default function HomePage() {
   const router = useRouter();
@@ -21,117 +43,107 @@ export default function HomePage() {
   };
 
   return (
-    <div className="space-y-12 pb-10">
-      {/* Hero Banner */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950 text-white p-8 sm:p-12 border border-slate-800 shadow-xl">
-        <div className="absolute -right-20 -top-20 w-96 h-96 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -left-20 -bottom-20 w-96 h-96 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-          <div className="lg:col-span-7 space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold">
-              <span>🇮🇳 SIH Problem Statement PS-26045</span>
-            </div>
-
-            <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-white leading-tight">
-              Multilingual, Source-Cited <span className="gradient-text-emerald">Ayurvedic IP & Regulatory</span> Assistant
-            </h1>
-
-            <p className="text-slate-200 text-base sm:text-lg leading-relaxed">
-              Navigate complex Indian (Sec 3(p), Biological Diversity Act, Drugs & Cosmetics Act) and International (WIPO, PCT, TRIPS, Nagoya Protocol) legal regimes for traditional knowledge, biological resources, and Ayurvedic innovations.
-            </p>
-
-            <div className="flex flex-wrap items-center gap-3 pt-2">
+    <div className="pb-12">
+      {/* Hero */}
+      <section className="grid grid-cols-1 items-end gap-10 border-b border-line pb-14 sm:gap-12 sm:pb-20 lg:grid-cols-12 lg:gap-10">
+        <div className="lg:col-span-7">
+          <p className="eyebrow">SIH Problem Statement PS-26045</p>
+          <h1 className="font-display mt-6 text-[clamp(2.75rem,6.5vw,4.75rem)] leading-[1.02] text-ink">
+            Multilingual, source-cited guidance on Ayurvedic{' '}
+            <span className="text-accent">IP &amp; regulatory</span> questions.
+          </h1>
+          <p className="mt-8 max-w-xl text-[16px] leading-relaxed text-muted">
+            Navigate complex Indian (Sec 3(p), Biological Diversity Act, Drugs &amp; Cosmetics Act) and
+            International (WIPO, PCT, TRIPS, Nagoya Protocol) legal regimes for traditional knowledge,
+            biological resources, and Ayurvedic innovations.
+          </p>
+          <div className="mt-10 flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleLaunchConsultation}
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-5 py-3 text-[13.5px] font-medium text-accent-fg transition-colors hover:bg-accent-hover cursor-pointer"
+            >
+              Launch AI Consultation
+              <ArrowRightIcon size={15} />
+            </button>
+            {!user ? (
               <button
-                onClick={handleLaunchConsultation}
-                className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-extrabold text-sm hover:from-emerald-400 hover:to-teal-500 transition-all shadow-lg shadow-emerald-950/50 flex items-center gap-2 cursor-pointer active:scale-95"
+                onClick={() => setShowAuthModal(true)}
+                className="inline-flex items-center gap-2 rounded-md border border-line-strong px-5 py-3 text-[13.5px] font-medium text-ink transition-colors hover:bg-subtle cursor-pointer"
               >
-                <span>Launch AI Consultation</span>
-                <span>→</span>
+                Sign In / Register
               </button>
-
-              {!user ? (
-                <button
-                  onClick={() => setShowAuthModal(true)}
-                  className="px-5 py-3.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-sm border border-emerald-500/40 transition-all backdrop-blur-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
-                >
-                  <span>🔑</span>
-                  <span>Sign In / Register</span>
-                </button>
-              ) : (
-                <Link
-                  href="/case"
-                  className="px-5 py-3.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-sm border border-emerald-500/40 transition-all backdrop-blur-sm flex items-center gap-1.5 cursor-pointer"
-                >
-                  <span>📁</span>
-                  <span>My Saved Cases</span>
-                </Link>
-              )}
-
+            ) : (
               <Link
-                href="/sources"
-                className="px-5 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm border border-white/20 transition-all backdrop-blur-sm cursor-pointer"
+                href="/case"
+                className="inline-flex items-center gap-2 rounded-md border border-line-strong px-5 py-3 text-[13.5px] font-medium text-ink transition-colors hover:bg-subtle"
               >
-                Legal RAG Sources
+                My Saved Cases
               </Link>
-            </div>
+            )}
+            <Link
+              href="/sources"
+              className="inline-flex items-center gap-2 rounded-md border border-line-strong px-5 py-3 text-[13.5px] font-medium text-ink transition-colors hover:bg-subtle"
+            >
+              Browse Legal RAG Sources
+            </Link>
           </div>
+        </div>
 
-          <div className="lg:col-span-5 flex justify-center items-center">
-            <div className="relative w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl border border-emerald-500/30 bg-white/95 dark:bg-slate-900/90 p-2 backdrop-blur-md">
+        <div className="lg:col-span-5 lg:justify-self-end">
+          <figure className="mx-auto w-full max-w-[260px] sm:max-w-[300px] lg:ml-auto">
+            <div className="flex aspect-square items-center justify-center rounded-lg border border-line bg-surface p-10 sm:p-12">
               <Image
-                src="/ip-sakti-exact.png"
-                alt="IP-SAKTI Sahayak - Your AI Companion for Ayurvedic Intellectual Property & Regulatory Guidance"
-                width={500}
-                height={500}
-                className="w-full h-auto object-contain rounded-2xl"
+                src="/logo-emblem.png"
+                alt="IP-SAKTI Sahayak emblem"
+                width={400}
+                height={400}
+                className="h-full w-full object-contain"
                 priority
               />
             </div>
-          </div>
+            <figcaption className="mt-4 text-[11px] leading-relaxed text-faint">
+              Ayush &amp; bio-resource intellectual property assistant for Indian and international
+              statutory regimes.
+            </figcaption>
+          </figure>
         </div>
       </section>
 
-      {/* Core Capabilities Grid */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="glass-panel p-6 space-y-3 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">
-          <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center justify-center font-bold text-lg">
-            ⚡
-          </div>
-          <h3 className="font-extrabold text-lg text-slate-900 dark:text-white">Dynamic Adaptive Questioning</h3>
-          <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
-            High-speed Groq 120B reasoning dynamically evaluates missing information parameters to ask context-aware legal questions with 1-click option chips.
-          </p>
-        </div>
-
-        <div className="glass-panel p-6 space-y-3 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">
-          <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-300 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-center font-bold text-lg">
-            📜
-          </div>
-          <h3 className="font-extrabold text-lg text-slate-900 dark:text-white">Authoritative RAG & Citations</h3>
-          <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
-            Evidence-verified answers against India Code, Patents Act 1970, NBA Biological Diversity Act, WIPO Treaties, EPC, and 35 U.S.C. with section citations.
-          </p>
-        </div>
-
-        <div className="glass-panel p-6 space-y-3 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 shadow-xs">
-          <div className="w-10 h-10 rounded-xl bg-cyan-100 dark:bg-cyan-500/10 border border-cyan-300 dark:border-cyan-500/20 text-cyan-700 dark:text-cyan-400 flex items-center justify-center font-bold text-lg">
-            🗣️
-          </div>
-          <h3 className="font-extrabold text-lg text-slate-900 dark:text-white">Multi-lingual Speech AI</h3>
-          <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
-            Hands-free voice consultation supporting Indian languages with speech-to-text input, clear voice synthesis, and inline document OCR ingestion.
-          </p>
-        </div>
+      {/* Capabilities — editorial list, not identical cards */}
+      <section className="pt-16">
+        <h2 className="eyebrow">Core capabilities</h2>
+        <ul className="mt-8 divide-y divide-line border-t border-line">
+          {CAPABILITIES.map((item, i) => {
+            const Icon = item.icon;
+            return (
+              <li
+                key={item.id}
+                className="grid grid-cols-1 gap-3 py-7 sm:grid-cols-12 sm:gap-8 sm:py-10"
+              >
+                <div className="flex items-baseline gap-3 sm:col-span-4 sm:items-start">
+                  <span className="mono-caps text-faint">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <Icon size={19} className="shrink-0 translate-y-0.5 text-accent" />
+                  <h3 className="font-display text-[21px] leading-snug text-ink sm:mt-[-2px]">
+                    {item.title}
+                  </h3>
+                </div>
+                <p className="max-w-2xl text-[14px] leading-relaxed text-muted sm:col-span-8 sm:pl-6">
+                  {item.body}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
       </section>
 
-      {/* Sign In / Sign Up Modal */}
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         onSuccess={() => router.push('/chat')}
         title="Sign In Before Starting Your Consultation"
-        subtitle="Sign in to save your consultations to Firebase and resume chatting with your cases anytime, or continue as guest."
+        subtitle="Sign in to save your consultations and resume chatting with your cases anytime, or continue as guest."
       />
     </div>
   );
