@@ -429,6 +429,60 @@ class VectorStoreInterface:
                     "section": "Monographs & Quality Standards",
                     "content": "The Ayurvedic Pharmacopoeia of India (API) sets official legal quality and identity standards for 600+ single herbal drugs and 1500+ classical compound formulations under the Drugs and Cosmetics Act 1940."
                 }
+            ],
+            "SRC_INT_PARIS_CONVENTION_1883": [
+                {
+                    "article": "Article 4 (Right of Priority)",
+                    "content": "Article 4 of the Paris Convention grants applicants a 12-month right of priority from the initial domestic filing date (e.g. Indian Patent Office filing) to file corresponding patent applications in any member country worldwide."
+                }
+            ],
+            "SRC_INT_WTO_TRIPS_1994": [
+                {
+                    "article": "Article 27 & Article 39",
+                    "content": "Article 27 of the TRIPS Agreement provides that patents shall be available for any inventions, whether products or processes, in all fields of technology, provided that they are new, involve an inventive step and are capable of industrial application. Article 39 protects undisclosed proprietary formulation know-how and trade secrets."
+                }
+            ],
+            "SRC_INT_CBD_1992": [
+                {
+                    "article": "Article 8(j) & Article 15",
+                    "content": "Article 8(j) of the Convention on Biological Diversity (CBD) requires contracting parties to respect, preserve and maintain knowledge, innovations and practices of indigenous and local communities. Article 15 recognizes sovereign rights of states over their natural resources and mandates prior informed consent and mutually agreed terms for access."
+                }
+            ],
+            "SRC_INT_WIPO_GRTKF_2024": [
+                {
+                    "article": "Article 3 (Mandatory Patent Disclosure)",
+                    "content": "Article 3 of the WIPO Diplomatic Treaty on IP, Genetic Resources and Associated Traditional Knowledge (2024) establishes a mandatory international patent disclosure requirement: patent applications claiming inventions based on genetic resources and associated traditional knowledge must disclose the country of origin or indigenous source."
+                }
+            ],
+            "SRC_INT_BUDAPEST_TREATY_1977": [
+                {
+                    "article": "Article 3 & 7",
+                    "content": "Article 3 of the Budapest Treaty establishes that the deposit of a biological microorganism or cell line with an International Depositary Authority (IDA) suffices for the purposes of patent procedure before the national patent offices of all contracting states."
+                }
+            ],
+            "SRC_GB_PATENTS_ACT_1977": [
+                {
+                    "section": "Section 1 & Section 14",
+                    "content": "Section 1 of the UK Patents Act 1977 sets out patentability requirements (novelty, inventive step, industrial application). Inventions derived from biological material must satisfy UK Nagoya Protocol Due Diligence Regulations 2015."
+                }
+            ],
+            "SRC_JP_PATENT_ACT": [
+                {
+                    "section": "Section 29(1) & 29(2)",
+                    "content": "Section 29 of the Japan Patent Act governs novelty and inventive step. Under JPO Examination Guidelines for Kampo and Traditional Medicines, combinations of known natural ingredients must demonstrate non-obvious synergistic therapeutic efficacy over classical literature."
+                }
+            ],
+            "SRC_AU_PATENTS_ACT_1990": [
+                {
+                    "section": "Section 18 & EPBC Act",
+                    "content": "Section 18 of the Australian Patents Act 1990 requires a manner of manufacture involving an inventive step. Access to native biological resources requires compliance with the Environment Protection and Biodiversity Conservation Act 1999 (EPBC Act) benefit-sharing rules."
+                }
+            ],
+            "SRC_CN_PATENT_LAW": [
+                {
+                    "section": "Article 25 & Article 26(5)",
+                    "content": "Article 25 of the Chinese Patent Law excludes scientific discoveries from patentability. Article 26(5) mandates that for inventions relying on genetic resources, applicants must disclose the direct and original source; patents will not be granted if acquisition or utilization violated relevant laws."
+                }
             ]
         }
 

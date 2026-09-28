@@ -58,10 +58,15 @@ export interface ChatTranslations {
   signInToSave: string;
   actionsButton: string;
   casesButton: string;
+  compareLawButton: string;
+  compareWithForeignTitle: string;
 }
 
 export const TRANSLATIONS: Record<SupportedLanguage, ChatTranslations> = {
   en: {
+    compareLawButton: '⚖️ Compare with International / Foreign Laws',
+    compareWithForeignTitle: 'Compare with Foreign Standards',
+
     aiConsultationTitle: 'AI Consultation',
     aiConsultationSubtitle: 'Source-cited IP & regulatory guidance under Indian statutory frameworks',
     emptyStateTitle: 'AI Consultation',
@@ -172,8 +177,12 @@ export const TRANSLATIONS: Record<SupportedLanguage, ChatTranslations> = {
     signInToSave: 'सुरक्षित रखने के लिए साइन इन करें',
     actionsButton: 'क्रियाएँ',
     casesButton: 'केस सूची',
+    compareLawButton: '⚖️ अंतर्राष्ट्रीय / विदेशी कानूनों से तुलना करें',
+    compareWithForeignTitle: 'विदेशी व अंतर्राष्ट्रीय मानकों से तुलना',
   },
   ta: {
+    compareLawButton: '⚖️ சர்வதேச / வெளிநாட்டுச் சட்டங்களுடன் ஒப்பிடுங்கள்',
+    compareWithForeignTitle: 'சர்வதேச தரங்களுடன் ஒப்பிடுங்கள்',
     aiConsultationTitle: 'AI ஆலோசனை',
     aiConsultationSubtitle: 'இந்திய சட்டக் கட்டமைப்பின் கீழ் மூல-மேற்கோள் காட்டப்பட்ட ஐபி வழிகாட்டுதல்',
     emptyStateTitle: 'ஆயுர்வேத ஐபி ஆலோசனை',
@@ -230,6 +239,8 @@ export const TRANSLATIONS: Record<SupportedLanguage, ChatTranslations> = {
     casesButton: 'வழக்குகள்',
   },
   te: {
+    compareLawButton: '⚖️ అంతర్జాతీయ / విదేశీ చట్టాలతో పోల్చండి',
+    compareWithForeignTitle: 'విదేశీ మరియు అంతర్జాతీయ నిబంధనలతో పోలిక',
     aiConsultationTitle: 'AI సంప్రదింపులు',
     aiConsultationSubtitle: 'భారతీయ చట్టపరమైన నిబంధనల ప్రకారం ధృవీకరించబడిన IP మార్గదర్శకత్వం',
     emptyStateTitle: 'ఆయుర్వేద IP సంప్రదింపులు',
@@ -286,6 +297,8 @@ export const TRANSLATIONS: Record<SupportedLanguage, ChatTranslations> = {
     casesButton: 'కేసులు',
   },
   mr: {
+    compareLawButton: '⚖️ आंतरराष्ट्रीय / परदेशी कायद्यांशी तुलना करा',
+    compareWithForeignTitle: 'परदेशी व आंतरराष्ट्रीय नियमांशी तुलना',
     aiConsultationTitle: 'एआय सल्लागार (AI Consultation)',
     aiConsultationSubtitle: 'भारतीय वैधानिक कायद्यांनुसार स्रोत-प्रमाणित बौद्धिक संपदा मार्गदर्शन',
     emptyStateTitle: 'आयुर्वेदिक आयपी सल्लागार',
@@ -342,6 +355,8 @@ export const TRANSLATIONS: Record<SupportedLanguage, ChatTranslations> = {
     casesButton: 'केस सूची',
   },
   bn: {
+    compareLawButton: '⚖️ আন্তর্জাতিক / বিদেশি আইনের সাথে তুলনা করুন',
+    compareWithForeignTitle: 'বিদেশি এবং আন্তর্জাতিক মানের সাথে তুলনা',
     aiConsultationTitle: 'এআই পরামর্শ (AI Consultation)',
     aiConsultationSubtitle: 'ভারতীয় বিধিবদ্ধ আইনের অধীনে উৎস-উদ্ধৃত আইপি নির্দেশিকা',
     emptyStateTitle: 'আয়ুর্বেদিক আইপি পরামর্শ',
@@ -398,6 +413,8 @@ export const TRANSLATIONS: Record<SupportedLanguage, ChatTranslations> = {
     casesButton: 'কেস তালিকা',
   },
   gu: {
+    compareLawButton: '⚖️ આંતરરાષ્ટ્રીય / વિદેશી કાયદા સાથે સરખામણી કરો',
+    compareWithForeignTitle: 'વિદેશી અને આંતરરાષ્ટ્રીય ધોરણો સાથે સરખામણી',
     aiConsultationTitle: 'AI સલાહકાર (AI Consultation)',
     aiConsultationSubtitle: 'ભારતીય વૈધાનિક માળખા હેઠળ સ્ત્રોત-પ્રમાણિત આઈપી માર્ગદર્શન',
     emptyStateTitle: 'આયુર્વેદિક આઈપી સલાહ',
@@ -454,6 +471,8 @@ export const TRANSLATIONS: Record<SupportedLanguage, ChatTranslations> = {
     casesButton: 'કેસ સૂચિ',
   },
   kn: {
+    compareLawButton: '⚖️ ಅಂತರರಾಷ್ಟ್ರೀಯ / ವಿದೇಶಿ ಕಾನೂನುಗಳೊಂದಿಗೆ ಹೋಲಿಸಿ',
+    compareWithForeignTitle: 'ವಿದೇಶಿ ಮತ್ತು ಅಂತರರಾಷ್ಟ್ರೀಯ ಮಾನದಂಡಗಳೊಂದಿಗೆ ಹೋಲಿಕೆ',
     aiConsultationTitle: 'AI ಸಮಾಲೋಚನೆ',
     aiConsultationSubtitle: 'ಭಾರತೀಯ ಶಾಸನಬದ್ಧ ನಿಯಮಗಳ ಅಡಿಯಲ್ಲಿ ಮೂಲ-ಪ್ರಮಾಣೀಕೃತ IP ಮಾರ್ಗದರ್ಶನ',
     emptyStateTitle: 'ಆಯುರ್ವೇದ IP ಸಮಾಲೋಚನೆ',
@@ -510,6 +529,8 @@ export const TRANSLATIONS: Record<SupportedLanguage, ChatTranslations> = {
     casesButton: 'ಪ್ರಕರಣಗಳು',
   },
   ml: {
+    compareLawButton: '⚖️ അന്താരാഷ്ട്ര / വിദേശ നിയമങ്ങളുമായി താരതമ്യം ചെയ്യുക',
+    compareWithForeignTitle: 'വിദേശ, അന്താരാഷ്ട്ര മാനദണ്ഡങ്ങളുമായി താരതമ്യം',
     aiConsultationTitle: 'AI കൺസൾട്ടേഷൻ',
     aiConsultationSubtitle: 'ഇന്ത്യൻ നിയമപരമായ ചട്ടക്കൂടുകൾക്ക് കീഴിലുള്ള ഐപി മാർഗ്ഗനിർദ്ദേശം',
     emptyStateTitle: 'ആയുർവേദ ഐപി കൺസൾട്ടേഷൻ',

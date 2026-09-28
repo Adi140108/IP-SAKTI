@@ -51,6 +51,40 @@ export interface ChatResponse {
   audio_url?: string;
   requires_human_escalation: boolean;
   safe_abstention: boolean;
+  comparison_options?: string[];
+}
+
+export interface ComparisonDimension {
+  dimension: string;
+  india_law: string;
+  target_law: string;
+  key_difference: string;
+  strategic_implication: string;
+}
+
+export interface ComparisonRequest {
+  case_id: string;
+  user_id?: string;
+  target_country?: string;
+  target_standard?: string;
+  user_query?: string;
+  language?: string;
+}
+
+export interface ComparisonResponse {
+  case_id: string;
+  target_jurisdiction: string;
+  target_country: string;
+  comparison_title: string;
+  comparison_summary: string;
+  indian_law_position: string;
+  target_law_position: string;
+  dimensions: ComparisonDimension[];
+  filing_pathway_advice: string;
+  citations: Citation[];
+  confidence_score: number;
+  confidence_explanation: string;
+  available_countries: string[];
 }
 
 export interface PreviousAnswer {

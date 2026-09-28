@@ -147,6 +147,43 @@ export async function sendChatMessage(params: {
   return handleResponse<ChatResponse>(res);
 }
 
+export async function compareJurisdictions(params: {
+  case_id: string;
+  user_id?: string;
+  target_country?: string;
+  target_standard?: string;
+  user_query?: string;
+  language?: string;
+}): Promise<import('@/types').ComparisonResponse> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/chat/compare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+  return handleResponse<import('@/types').ComparisonResponse>(res);
+}
+
+export async function fetchComparisonTargets(): Promise<string[]> {
+  const baseUrl = getApiBaseUrl();
+  try {
+    const res = await fetch(`${baseUrl}/chat/comparison-targets`);
+    if (!res.ok) throw new Error('Failed to fetch targets');
+    return await handleResponse<string[]>(res);
+  } catch {
+    return [
+      'International Standards (WIPO PCT, Nagoya Protocol, TRIPS)',
+      'United States (USPTO - 35 U.S.C.)',
+      'European Union (EPO - European Patent Convention)',
+      'Germany (DPMA - German Patent Act PatG)',
+      'United Kingdom (UK IPO - Patents Act 1977)',
+      'Japan (JPO - Japan Patent Act)',
+      'Australia (IP Australia - Patents Act 1990)',
+      'China (CNIPA - Chinese Patent Law)'
+    ];
+  }
+}
+
 export async function uploadDocument(file: File, caseId: string): Promise<DocumentMetadata> {
   const baseUrl = getApiBaseUrl();
   const formData = new FormData();

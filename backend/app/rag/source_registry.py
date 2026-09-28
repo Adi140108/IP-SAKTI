@@ -645,6 +645,74 @@ class SourceRegistry:
                 source_url="https://www.tkdl.res.in/",
                 checksum=hashlib.sha256(b"TKDL Classification Standard 2024").hexdigest(),
                 authority_level="public_pointer"
+            ),
+            # 27. UK Patents Act 1977 (United Kingdom)
+            LegalSourceMetadata(
+                source_id="SRC_GB_PATENTS_ACT_1977",
+                title="United Kingdom Patents Act 1977 (UK IPO)",
+                authority="Intellectual Property Office (UK IPO)",
+                jurisdiction="International",
+                country="United Kingdom",
+                region="Europe",
+                applicable_countries=["United Kingdom", "UK", "Britain"],
+                source_type="statute",
+                effective_date="1978-06-01",
+                version="Patents Act 1977 (c. 37, Amended 2021)",
+                amendment_status="Section 1 Patentability conditions & compliance with Nagoya Due Diligence Regs 2015",
+                source_url="https://www.gov.uk/government/organisations/intellectual-property-office",
+                checksum=hashlib.sha256(b"UK Patents Act 1977 UKIPO").hexdigest(),
+                authority_level="statutory"
+            ),
+            # 28. Japan Patent Act (Act No. 121 of 1959, Japan)
+            LegalSourceMetadata(
+                source_id="SRC_JP_PATENT_ACT",
+                title="Japan Patent Act (JPO)",
+                authority="Japan Patent Office (JPO) / Ministry of Economy, Trade and Industry",
+                jurisdiction="International",
+                country="Japan",
+                region="Asia",
+                applicable_countries=["Japan"],
+                source_type="statute",
+                effective_date="1960-04-01",
+                version="Act No. 121 of 1959 (Amended 2021)",
+                amendment_status="Section 29(1) Industrial applicability, Section 29(2) Inventive step for traditional herbal extracts & Kampo guidelines",
+                source_url="https://www.jpo.go.jp/",
+                checksum=hashlib.sha256(b"Japan Patent Act JPO 1959").hexdigest(),
+                authority_level="statutory"
+            ),
+            # 29. Australia Patents Act 1990 (IP Australia)
+            LegalSourceMetadata(
+                source_id="SRC_AU_PATENTS_ACT_1990",
+                title="Australia Patents Act 1990 (IP Australia)",
+                authority="IP Australia / Department of Industry, Science and Resources",
+                jurisdiction="International",
+                country="Australia",
+                region="Oceania",
+                applicable_countries=["Australia"],
+                source_type="statute",
+                effective_date="1991-04-30",
+                version="Patents Act 1990 (No. 83, 1990 as amended)",
+                amendment_status="Section 18 Patentable inventions (Manner of Manufacture) & EPBC Act biological access",
+                source_url="https://www.ipaustralia.gov.au/",
+                checksum=hashlib.sha256(b"Australia Patents Act 1990 IP Australia").hexdigest(),
+                authority_level="statutory"
+            ),
+            # 30. Patent Law of the People's Republic of China (CNIPA)
+            LegalSourceMetadata(
+                source_id="SRC_CN_PATENT_LAW",
+                title="Patent Law of the People's Republic of China (CNIPA)",
+                authority="China National Intellectual Property Administration (CNIPA)",
+                jurisdiction="International",
+                country="China",
+                region="Asia",
+                applicable_countries=["China"],
+                source_type="statute",
+                effective_date="1985-04-01",
+                version="Patent Law 4th Amendment (2020 Revision)",
+                amendment_status="Article 25 (Scientific discoveries exclusion) & Article 26(5) Mandatory genetic resource origin disclosure for Traditional Chinese Medicine (TCM)",
+                source_url="https://english.cnipa.gov.cn/",
+                checksum=hashlib.sha256(b"China Patent Law CNIPA 2020").hexdigest(),
+                authority_level="statutory"
             )
         ]
 

@@ -60,6 +60,7 @@ class ChatResponse(BaseModel):
     audio_url: Optional[str] = None  # For BHASHINI TTS output
     requires_human_escalation: bool = False
     safe_abstention: bool = False
+    comparison_options: Optional[List[str]] = None
 
 class TranslateRequest(BaseModel):
     text: str
@@ -70,4 +71,35 @@ class TranslateResponse(BaseModel):
     translated_text: str
     source_lang: str
     target_lang: str
+
+class ComparisonDimension(BaseModel):
+    dimension: str
+    india_law: str
+    target_law: str
+    key_difference: str
+    strategic_implication: str
+
+class ComparisonRequest(BaseModel):
+    case_id: str
+    user_id: Optional[str] = "guest_user"
+    target_country: Optional[str] = "International" # "International", "USA", "European Union", "Germany", "United Kingdom", "Japan", "Australia", "China", etc.
+    target_standard: Optional[str] = None
+    user_query: Optional[str] = None
+    language: str = "en"
+
+class ComparisonResponse(BaseModel):
+    case_id: str
+    target_jurisdiction: str
+    target_country: str
+    comparison_title: str
+    comparison_summary: str
+    indian_law_position: str
+    target_law_position: str
+    dimensions: List[ComparisonDimension]
+    filing_pathway_advice: str
+    citations: List[Citation]
+    confidence_score: float
+    confidence_explanation: str
+    available_countries: List[str] = Field(default_factory=list)
+
 

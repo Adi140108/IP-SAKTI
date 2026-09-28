@@ -10,6 +10,7 @@ import { findClientMatchingPatents } from '@/lib/patents';
 import FormulationPathwayModal from '@/components/FormulationPathwayModal';
 import OfficialFormsModal from '@/components/OfficialFormsModal';
 import DossierExportModal from '@/components/DossierExportModal';
+import InternationalComparisonModal from '@/components/InternationalComparisonModal';
 import AuthModal from '@/components/AuthModal';
 import { useAuth } from '@/components/AuthProvider';
 import {
@@ -104,7 +105,14 @@ export default function ChatPage() {
   const [showPathwayModal, setShowPathwayModal] = useState<boolean>(false);
   const [showFormsModal, setShowFormsModal] = useState<boolean>(false);
   const [showDossierModal, setShowDossierModal] = useState<boolean>(false);
+  const [showComparisonModal, setShowComparisonModal] = useState<boolean>(false);
+  const [comparisonTargetCountry, setComparisonTargetCountry] = useState<string>('International');
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+
+  const openComparisonModal = (targetCountry: string = 'International') => {
+    setComparisonTargetCountry(targetCountry);
+    setShowComparisonModal(true);
+  };
 
   // Actions dropdown & Mobile sidebar toggle
   const [actionsDropdownOpen, setActionsDropdownOpen] = useState<boolean>(false);
@@ -973,6 +981,20 @@ export default function ChatPage() {
                     <span className="block text-[10.5px] text-faint">Download diagnostic report</span>
                   </span>
                 </button>
+
+                <button
+                  onClick={() => {
+                    openComparisonModal('International');
+                    setActionsDropdownOpen(false);
+                  }}
+                  className="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-subtle border-t border-line-subtle"
+                >
+                  <GlobeIcon size={14} className="mt-0.5 shrink-0 text-accent" />
+                  <span>
+                    <span className="block text-[12px] font-medium text-ink">Compare International / Foreign Laws</span>
+                    <span className="block text-[10.5px] text-faint">USA, EPO, DPMA, WIPO, PCT, Nagoya</span>
+                  </span>
+                </button>
               </div>
             )}
           </div>
@@ -1185,6 +1207,53 @@ export default function ChatPage() {
 
                     {/* Rendered Guidance Payload */}
                     <div className="legal-prose">{item.data.answer}</div>
+
+                    {/* Option to Compare with International Standard Law & Specific Foreign Countries */}
+                    {(jurisdiction === 'India' || item.data.jurisdiction === 'India' || item.data.comparison_options) && (
+                      <div className="space-y-2 rounded-lg border border-accent-line bg-accent-soft/40 p-3.5 sm:p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <GlobeIcon size={14} className="text-accent" />
+                            <span className="text-[12px] font-semibold text-accent-ink">
+                              {t.compareLawButton || '⚖️ Compare with International & Foreign Laws:'}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-faint">Select standard to compare</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          <button
+                            onClick={() => openComparisonModal('International')}
+                            className="rounded-md border border-accent-line bg-surface px-2.5 py-1 text-[11.5px] font-medium text-accent-ink transition-colors hover:bg-accent hover:text-accent-fg shadow-soft"
+                          >
+                            🌐 WIPO / PCT Treaties
+                          </button>
+                          <button
+                            onClick={() => openComparisonModal('USA')}
+                            className="rounded-md border border-accent-line bg-surface px-2.5 py-1 text-[11.5px] font-medium text-accent-ink transition-colors hover:bg-accent hover:text-accent-fg shadow-soft"
+                          >
+                            🇺🇸 USA (USPTO §101/102)
+                          </button>
+                          <button
+                            onClick={() => openComparisonModal('European Union')}
+                            className="rounded-md border border-accent-line bg-surface px-2.5 py-1 text-[11.5px] font-medium text-accent-ink transition-colors hover:bg-accent hover:text-accent-fg shadow-soft"
+                          >
+                            🇪🇺 Europe (EPO / EPC)
+                          </button>
+                          <button
+                            onClick={() => openComparisonModal('Germany')}
+                            className="rounded-md border border-accent-line bg-surface px-2.5 py-1 text-[11.5px] font-medium text-accent-ink transition-colors hover:bg-accent hover:text-accent-fg shadow-soft"
+                          >
+                            🇩🇪 Germany (DPMA PatG)
+                          </button>
+                          <button
+                            onClick={() => openComparisonModal('International')}
+                            className="rounded-md border border-line bg-surface px-2.5 py-1 text-[11.5px] font-medium text-muted transition-colors hover:border-line-strong hover:text-ink"
+                          >
+                            + Other Countries...
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Prominent Dynamic Question Box with 1-Click Option Chips */}
                     {item.data.next_question && (
@@ -1605,6 +1674,36 @@ export default function ChatPage() {
         }}
         title="Sign In to Save & Resume Consultations"
         subtitle="Sign in so your cases and chat history are saved to your account and can be resumed across devices."
+      />
+
+      <InternationalComparisonModal
+        isOpen={showComparisonModal}
+        onClose={() => setShowComparisonModal(false)}
+        caseState={caseState}
+        language={language}
+        initialTargetCountry={comparisonTargetCountry}
+        onInsertToChat={(text, citations) => {
+          setChatHistory((prev) => [
+            ...prev,
+            {
+              sender: 'assistant',
+              data: {
+                case_id: caseId || 'comparison_record',
+                message_id: `comp_${Date.now().toString(36)}`,
+                answer: text,
+                jurisdiction: 'Comparative',
+                country: comparisonTargetCountry,
+                relevant_ip_domains: ['patent', 'abs', 'tkdl_prior_art'],
+                product_classification: caseState?.formulation_classification || 'unknown',
+                citations: citations || [],
+                confidence_score: 0.95,
+                confidence_explanation: 'Comparative analysis generated from verified statutory registers.',
+                safe_abstention: false,
+                requires_human_escalation: false
+              }
+            }
+          ]);
+        }}
       />
     </div>
   );

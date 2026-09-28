@@ -20,6 +20,7 @@ from app.modules.citations.validator import citation_validator
 from app.modules.confidence.engine import confidence_engine
 from app.modules.questioning.engine import questioning_engine
 from app.modules.prior_art.matching import prior_art_matcher
+from app.modules.comparison.engine import comparative_law_engine, ComparisonRequest, AVAILABLE_COMPARISON_TARGETS
 
 
 LANGUAGE_NAMES = {
@@ -157,39 +158,96 @@ class ConversationPipeline:
             if d != "unknown" and d not in case_state.intellectual_property_objective:
                 case_state.intellectual_property_objective.append(d)
 
-        # 5. RAG Pipeline (Query Planner -> Retrieval -> Reranker -> EvidenceContext)
-        evidence_context: EvidenceContext = await rag_retriever.execute_rag_pipeline(processed_text, case_state)
+        # 5. Check if query is a comparative statutory query
+        lower_query = processed_text.lower()
+        is_comparative_query = any(k in lower_query for k in [
+            "compare", "comparison", "compare it with", "compare with", "difference between",
+            "vs us", "vs epo", "vs german", "vs uspto", "vs uk", "vs japan", "vs china",
+            "international standard law", "international standard", "another country", "foreign law"
+        ])
 
-        # 6. Groq / LLM Answer Generation with EvidenceContext
-        jurisdiction_prompt = jurisdiction_engine.get_jurisdiction_prompt_filter(jur_norm)
-        evidence_prompt_text = evidence_context.to_formatted_prompt_text()
-        lang_name = LANGUAGE_NAMES.get(lang, "English")
+        raw_answer = ""
+        raw_citations = []
+        evidence_context = None
 
-        system_prompt = (
-            "You are IP-SAKTI Sahayak, an authoritative legal and regulatory AI assistant "
-            "for Intellectual Property related to Ayurveda and Traditional Knowledge.\n"
-            f"{jurisdiction_prompt}\n"
-            "STRICT CONCISENESS & LEGAL SAFETY RULES:\n"
-            "1. Base all legal claims ONLY on the provided RAG statutory EvidenceContext.\n"
-            "2. Keep answers CRISP, DIRECT, and HIGH-IMPACT. Capped at MAXIMUM 5 to 8 bullet points total (NEVER exceed 10 points).\n"
-            "3. Do NOT write long narrative essays or repetitive fluff.\n"
-            "4. Never invent sections, acts, treaties, fees, or procedural deadlines."
-        )
+        if is_comparative_query:
+            target_country = jur_norm.get("country") if jur_norm.get("country") != "India" else "International"
+            for k, c_name in jurisdiction_engine.COUNTRY_MAP.items():
+                if k in lower_query:
+                    target_country = c_name
+                    break
 
-        if lang != "en":
-            system_prompt += (
-                f"\n5. MANDATORY MULTILINGUAL REQUIREMENT: The user has selected the language '{lang_name}' ({lang}). "
-                f"You MUST generate the entire 'answer' text in {lang_name} using natural, authentic Indic script (e.g. Devanagari for Hindi/Marathi, Tamil script for Tamil, Telugu for Telugu, etc.). "
-                f"Do NOT write the 'answer' in English."
+            comp_res = await comparative_law_engine.compare_jurisdictions(
+                ComparisonRequest(
+                    case_id=case_id,
+                    user_id=request.user_id,
+                    target_country=target_country,
+                    user_query=processed_text,
+                    language="en"
+                ),
+                case_state
+            )
+            
+            sections_summary = []
+            for d in comp_res.dimensions:
+                sections_summary.append(
+                    f"#### 📌 {d.dimension}\n"
+                    f"- **🇮🇳 Indian Law**: {d.india_law}\n"
+                    f"- **🌐 {comp_res.target_country} Law**: {d.target_law}\n"
+                    f"- **⚡ Key Difference**: {d.key_difference}\n"
+                    f"- **💡 Strategic Implication**: {d.strategic_implication}"
+                )
+            raw_answer = (
+                f"### ⚖️ {comp_res.comparison_title}\n\n"
+                f"{comp_res.comparison_summary}\n\n"
+                f"### Statutory Comparison Matrix\n\n"
+                + "\n\n".join(sections_summary) +
+                f"\n\n### 🗺️ Cross-Border Filing Roadmap\n"
+                f"{comp_res.filing_pathway_advice}"
+            )
+            raw_citations = comp_res.citations
+            evidence_context = EvidenceContext(
+                selected_chunks=[],
+                source_metadata=[],
+                top_relevance_score=comp_res.confidence_score,
+                authority_level="statutory",
+                jurisdiction="Comparative",
+                version="Current"
+            )
+        else:
+            # 5b. Standard RAG Pipeline (Query Planner -> Retrieval -> Reranker -> EvidenceContext)
+            evidence_context = await rag_retriever.execute_rag_pipeline(processed_text, case_state)
+
+            # 6. Groq / LLM Answer Generation with EvidenceContext
+            jurisdiction_prompt = jurisdiction_engine.get_jurisdiction_prompt_filter(jur_norm)
+            evidence_prompt_text = evidence_context.to_formatted_prompt_text()
+            lang_name = LANGUAGE_NAMES.get(lang, "English")
+
+            system_prompt = (
+                "You are IP-SAKTI Sahayak, an authoritative legal and regulatory AI assistant "
+                "for Intellectual Property related to Ayurveda and Traditional Knowledge.\n"
+                f"{jurisdiction_prompt}\n"
+                "STRICT CONCISENESS & LEGAL SAFETY RULES:\n"
+                "1. Base all legal claims ONLY on the provided RAG statutory EvidenceContext.\n"
+                "2. Keep answers CRISP, DIRECT, and HIGH-IMPACT. Capped at MAXIMUM 5 to 8 bullet points total (NEVER exceed 10 points).\n"
+                "3. Do NOT write long narrative essays or repetitive fluff.\n"
+                "4. Never invent sections, acts, treaties, fees, or procedural deadlines."
             )
 
-        task_instruction = (
-            f"Provide concise, high-impact informational guidance completely written in {lang_name} ({lang}) (MAX 5-8 BULLET POINTS TOTAL) using natural Indic script."
-            if lang != "en"
-            else "Provide concise, high-impact informational guidance (MAX 5-8 BULLET POINTS TOTAL)."
-        )
+            if lang != "en":
+                system_prompt += (
+                    f"\n5. MANDATORY MULTILINGUAL REQUIREMENT: The user has selected the language '{lang_name}' ({lang}). "
+                    f"You MUST generate the entire 'answer' text in {lang_name} using natural, authentic Indic script (e.g. Devanagari for Hindi/Marathi, Tamil script for Tamil, Telugu for Telugu, etc.). "
+                    f"Do NOT write the 'answer' in English."
+                )
 
-        user_prompt = f"""
+            task_instruction = (
+                f"Provide concise, high-impact informational guidance completely written in {lang_name} ({lang}) (MAX 5-8 BULLET POINTS TOTAL) using natural Indic script."
+                if lang != "en"
+                else "Provide concise, high-impact informational guidance (MAX 5-8 BULLET POINTS TOTAL)."
+            )
+
+            user_prompt = f"""
 Case Parameters:
 - Jurisdiction: {case_state.jurisdiction} ({case_state.country or 'India'})
 - Formulation Category: {case_state.formulation_classification}
@@ -220,58 +278,56 @@ Return JSON:
 }}
 """
 
-        raw_answer = ""
-        raw_citations = []
+            try:
+                groq_res = await groq_provider.generate_structured_json(user_prompt, system_prompt)
+                answer_val = groq_res.get("answer", "")
+                if isinstance(answer_val, list):
+                    raw_answer = "\n".join([f"- {str(item)}" for item in answer_val])
+                else:
+                    raw_answer = str(answer_val or "")
 
-        try:
-            groq_res = await groq_provider.generate_structured_json(user_prompt, system_prompt)
-            answer_val = groq_res.get("answer", "")
-            if isinstance(answer_val, list):
-                raw_answer = "\n".join([f"- {str(item)}" for item in answer_val])
-            else:
-                raw_answer = str(answer_val or "")
+                for c in groq_res.get("citations", []):
+                    raw_citations.append(Citation(
+                        source=c.get("source", "Authoritative Source"),
+                        section_or_rule=c.get("section_or_rule"),
+                        jurisdiction=c.get("jurisdiction", case_state.jurisdiction),
+                        effective_date=c.get("effective_date"),
+                        is_authoritative=True
+                    ))
+            except Exception as e:
+                logger.warning(f"Groq generation error: {e}. Assembling fallback guidance directly from statutory evidence context.")
 
-            for c in groq_res.get("citations", []):
-                raw_citations.append(Citation(
-                    source=c.get("source", "Authoritative Source"),
-                    section_or_rule=c.get("section_or_rule"),
-                    jurisdiction=c.get("jurisdiction", case_state.jurisdiction),
-                    effective_date=c.get("effective_date"),
-                    is_authoritative=True
-                ))
-        except Exception as e:
-            logger.warning(f"Groq generation error: {e}. Assembling fallback guidance directly from statutory evidence context.")
+            if not raw_answer and not evidence_context.is_empty():
+                sections_summary = []
+                for chunk in evidence_context.selected_chunks:
+                    sec_title = chunk.section or chunk.article or "General Provision"
+                    sections_summary.append(
+                        f"#### {chunk.title} — {sec_title}\n"
+                        f"**Authority**: {chunk.authority} | **Jurisdiction**: {chunk.jurisdiction}\n\n"
+                        f"> *\"{chunk.text}\"*\n"
+                    )
+                    raw_citations.append(Citation(
+                        source=chunk.title,
+                        section_or_rule=sec_title,
+                        jurisdiction=chunk.jurisdiction,
+                        effective_date=chunk.version or "Current",
+                        snippet=chunk.text[:200],
+                        is_authoritative=True
+                    ))
 
-        if not raw_answer and not evidence_context.is_empty():
-            sections_summary = []
-            for chunk in evidence_context.selected_chunks:
-                sec_title = chunk.section or chunk.article or "General Provision"
-                sections_summary.append(
-                    f"#### {chunk.title} — {sec_title}\n"
-                    f"**Authority**: {chunk.authority} | **Jurisdiction**: {chunk.jurisdiction}\n\n"
-                    f"> *\"{chunk.text}\"*\n"
+                raw_answer = (
+                    f"### Executive Legal Guidance ({case_state.jurisdiction})\n\n"
+                    f"Based on authoritative statutory registers for **{case_state.product_type or 'Ayurvedic formulation'}**, "
+                    f"the following legal and regulatory provisions apply under {case_state.jurisdiction} law:\n\n"
+                    + "\n\n".join(sections_summary) +
+                    "\n\n### Actionable Next Steps for Innovators\n"
+                    "1. **Prior Art & TKDL Check**: Verify that active medicinal herbs are not documented as public prior art in classical texts under Section 3(p).\n"
+                    "2. **Synergistic Efficacy Data**: If combining multiple biological ingredients, conduct comparative efficacy studies to overcome Section 3(e) admixture objections.\n"
+                    "3. **NBA / ABS Compliance**: If sourcing biological materials from India, file Form I / Form III intimation with the National Biodiversity Authority (NBA).\n"
                 )
-                raw_citations.append(Citation(
-                    source=chunk.title,
-                    section_or_rule=sec_title,
-                    jurisdiction=chunk.jurisdiction,
-                    effective_date=chunk.version or "Current",
-                    snippet=chunk.text[:200],
-                    is_authoritative=True
-                ))
+            elif not raw_answer:
+                raw_answer = "I do not have sufficient verified statutory evidence in the legal index to answer this query with high confidence."
 
-            raw_answer = (
-                f"### Executive Legal Guidance ({case_state.jurisdiction})\n\n"
-                f"Based on authoritative statutory registers for **{case_state.product_type or 'Ayurvedic formulation'}**, "
-                f"the following legal and regulatory provisions apply under {case_state.jurisdiction} law:\n\n"
-                + "\n\n".join(sections_summary) +
-                "\n\n### Actionable Next Steps for Innovators\n"
-                "1. **Prior Art & TKDL Check**: Verify that active medicinal herbs are not documented as public prior art in classical texts under Section 3(p).\n"
-                "2. **Synergistic Efficacy Data**: If combining multiple biological ingredients, conduct comparative efficacy studies to overcome Section 3(e) admixture objections.\n"
-                "3. **NBA / ABS Compliance**: If sourcing biological materials from India, file Form I / Form III intimation with the National Biodiversity Authority (NBA).\n"
-            )
-        elif not raw_answer:
-            raw_answer = "I do not have sufficient verified statutory evidence in the legal index to answer this query with high confidence."
 
         # 7. Claim Extraction & Citation Validation
         extracted_claims = await claim_extractor.extract_claims(raw_answer)
@@ -379,6 +435,21 @@ Return JSON:
         # Save updated state
         await firestore_service.save_case_state(case_id, case_state.model_dump())
 
+        # 11. Comparison Options for Indian Law Consultations
+        comparison_options = None
+        if case_state.jurisdiction == "India" or "india" in str(case_state.jurisdiction).lower():
+            comparison_options = [
+                "🌐 Compare with International Standards (WIPO/PCT/Nagoya)",
+                "🇺🇸 Compare with US Law (USPTO - 35 U.S.C.)",
+                "🇪🇺 Compare with European Law (EPO / EPC)",
+                "🇩🇪 Compare with German Law (DPMA / PatG)"
+            ]
+            if lang != "en":
+                try:
+                    comparison_options = [await robust_translate(opt, source_lang="en", target_lang=lang) for opt in comparison_options]
+                except Exception as e:
+                    logger.error(f"Comparison options translation error: {e}")
+
         return ChatResponse(
             case_id=case_id,
             message_id=str(uuid.uuid4())[:8],
@@ -395,8 +466,10 @@ Return JSON:
             prior_art_matches=prior_art_matches,
             audio_url=audio_output,
             requires_human_escalation=requires_escalation,
-            safe_abstention=safe_abstain
+            safe_abstention=safe_abstain,
+            comparison_options=comparison_options
         )
 
 
 conversation_pipeline = ConversationPipeline()
+
