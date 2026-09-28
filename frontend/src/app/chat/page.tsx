@@ -826,19 +826,8 @@ export default function ChatPage() {
           </button>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          {/* Mobile Case Context Toggle Button */}
-          <button
-            onClick={() => setShowMobileSidebar(!showMobileSidebar)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1.5 text-[12px] font-medium text-ink lg:hidden"
-          >
-            <ClipboardIcon size={13} />
-            Context
-          </button>
-
-          {/* Everything else lives behind one menu — sound, language, and the
-              three action modals. Reuses actionsDropdownOpen so the existing
-              outside-click handler applies unchanged. */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          {/* Actions Dropdown */}
           <div className="relative" ref={actionsMenuRef}>
             <button
               onClick={() => setActionsDropdownOpen(!actionsDropdownOpen)}
@@ -847,7 +836,7 @@ export default function ChatPage() {
               className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-subtle"
             >
               <SlidersIcon size={13} />
-              Options
+              Actions
               <ChevronDownIcon
                 size={12}
                 className={`opacity-50 transition-transform duration-200 ${
@@ -857,71 +846,18 @@ export default function ChatPage() {
             </button>
 
             {actionsDropdownOpen && (
-              <div className="animate-liftIn absolute right-0 z-50 mt-2 w-[264px] rounded-lg border border-line bg-surface p-1.5 shadow-lift">
-                {/* Spoken responses toggle */}
-                <button
-                  onClick={() => setSoundEnabled(!soundEnabled)}
-                  role="switch"
-                  aria-checked={soundEnabled}
-                  className="flex w-full items-center justify-between gap-3 rounded-md px-2.5 py-2.5 text-left transition-colors hover:bg-subtle"
-                >
-                  <span className="inline-flex items-center gap-2.5 text-[12.5px] text-ink">
-                    {soundEnabled ? (
-                      <VolumeIcon size={14} className="text-accent" />
-                    ) : (
-                      <MuteIcon size={14} className="text-faint" />
-                    )}
-                    Spoken responses
-                  </span>
-                  <span
-                    className={`relative h-[18px] w-8 shrink-0 rounded-full border transition-colors duration-200 ${
-                      soundEnabled ? 'border-accent bg-accent' : 'border-line bg-sunken'
-                    }`}
-                    aria-hidden="true"
-                  >
-                    <span
-                      className={`absolute top-[2px] h-[12px] w-[12px] rounded-full transition-all duration-200 ease-out ${
-                        soundEnabled ? 'left-[16px] bg-accent-fg' : 'left-[2px] bg-faint'
-                      }`}
-                    />
-                  </span>
-                </button>
-
-                {/* Language */}
-                <div className="px-2.5 pt-1 pb-2.5">
-                  <label
-                    htmlFor="chat-language"
-                    className="eyebrow mb-1.5 block"
-                  >
-                    Response language
-                  </label>
-                  <select
-                    id="chat-language"
-                    value={language}
-                    onChange={(e) => handleLanguageChange(e.target.value)}
-                    className="w-full rounded-md border border-line bg-sunken px-2.5 py-2 text-[12.5px] text-ink"
-                  >
-                    {languages.map((l) => (
-                      <option key={l.code} value={l.code}>
-                        {l.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <hr className="rule my-1" />
-
+              <div className="animate-liftIn absolute right-0 z-50 mt-2 w-[240px] rounded-lg border border-line bg-surface p-1.5 shadow-lift">
                 <button
                   onClick={() => {
                     setShowPathwayModal(true);
                     setActionsDropdownOpen(false);
                   }}
-                  className="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2.5 text-left transition-colors hover:bg-subtle"
+                  className="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-subtle"
                 >
-                  <ScalesIcon size={15} className="mt-0.5 shrink-0 text-accent" />
+                  <ScalesIcon size={14} className="mt-0.5 shrink-0 text-accent" />
                   <span>
-                    <span className="block text-[12.5px] font-medium text-ink">6-Tier Legal Pathway</span>
-                    <span className="mt-0.5 block text-[11px] text-faint">Formulation roadmap &amp; ABS</span>
+                    <span className="block text-[12px] font-medium text-ink">6-Tier Legal Pathway</span>
+                    <span className="block text-[10.5px] text-faint">Formulation roadmap &amp; ABS</span>
                   </span>
                 </button>
 
@@ -930,12 +866,12 @@ export default function ChatPage() {
                     setShowFormsModal(true);
                     setActionsDropdownOpen(false);
                   }}
-                  className="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2.5 text-left transition-colors hover:bg-subtle"
+                  className="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-subtle"
                 >
-                  <LandmarkIcon size={15} className="mt-0.5 shrink-0 text-accent" />
+                  <LandmarkIcon size={14} className="mt-0.5 shrink-0 text-accent" />
                   <span>
-                    <span className="block text-[12.5px] font-medium text-ink">Official Forms &amp; Portals</span>
-                    <span className="mt-0.5 block text-[11px] text-faint">IPO, NBA, FSSAI, AYUSH</span>
+                    <span className="block text-[12px] font-medium text-ink">Official Forms &amp; Portals</span>
+                    <span className="block text-[10.5px] text-faint">IPO, NBA, FSSAI, AYUSH</span>
                   </span>
                 </button>
 
@@ -944,17 +880,65 @@ export default function ChatPage() {
                     setShowDossierModal(true);
                     setActionsDropdownOpen(false);
                   }}
-                  className="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2.5 text-left transition-colors hover:bg-subtle"
+                  className="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-subtle"
                 >
-                  <FileTextIcon size={15} className="mt-0.5 shrink-0 text-accent" />
+                  <FileTextIcon size={14} className="mt-0.5 shrink-0 text-accent" />
                   <span>
-                    <span className="block text-[12.5px] font-medium text-ink">Export Legal Dossier</span>
-                    <span className="mt-0.5 block text-[11px] text-faint">Download diagnostic report</span>
+                    <span className="block text-[12px] font-medium text-ink">Export Legal Dossier</span>
+                    <span className="block text-[10.5px] text-faint">Download diagnostic report</span>
                   </span>
                 </button>
               </div>
             )}
           </div>
+
+          {/* Master Global Speaker Toggle (Outside in Top Bar) */}
+          <button
+            onClick={toggleGlobalSound}
+            aria-label={soundEnabled ? 'Mute spoken audio' : 'Enable spoken audio'}
+            title={soundEnabled ? 'Spoken audio is ON (Click to mute)' : 'Spoken audio is OFF (Click to unmute)'}
+            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+              soundEnabled
+                ? 'border-accent-line bg-accent-soft text-accent-ink'
+                : 'border-line text-faint hover:border-line-strong hover:text-ink'
+            }`}
+          >
+            {soundEnabled ? (
+              <>
+                <VolumeIcon size={13} className="text-accent animate-pulse" />
+                <span className="hidden sm:inline">Voice ON</span>
+              </>
+            ) : (
+              <>
+                <MuteIcon size={13} />
+                <span className="hidden sm:inline">Muted</span>
+              </>
+            )}
+          </button>
+
+          {/* Response Language Selector (Outside in Top Bar) */}
+          <select
+            id="chat-language"
+            aria-label="Response Language"
+            value={language}
+            onChange={(e) => handleLanguageChange(e.target.value)}
+            className="rounded-md border border-line bg-surface px-2.5 py-1.5 text-[12px] font-medium text-ink focus:border-accent focus:outline-none"
+          >
+            {languages.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Mobile Case Context Toggle Button */}
+          <button
+            onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1.5 text-[12px] font-medium text-ink lg:hidden"
+          >
+            <ClipboardIcon size={13} />
+            Context
+          </button>
         </div>
       </div>
 
@@ -1267,8 +1251,8 @@ export default function ChatPage() {
           />
         )}
 
-        <div
-          className={`panel overflow-y-auto pb-[env(safe-area-inset-bottom)] lg:col-span-4 lg:flex lg:rounded-lg xl:col-span-3 ${
+        <aside
+          className={`panel max-h-full min-h-0 overflow-y-auto pb-[env(safe-area-inset-bottom)] lg:col-span-4 lg:flex lg:rounded-lg xl:col-span-3 ${
             showMobileSidebar
               ? 'animate-liftIn fixed inset-y-0 right-0 z-50 flex w-[min(380px,92vw)] rounded-l-lg border-y-0 border-r-0 p-4'
               : 'hidden lg:flex'
@@ -1454,7 +1438,7 @@ export default function ChatPage() {
               </span>
             }
           >
-            <div className="max-h-72 space-y-2.5 overflow-y-auto p-3">
+            <div className="space-y-2.5 p-3">
               {latestResponse?.citations && latestResponse.citations.length > 0 ? (
                 latestResponse.citations.map((c, cIdx) => (
                   <div key={cIdx} className="panel-sunken space-y-2 p-3.5">
@@ -1500,7 +1484,7 @@ export default function ChatPage() {
               )}
             </div>
           </Accordion>
-        </div>
+        </aside>
       </div>
 
       {/* ========================================================================= */}
