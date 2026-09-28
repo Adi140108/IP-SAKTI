@@ -61,3 +61,13 @@ class ChatResponse(BaseModel):
     requires_human_escalation: bool = False
     safe_abstention: bool = False
 
+class TranslateRequest(BaseModel):
+    text: str
+    target_lang: str
+    source_lang: Optional[str] = "en"
+
+class TranslateResponse(BaseModel):
+    translated_text: str
+    source_lang: str
+    target_lang: str
+

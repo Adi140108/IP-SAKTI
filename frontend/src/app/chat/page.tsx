@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createCase, sendChatMessage, getCase, uploadDocument, updateCase, listCases } from '@/lib/api';
+import { createCase, sendChatMessage, getCase, uploadDocument, updateCase, listCases, translateText } from '@/lib/api';
 import { ChatResponse, CaseState } from '@/types';
 import { FORMULATION_TIERS, getTierFromClassification } from '@/lib/formulationTaxonomy';
 import { getPersistedCases, persistCase, mergeAndPersistCases } from '@/lib/caseRegistry';
@@ -355,12 +355,48 @@ export default function ChatPage() {
     ml: 'ml-IN',
   };
 
-  const handleLanguageChange = (code: string) => {
+  const handleLanguageChange = async (code: string) => {
     setLanguage(code);
     if (typeof window !== 'undefined') {
       localStorage.setItem('ip_sakti_chat_language', code);
     }
+    // If there is existing chat history, translate the assistant messages to the newly chosen language
+    if (chatHistory.length > 0 && code !== 'en') {
+      try {
+        const updated = await Promise.all(
+          chatHistory.map(async (item) => {
+            if (item.sender === 'assistant' && item.data && item.data.answer) {
+              const translatedAnswer = await translateText(item.data.answer, code, 'en');
+              const translatedQuestion = item.data.next_question
+                ? await translateText(item.data.next_question, code, 'en')
+                : item.data.next_question;
+              const translatedOptions = item.data.suggested_options
+                ? await Promise.all(item.data.suggested_options.map((opt) => translateText(opt, code, 'en')))
+                : item.data.suggested_options;
+
+              return {
+                ...item,
+                data: {
+                  ...item.data,
+                  answer: translatedAnswer,
+                  next_question: translatedQuestion,
+                  suggested_options: translatedOptions,
+                },
+              };
+            }
+            return item;
+          })
+        );
+        setChatHistory(updated);
+        if (updated.length > 0 && updated[updated.length - 1].data) {
+          setLatestResponse(updated[updated.length - 1].data!);
+        }
+      } catch (e) {
+        console.error('Failed to translate existing chat history:', e);
+      }
+    }
   };
+
 
   // Helper: Find Natural Female Voice (preferring a voice for the active language)
   const getFemaleVoice = (targetLangCode?: string): SpeechSynthesisVoice | null => {

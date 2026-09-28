@@ -102,3 +102,14 @@ def test_document_upload_and_ocr():
     assert doc_meta["filename"] == "test_doc.pdf"
     assert doc_meta["ocr_result"] is not None
     assert doc_meta["ocr_result"]["ocr_engine"] in ["bhashini", "gemma_vision"]
+
+def test_translate_endpoint():
+    res = client.post(
+        "/api/v1/chat/translate",
+        json={"text": "Hello World", "target_lang": "hi", "source_lang": "en"}
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert "translated_text" in data
+    assert data["target_lang"] == "hi"
+

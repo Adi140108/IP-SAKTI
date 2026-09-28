@@ -283,3 +283,25 @@ export async function updateEscalationStatus(dossierId: string, status: string, 
   return handleResponse<EscalationDossier>(res);
 }
 
+export async function translateText(
+  text: string,
+  targetLang: string,
+  sourceLang: string = 'en'
+): Promise<string> {
+  if (!text || !text.trim() || targetLang === sourceLang) return text;
+  try {
+    const baseUrl = getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/chat/translate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, target_lang: targetLang, source_lang: sourceLang }),
+    });
+    const data = await handleResponse<{ translated_text: string }>(res);
+    return data.translated_text || text;
+  } catch (err) {
+    console.warn('Translation service warning:', err);
+    return text;
+  }
+}
+
+
