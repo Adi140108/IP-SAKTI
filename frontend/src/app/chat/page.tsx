@@ -694,7 +694,7 @@ export default function ChatPage() {
             className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1.5 text-[12px] font-medium text-ink transition-colors hover:border-accent hover:bg-accent hover:text-accent-fg"
           >
             <PlusIcon size={13} />
-            <span className="hidden sm:inline">New Case</span>
+            <span className="hidden sm:inline">{t.newCaseButton || 'New Case'}</span>
           </button>
 
           {/* Regime Switcher */}
@@ -751,7 +751,7 @@ export default function ChatPage() {
                 className="mono-caps inline-flex items-center gap-1.5 rounded-md border border-line bg-sunken px-2.5 py-1.5 text-faint transition-colors hover:border-accent-line hover:text-ink"
               >
                 <FolderIcon size={12} />
-                Case #{caseId ? caseId.slice(0, 8) : 'new'}
+                {t.casesButton || 'Case'} #{caseId ? caseId.slice(0, 8) : 'new'}
                 <ChevronDownIcon
                   size={11}
                   className={`opacity-50 transition-transform duration-200 ${
@@ -762,7 +762,7 @@ export default function ChatPage() {
 
               {casePickerOpen && (
                 <div className="animate-liftIn absolute left-0 z-50 mt-2 max-h-80 w-[300px] overflow-y-auto rounded-lg border border-line bg-surface p-1.5 shadow-lift">
-                  <div className="eyebrow px-2.5 pb-1 pt-1.5">Your Consultations</div>
+                  <div className="eyebrow px-2.5 pb-1 pt-1.5">{t.casesButton || 'Your Consultations'}</div>
                   {userCases.map((c, idx) => {
                     const isActive = c.case_id === caseId;
                     const tierLabel = getTierFromClassification(
@@ -807,7 +807,7 @@ export default function ChatPage() {
                       className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[12px] font-medium text-accent-ink transition-colors hover:bg-accent-soft"
                     >
                       <PlusIcon size={13} />
-                      Start New Consultation
+                      {t.newCaseButton || 'Start New Consultation'}
                     </button>
                   </div>
                 </div>
@@ -836,7 +836,7 @@ export default function ChatPage() {
               className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-subtle"
             >
               <SlidersIcon size={13} />
-              Actions
+              {t.actionsButton || 'Actions'}
               <ChevronDownIcon
                 size={12}
                 className={`opacity-50 transition-transform duration-200 ${
@@ -937,7 +937,7 @@ export default function ChatPage() {
             className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1.5 text-[12px] font-medium text-ink lg:hidden"
           >
             <ClipboardIcon size={13} />
-            Context
+            {t.caseContextTitle || 'Context'}
           </button>
         </div>
       </div>
@@ -958,15 +958,17 @@ export default function ChatPage() {
                 <ScalesIcon size={17} className="text-accent" />
               </span>
               <div className="min-w-0">
-                <h2 className="font-display text-[17px] leading-tight text-ink">AI Consultation</h2>
+                <h2 className="font-display text-[17px] leading-tight text-ink">
+                  {t.aiConsultationTitle || 'AI Consultation'}
+                </h2>
                 <p className="mt-1 truncate text-[11.5px] text-faint">
-                  Source-cited IP &amp; regulatory guidance under Indian statutory frameworks
+                  {t.aiConsultationSubtitle || 'Source-cited IP & regulatory guidance under Indian statutory frameworks'}
                 </p>
               </div>
             </div>
             <span className="chip chip-ok">
               <span className="status-dot status-dot-ok animate-pulse-soft" aria-hidden="true" />
-              RAG Sources Ready
+              {t.ragSourcesReady || 'RAG Sources Ready'}
             </span>
           </div>
 
@@ -1002,7 +1004,7 @@ export default function ChatPage() {
                       onClick={() => setShowAuthModal(true)}
                       className="rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-accent-fg transition-colors hover:bg-accent-hover"
                     >
-                      Sign In
+                      {t.signInToSave || 'Sign In'}
                     </button>
                   </div>
                 )}
@@ -1053,7 +1055,7 @@ export default function ChatPage() {
                     <div className="flex items-center justify-between gap-3 border-b border-line-subtle pb-3.5">
                       <div className="flex items-center gap-2">
                         <span className="status-dot status-dot-ok" aria-hidden="true" />
-                        <span className="eyebrow">IP-SAKTI Legal Guidance</span>
+                        <span className="eyebrow">{t.aiConsultationTitle || 'IP-SAKTI Legal Guidance'}</span>
                       </div>
                       <button
                         onClick={() => speakText(item.data!.answer, idx)}
@@ -1103,8 +1105,8 @@ export default function ChatPage() {
                     {item.data.next_question && (
                       <div className="space-y-3.5 rounded-md border border-accent-line bg-accent-soft p-5">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="eyebrow text-accent-ink">Case Clarification</span>
-                          <span className="mono-caps text-faint">Select to proceed</span>
+                          <span className="eyebrow text-accent-ink">{t.caseClarification || 'Case Clarification'}</span>
+                          <span className="mono-caps text-faint">{t.selectToProceed || 'Select to proceed'}</span>
                         </div>
 
                         <p className="text-[14px] font-medium leading-relaxed text-ink">
@@ -1152,8 +1154,8 @@ export default function ChatPage() {
                   />
                   <span>
                     {isUploadingDoc
-                      ? 'Extracting document text via OCR and updating case state...'
-                      : 'Retrieving statutory RAG context & running Groq reasoning...'}
+                      ? (t.extractingDoc || 'Extracting document text via OCR and updating case state...')
+                      : (t.retrievingSources || 'Retrieving statutory RAG context & running Groq reasoning...')}
                   </span>
                 </div>
                 <div className="space-y-2" aria-hidden="true">
@@ -1176,7 +1178,7 @@ export default function ChatPage() {
               <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-danger-line bg-danger-soft px-4 py-3 text-[12px] text-danger">
                 <div className="flex items-center gap-2">
                   <span className="status-dot status-dot-danger animate-pulse-soft" aria-hidden="true" />
-                  <span>Listening... Speak your query clearly.</span>
+                  <span>{t.listeningText || 'Listening... Speak your query clearly.'}</span>
                 </div>
                 <span className="mono-caps truncate opacity-80">{transcript}</span>
               </div>
@@ -1211,7 +1213,7 @@ export default function ChatPage() {
               {/* Query Text Input */}
               <input
                 type="text"
-                placeholder="Ask an Ayurvedic IP question or upload a document..."
+                placeholder={t.inputPlaceholder || "Ask an Ayurvedic IP question or upload a document..."}
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
@@ -1224,16 +1226,14 @@ export default function ChatPage() {
                 disabled={loading || !inputMessage.trim()}
                 className="inline-flex h-11 shrink-0 items-center gap-2 rounded-md bg-accent px-5 text-[13px] font-medium text-accent-fg transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40 sm:h-10"
               >
-                Send
+                {t.sendButton?.replace('➔', '').trim() || 'Send'}
                 <ArrowRightIcon size={14} />
               </button>
             </div>
 
             {/* Clean Disclaimer Footnote */}
             <p className="mt-3.5 truncate text-center text-[10.5px] text-faint">
-              <strong className="font-semibold text-muted">Disclaimer:</strong> IP-SAKTI Sahayak
-              provides statutory information under SIH PS-26045. It does not replace professional
-              legal counsel.
+              {t.disclaimer || 'Disclaimer: IP-SAKTI Sahayak provides statutory information under SIH PS-26045. It does not replace professional legal counsel.'}
             </p>
             </div>
           </div>
@@ -1261,7 +1261,7 @@ export default function ChatPage() {
           {/* Sidebar Header with Coverage Confidence */}
           <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line pb-4">
             <div className="flex items-center gap-2.5">
-              <h3 className="eyebrow">Case Context</h3>
+              <h3 className="eyebrow">{t.caseContextTitle || 'Case Context'}</h3>
               {showMobileSidebar && (
                 <button
                   onClick={() => setShowMobileSidebar(false)}
@@ -1275,7 +1275,7 @@ export default function ChatPage() {
 
             {/* Coverage Confidence Badge */}
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-faint">Coverage</span>
+              <span className="text-[11px] text-faint">{t.coverageLabel || 'Coverage'}</span>
               <span
                 className={`chip ${
                   latestResponse?.confidence_score && latestResponse.confidence_score >= 0.5
@@ -1290,10 +1290,10 @@ export default function ChatPage() {
 
           {/* SECTION 1: COMPACT CASE CONTEXT ROWS */}
           <div className="panel-sunken shrink-0 p-4">
-            <Row label="Jurisdiction">
+            <Row label={t.jurisdictionLabel || 'Jurisdiction'}>
               {jurisdiction} {country ? `(${country})` : ''}
             </Row>
-            <Row label="Formulation" last={false}>
+            <Row label={t.formulationLabel || 'Formulation'} last={false}>
               <button
                 onClick={() => setShowPathwayModal(true)}
                 className="inline-flex max-w-[150px] items-center gap-1.5 text-left font-medium text-accent-ink hover:underline"
@@ -1303,27 +1303,27 @@ export default function ChatPage() {
                 <PencilIcon size={10} className="shrink-0 opacity-60" />
               </button>
             </Row>
-            <Row label="Classical Basis" warn={!caseState?.classical_reference}>
-              {caseState?.classical_reference || 'Unspecified'}
+            <Row label={t.classicalBasisLabel || 'Classical Basis'} warn={!caseState?.classical_reference}>
+              {caseState?.classical_reference || t.unspecified || 'Unspecified'}
             </Row>
-            <Row label="Active Herbs" warn={!caseState?.ingredients?.length}>
+            <Row label={t.activeHerbsLabel || 'Active Herbs'} warn={!caseState?.ingredients?.length}>
               {caseState?.ingredients && caseState.ingredients.length > 0
                 ? caseState.ingredients.join(', ')
-                : 'Not specified'}
+                : (t.notSpecified || 'Not specified')}
             </Row>
-            <Row label="TK Involved" last={false}>
+            <Row label={t.tkInvolvedLabel || 'TK Involved'} last={false}>
               {caseState?.traditional_knowledge_involved === true
-                ? 'Yes (Prior Art)'
+                ? (t.tkYes || 'Yes (Prior Art)')
                 : caseState?.traditional_knowledge_involved === false
-                  ? 'No (Novel)'
-                  : 'Uncertain'}
+                  ? (t.tkNo || 'No (Novel)')
+                  : (t.tkUncertain || 'Uncertain')}
             </Row>
-            <Row label="Bio Resources (ABS)" last>
+            <Row label={t.bioResourcesLabel || 'Bio Resources (ABS)'} last>
               {caseState?.biological_resources_involved === true
-                ? 'Yes (NBA Clearance)'
+                ? (t.bioYes || 'Yes (NBA Clearance)')
                 : caseState?.biological_resources_involved === false
-                  ? 'No Indian Bio'
-                  : 'Uncertain'}
+                  ? (t.bioNo || 'No Indian Bio')
+                  : (t.bioUncertain || 'Uncertain')}
             </Row>
           </div>
 
@@ -1331,10 +1331,10 @@ export default function ChatPage() {
           <Accordion
             open={isParamsOpen}
             onToggle={() => setIsParamsOpen(!isParamsOpen)}
-            title="Case Parameters"
+            title={t.caseParametersTitle || 'Case Parameters'}
             trailing={
               <span className="text-[11px] text-faint">
-                {isParamsOpen ? `${knownCount}/${totalParams} gathered` : `${missingCount} needed`}
+                {isParamsOpen ? `${knownCount}/${totalParams} ${t.gatheredCount || 'gathered'}` : `${missingCount} ${t.neededCount || 'needed'}`}
               </span>
             }
           >
@@ -1342,7 +1342,7 @@ export default function ChatPage() {
               {/* Progress bar */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="eyebrow">Progress</span>
+                  <span className="eyebrow">{t.progressLabel || 'Progress'}</span>
                   <span className="mono-caps text-muted">{completionPct}%</span>
                 </div>
                 <div
@@ -1363,7 +1363,7 @@ export default function ChatPage() {
               {/* Known items */}
               {caseState?.known_information && caseState.known_information.length > 0 && (
                 <div className="space-y-1.5">
-                  <span className="eyebrow text-ok">Gathered</span>
+                  <span className="eyebrow text-ok">{t.gatheredLabel || 'Gathered'}</span>
                   {caseState.known_information.map((item, idx) => (
                     <div key={idx} className="flex items-start gap-2 text-[12px] leading-snug text-muted">
                       <CheckIcon size={12} className="mt-0.5 shrink-0 text-ok" />
@@ -1376,7 +1376,7 @@ export default function ChatPage() {
               {/* Missing items */}
               {caseState?.missing_information && caseState.missing_information.length > 0 && (
                 <div className="space-y-1.5 border-t border-line-subtle pt-3">
-                  <span className="eyebrow text-warn">Pending Clarification</span>
+                  <span className="eyebrow text-warn">{t.pendingClarificationLabel || 'Pending Clarification'}</span>
                   {caseState.missing_information.map((item, idx) => (
                     <div key={idx} className="flex items-start gap-2 text-[12px] leading-snug text-faint">
                       <CircleIcon size={12} className="mt-0.5 shrink-0 text-warn" />
@@ -1392,10 +1392,10 @@ export default function ChatPage() {
           <Accordion
             open={isIpDomainsOpen}
             onToggle={() => setIsIpDomainsOpen(!isIpDomainsOpen)}
-            title="IP Domains"
+            title={t.ipDomainsTitle || 'IP Domains'}
             trailing={
               <span className={activeDomainsCount > 0 ? 'chip chip-accent' : 'chip chip-neutral'}>
-                {activeDomainsCount} active
+                {activeDomainsCount} {t.activeCount || 'active'}
               </span>
             }
           >
@@ -1431,7 +1431,7 @@ export default function ChatPage() {
           <Accordion
             open={isSourcesOpen}
             onToggle={() => setIsSourcesOpen(!isSourcesOpen)}
-            title="Verified Sources"
+            title={t.verifiedSourcesTitle || 'Verified Sources'}
             trailing={
               <span className={citationsCount > 0 ? 'chip chip-accent' : 'chip chip-neutral'}>
                 {citationsCount}
@@ -1447,7 +1447,7 @@ export default function ChatPage() {
                       <span
                         className={`chip shrink-0 ${c.is_authoritative ? 'chip-ok' : 'chip-neutral'}`}
                       >
-                        {c.is_authoritative ? 'Auth' : 'Ref'}
+                        {c.is_authoritative ? (t.authBadge || 'Auth') : (t.refBadge || 'Ref')}
                       </span>
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1479,7 +1479,7 @@ export default function ChatPage() {
                 ))
               ) : (
                 <p className="p-3 text-center text-[11.5px] text-faint italic">
-                  Citations appear when a query is submitted.
+                  {t.citationsEmpty || 'Citations appear when a query is submitted.'}
                 </p>
               )}
             </div>

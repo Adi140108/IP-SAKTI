@@ -194,17 +194,6 @@ export default function Navbar() {
                     </p>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      setUserRole(userRole === 'facilitator' ? 'practitioner' : 'facilitator');
-                      setUserDropdownOpen(false);
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[12.5px] text-ink transition-colors hover:bg-subtle"
-                  >
-                    <ScalesIcon size={14} className="shrink-0 text-faint" />
-                    Switch to {userRole === 'facilitator' ? 'Practitioner' : 'Facilitator'} Mode
-                  </button>
-
                   <Link
                     href="/case"
                     onClick={() => setUserDropdownOpen(false)}
@@ -306,16 +295,6 @@ export default function Navbar() {
                   <ScalesIcon size={14} />
                   {userRole === 'facilitator' ? 'Facilitator Portal' : 'Escalate Case'}
                 </Link>
-                <button
-                  onClick={() => {
-                    setUserRole(userRole === 'facilitator' ? 'practitioner' : 'facilitator');
-                    setMobileOpen(false);
-                  }}
-                  className="flex w-full items-center gap-2 border-b border-line-subtle py-3 text-left text-sm text-muted"
-                >
-                  <ScalesIcon size={14} />
-                  Switch to {userRole === 'facilitator' ? 'Practitioner' : 'Facilitator'} Mode
-                </button>
                 <button
                   onClick={() => {
                     signOutUser();

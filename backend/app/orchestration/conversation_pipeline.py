@@ -178,15 +178,22 @@ class ConversationPipeline:
 
         if lang != "en":
             system_prompt += (
-                f"\n5. MULTILINGUAL INSTRUCTION: The user has selected the language '{lang_name}'. "
-                f"You MUST formulate and write the entire 'answer' text in {lang_name} using natural, authentic Indic script and proper terminology."
+                f"\n5. MANDATORY MULTILINGUAL REQUIREMENT: The user has selected the language '{lang_name}' ({lang}). "
+                f"You MUST write the entire 'answer' field in {lang_name} using natural, authentic Indic script and proper terminology."
             )
+
+        task_instruction = (
+            f"Provide concise, high-impact informational guidance in {lang_name} ({lang}) (MAX 5-8 BULLET POINTS TOTAL) using natural Indic script."
+            if lang != "en"
+            else "Provide concise, high-impact informational guidance (MAX 5-8 BULLET POINTS TOTAL)."
+        )
 
         user_prompt = f"""
 Case Parameters:
 - Jurisdiction: {case_state.jurisdiction} ({case_state.country or 'India'})
 - Formulation Category: {case_state.formulation_classification}
 - Relevant IP Domains: {', '.join(case_state.intellectual_property_objective)}
+- Target Language: {lang_name} ({lang})
 
 Authoritative RAG Statutory Evidence Context:
 {evidence_prompt_text}
@@ -195,12 +202,12 @@ User Query:
 {processed_text}
 
 Task:
-Provide concise, high-impact informational guidance (MAX 10 BULLET POINTS TOTAL).
+{task_instruction}
 List explicit statutory section citations.
 
 Return JSON:
 {{
-  "answer": "Concise guidance formatted in maximum 5-8 bullet points",
+  "answer": "Concise guidance formatted in maximum 5-8 bullet points (in {lang_name})",
   "citations": [
     {{
       "source": "Exact Statute Title",
@@ -341,18 +348,6 @@ Return JSON:
             )
             final_answer += insufficient_info_notice
 
-        # Record complete turn into conversation_history
-        turn_record = {
-            "user_message": user_text,
-            "assistant_answer": final_answer,
-            "next_question": next_question,
-            "suggested_options": q_res.suggested_options if next_question else None,
-            "citations": [c.model_dump() for c in validated_cits],
-            "question": next_question,
-            "timestamp": datetime.now().isoformat()
-        }
-        case_state.conversation_history.append(turn_record)
-
         # 10. Multilingual Translation & TTS Audio
         translated_options = q_res.suggested_options if next_question else None
         if lang != "en":
@@ -364,6 +359,18 @@ Return JSON:
                     translated_options = [await robust_translate(opt, source_lang="en", target_lang=lang) for opt in translated_options]
             except Exception as e:
                 logger.error(f"Response translation failed (en -> {lang}): {e}")
+
+        # Record complete translated turn into conversation_history
+        turn_record = {
+            "user_message": user_text,
+            "assistant_answer": final_answer,
+            "next_question": next_question,
+            "suggested_options": translated_options,
+            "citations": [c.model_dump() for c in validated_cits],
+            "question": next_question,
+            "timestamp": datetime.now().isoformat()
+        }
+        case_state.conversation_history.append(turn_record)
 
         wants_audio = bool(request.audio_base64 or getattr(request, "enable_audio_output", False))
         audio_output = await bhashini_service.text_to_speech(final_answer[:200], target_lang=lang) if wants_audio else None
