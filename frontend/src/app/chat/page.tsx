@@ -945,12 +945,12 @@ export default function ChatPage() {
       {/* ========================================================================= */}
       {/* 2. MAIN 2-PANE WORKSPACE (CHAT ~72% | COMPACT SIDEBAR ~28%) */}
       {/* ========================================================================= */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-12">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-12 overflow-hidden">
 
         {/* ===================================================================== */}
         {/* DOMINANT CHAT AREA (Col 8 / ~72% on desktop) */}
         {/* ===================================================================== */}
-        <div className="panel relative flex flex-col overflow-hidden lg:col-span-8 xl:col-span-9">
+        <div className="panel relative flex h-full min-h-0 flex-col overflow-hidden lg:col-span-8 xl:col-span-9">
           {/* Chat Card Header */}
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-4 sm:px-6 sm:py-5 lg:px-7">
             <div className="flex min-w-0 items-center gap-3">
@@ -985,7 +985,7 @@ export default function ChatPage() {
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-auto flex min-h-full w-full max-w-[860px] flex-col gap-5 px-4 py-5 sm:gap-7 sm:px-6 sm:py-7 xl:max-w-[960px] lg:px-8">
 
-{/* Clean Minimal Empty State — no duplicate title, the panel
+            {/* Clean Minimal Empty State — no duplicate title, the panel
                 header above already says "AI Consultation". */}
             {chatHistory.length === 0 && (
               <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
@@ -1023,17 +1023,17 @@ export default function ChatPage() {
                     t.starterPrompt2 || 'Does this formulation require ABS clearance from NBA?',
                     t.starterPrompt3 || 'What IP protection is available for our Ayurvedic product?',
                   ].map((prompt, i) => (
-              <button
-                key={i}
-                onClick={() => handleSendMessage(prompt)}
-                className="rounded-md border border-line bg-sunken px-3.5 py-2 text-[12px] leading-snug text-muted transition-colors hover:border-accent-line hover:bg-accent-soft hover:text-ink"
-              >
-                {prompt}
-              </button>
-            ))}
-        </div>
-      </div>
-    )}
+                    <button
+                      key={i}
+                      onClick={() => handleSendMessage(prompt)}
+                      className="rounded-md border border-line bg-sunken px-3.5 py-2 text-[12px] leading-snug text-muted transition-colors hover:border-accent-line hover:bg-accent-soft hover:text-ink"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Chat Messages */}
             {chatHistory.map((item, idx) => (
@@ -1252,7 +1252,7 @@ export default function ChatPage() {
         )}
 
         <aside
-          className={`panel max-h-full min-h-0 overflow-y-auto pb-[env(safe-area-inset-bottom)] lg:col-span-4 lg:flex lg:rounded-lg xl:col-span-3 ${
+          className={`panel h-full min-h-0 overflow-y-auto pb-[env(safe-area-inset-bottom)] lg:col-span-4 lg:flex lg:rounded-lg xl:col-span-3 ${
             showMobileSidebar
               ? 'animate-liftIn fixed inset-y-0 right-0 z-50 flex w-[min(380px,92vw)] rounded-l-lg border-y-0 border-r-0 p-4'
               : 'hidden lg:flex'
@@ -1289,7 +1289,7 @@ export default function ChatPage() {
           </div>
 
           {/* SECTION 1: COMPACT CASE CONTEXT ROWS */}
-          <div className="panel-sunken p-4">
+          <div className="panel-sunken shrink-0 p-4">
             <Row label="Jurisdiction">
               {jurisdiction} {country ? `(${country})` : ''}
             </Row>
@@ -1570,8 +1570,9 @@ function Accordion({
   children: React.ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-md border border-line">
+    <div className="shrink-0 overflow-hidden rounded-md border border-line bg-surface">
       <button
+        type="button"
         onClick={onToggle}
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-2 bg-sunken px-4 py-3 text-left transition-colors hover:bg-subtle"
@@ -1588,9 +1589,11 @@ function Accordion({
         </span>
         {trailing}
       </button>
-      <div className="disclosure" data-open={open}>
-        <div>{children}</div>
-      </div>
+      {open && (
+        <div className="border-t border-line bg-surface">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
