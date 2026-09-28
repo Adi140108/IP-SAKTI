@@ -44,7 +44,7 @@ class GroqProvider(LLMProvider):
         except Exception as e:
             return {"available": False, "error": str(e)}
 
-    async def generate_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+    async def generate_text(self, prompt: str, system_prompt: Optional[str] = None, max_tokens: int = 3500) -> str:
         """Generate raw text response via Groq API."""
         if not settings.GROQ_API_KEY:
             raise RuntimeError("GROQ_API_KEY_MISSING: Cannot invoke Groq API without API key.")
@@ -65,7 +65,8 @@ class GroqProvider(LLMProvider):
             "model": self.model,
             "messages": messages,
             "temperature": 0.2,
-            "top_p": 0.9
+            "top_p": 0.9,
+            "max_tokens": max_tokens
         }
 
         timeout_config = httpx.Timeout(60.0, connect=5.0)
@@ -79,9 +80,9 @@ class GroqProvider(LLMProvider):
                         return choices[0].get("message", {}).get("content", "").strip()
                     raise RuntimeError("Groq returned empty choices payload.")
                 
-                # If primary model unavailable or rate-limited (HTTP 429/404/400), attempt fallback Groq models
+                # If primary model unavailable or rate-limited (HTTP 429/404/400), attempt fallback active Groq models
                 if res.status_code in (429, 404, 400):
-                    fallback_models = ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama-3.1-8b-instant", "qwen-2.5-32b"]
+                    fallback_models = ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b"]
                     for alt_model in fallback_models:
                         if alt_model != payload["model"]:
                             logger.warning(f"Groq API model {payload['model']} returned HTTP {res.status_code}. Retrying with {alt_model}.")

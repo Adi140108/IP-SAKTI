@@ -461,7 +461,7 @@ STRICT TASK:
 Generate EXACTLY ONE clear, friendly follow-up question to collect the missing parameter "{target_field}".
 
 RULES:
-1. Language: {f"Formulate the question and options in {state.language} (e.g. Hindi, Tamil, Telugu, etc.) using clear Indic script." if getattr(state, "language", "en") != "en" else "Speak in plain, clear English understandable to an inventor or Ayurvedic practitioner."}
+1. Language: Speak in plain, clear English understandable to an inventor or Ayurvedic practitioner. (The pipeline will translate this into the user's target language in the final step).
 2. Avoid dense legal or Ayurvedic jargon. If a legal term (e.g. Prior Art, ABS clearance, Synergistic Efficacy) is essential, explain it briefly and simply.
 3. If jurisdiction is International and country is {country_name}, make the question relevant to {country_name}.
 4. Provide 2 to 4 realistic, selectable answer options / chips. ALWAYS provide real concrete answers (e.g. "Ashwagandha & Curcumin", "Novel Proprietary Formula", "India (Domestic Law)") or "✍️ Type custom details...". NEVER generate instructional meta-options like "List each ingredient with exact weight" or "Specify percentage composition".

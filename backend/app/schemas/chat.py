@@ -72,6 +72,16 @@ class TranslateResponse(BaseModel):
     source_lang: str
     target_lang: str
 
+class TranslateBatchRequest(BaseModel):
+    texts: List[str]
+    target_lang: str
+    source_lang: Optional[str] = "auto"
+
+class TranslateBatchResponse(BaseModel):
+    translated_texts: List[str]
+    target_lang: str
+
+
 class ComparisonDimension(BaseModel):
     dimension: str
     india_law: str

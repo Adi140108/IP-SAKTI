@@ -60,6 +60,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!firebaseConfigured || !auth) {
+      if (typeof window !== 'undefined') {
+        const localMock = localStorage.getItem('ip_sakti_local_mock_user');
+        if (localMock) {
+          try {
+            setUser(JSON.parse(localMock));
+          } catch {
+            // ignore
+          }
+        }
+      }
       setLoading(false);
       return;
     }
@@ -82,7 +92,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInWithEmail = async (email: string, pass: string): Promise<User> => {
-    if (!auth) throw new Error('Authentication is not configured (missing Firebase API key). Contact the administrator.');
+    if (!auth || !firebaseConfigured) {
+      const mockUser = {
+        uid: `local_user_${email.replace(/[^a-zA-Z0-9]/g, '_') || 'demo'}`,
+        email: email || 'innovator@ip-sakti.gov.in',
+        displayName: email.split('@')[0] || 'Local Innovator',
+      } as unknown as User;
+      setUser(mockUser);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ip_sakti_user_uid', mockUser.uid);
+        localStorage.setItem('ip_sakti_user_email', mockUser.email || '');
+        localStorage.setItem('ip_sakti_local_mock_user', JSON.stringify(mockUser));
+      }
+      return mockUser;
+    }
     const res = await signInWithEmailAndPassword(auth, email, pass);
     return res.user;
   };
@@ -93,7 +116,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     displayName?: string,
     role: UserRole = 'practitioner'
   ): Promise<User> => {
-    if (!auth) throw new Error('Authentication is not configured (missing Firebase API key). Contact the administrator.');
+    if (!auth || !firebaseConfigured) {
+      const mockUser = {
+        uid: `local_user_${email.replace(/[^a-zA-Z0-9]/g, '_') || Date.now().toString(36)}`,
+        email: email || 'innovator@ip-sakti.gov.in',
+        displayName: displayName || email.split('@')[0] || 'Local Innovator',
+      } as unknown as User;
+      setUser(mockUser);
+      setUserRole(role);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ip_sakti_user_uid', mockUser.uid);
+        localStorage.setItem('ip_sakti_user_email', mockUser.email || '');
+        localStorage.setItem('ip_sakti_local_mock_user', JSON.stringify(mockUser));
+      }
+      return mockUser;
+    }
     const res = await createUserWithEmailAndPassword(auth, email, pass);
     if (displayName && res.user) {
       await updateProfile(res.user, { displayName });
@@ -103,16 +140,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithGoogle = async (role: UserRole = 'practitioner'): Promise<User> => {
-    if (!auth || !googleProvider) throw new Error('Authentication is not configured (missing Firebase API key). Contact the administrator.');
+    if (!auth || !googleProvider || !firebaseConfigured) {
+      const mockUser = {
+        uid: `local_google_${Date.now().toString(36)}`,
+        email: 'google_innovator@ip-sakti.gov.in',
+        displayName: 'Google Innovator',
+      } as unknown as User;
+      setUser(mockUser);
+      setUserRole(role);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ip_sakti_user_uid', mockUser.uid);
+        localStorage.setItem('ip_sakti_user_email', mockUser.email || '');
+        localStorage.setItem('ip_sakti_local_mock_user', JSON.stringify(mockUser));
+      }
+      return mockUser;
+    }
     const res = await signInWithPopup(auth, googleProvider);
     setUserRole(role);
     return res.user;
   };
 
   const signOutUser = async (): Promise<void> => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('ip_sakti_local_mock_user');
+      localStorage.removeItem('ip_sakti_user_uid');
+      localStorage.removeItem('ip_sakti_user_email');
+    }
+    setUser(null);
     if (!auth) return;
     await signOut(auth);
   };
+
 
   return (
     <AuthContext.Provider

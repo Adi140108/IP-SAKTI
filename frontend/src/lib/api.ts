@@ -323,9 +323,11 @@ export async function updateEscalationStatus(dossierId: string, status: string, 
 export async function translateText(
   text: string,
   targetLang: string,
-  sourceLang: string = 'en'
+  sourceLang: string = 'auto'
 ): Promise<string> {
-  if (!text || !text.trim() || targetLang === sourceLang) return text;
+  if (!text || !text.trim() || (sourceLang !== 'auto' && targetLang === sourceLang)) return text;
+  
+  // 1. Primary: High-speed Groq/Qwen neural backend translation
   try {
     const baseUrl = getApiBaseUrl();
     const res = await fetch(`${baseUrl}/chat/translate`, {
@@ -333,12 +335,67 @@ export async function translateText(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, target_lang: targetLang, source_lang: sourceLang }),
     });
-    const data = await handleResponse<{ translated_text: string }>(res);
-    return data.translated_text || text;
+    if (res.ok) {
+      const data = await res.json();
+      if (data.translated_text && data.translated_text.trim()) {
+        return data.translated_text.trim();
+      }
+    }
   } catch (err) {
-    console.warn('Translation service warning:', err);
-    return text;
+    console.warn('Backend translation warning:', err);
   }
+
+  // 2. Secondary Fallback: Client-side pipeline
+  try {
+    const sl = sourceLang === 'auto' ? 'auto' : encodeURIComponent(sourceLang);
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(text)}`;
+    const r = await fetch(url);
+    if (r.ok) {
+      const data = await r.json();
+      if (Array.isArray(data) && Array.isArray(data[0])) {
+        const translated = data[0].map((chunk: any) => chunk[0] || '').join('');
+        if (translated && translated.trim()) {
+          return translated.trim();
+        }
+      }
+    }
+  } catch {
+    // Ignore fallback failure
+  }
+
+  return text;
 }
+
+export async function translateBatch(
+  texts: string[],
+  targetLang: string,
+  sourceLang: string = 'auto'
+): Promise<string[]> {
+  if (!texts || texts.length === 0 || (sourceLang !== 'auto' && targetLang === sourceLang)) {
+    return texts;
+  }
+
+  // 1. Primary: High-speed Atomic Batch Translation on Groq/Qwen
+  try {
+    const baseUrl = getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/chat/translate-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texts, target_lang: targetLang, source_lang: sourceLang }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.translated_texts && Array.isArray(data.translated_texts) && data.translated_texts.length === texts.length) {
+        return data.translated_texts;
+      }
+    }
+  } catch (err) {
+    console.warn('Backend batch translation failed, falling back to sequential:', err);
+  }
+
+  // 2. Fallback to sequential translateText
+  return Promise.all(texts.map(t => translateText(t, targetLang, sourceLang)));
+}
+
 
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createCase, sendChatMessage, getCase, uploadDocument, updateCase, listCases, translateText } from '@/lib/api';
+import { createCase, sendChatMessage, getCase, uploadDocument, updateCase, listCases, translateText, translateBatch } from '@/lib/api';
 import { ChatResponse, CaseState } from '@/types';
 import { FORMULATION_TIERS, getTierFromClassification } from '@/lib/formulationTaxonomy';
 import { getPersistedCases, persistCase, mergeAndPersistCases } from '@/lib/caseRegistry';
@@ -86,12 +86,18 @@ export default function ChatPage() {
   const [caseState, setCaseState] = useState<CaseState | null>(null);
   const [jurisdiction, setJurisdiction] = useState<'India' | 'International'>('India');
   const [country, setCountry] = useState<string>('');
-  const [language, setLanguage] = useState<string>(() => {
+  const [mounted, setMounted] = useState<boolean>(false);
+  const [language, setLanguage] = useState<string>('en');
+
+  useEffect(() => {
+    setMounted(true);
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('ip_sakti_chat_language') || 'en';
+      const savedLang = localStorage.getItem('ip_sakti_chat_language');
+      if (savedLang) {
+        setLanguage(savedLang);
+      }
     }
-    return 'en';
-  });
+  }, []);
   const [inputMessage, setInputMessage] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [chatHistory, setChatHistory] = useState<Array<{ sender: 'user' | 'assistant'; data?: ChatResponse; text?: string }>>([]);
@@ -131,14 +137,19 @@ export default function ChatPage() {
 
   // Voice & Speech Controls (Sound ON/OFF, Female Voice, Slower Speed 0.85x)
   const [isListening, setIsListening] = useState<boolean>(false);
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('ip_sakti_sound_enabled') === 'true';
-    }
-    return false;
-  });
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
   const [transcript, setTranscript] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedSound = localStorage.getItem('ip_sakti_sound_enabled');
+      if (savedSound === 'true') {
+        setSoundEnabled(true);
+      }
+    }
+  }, []);
+
 
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
@@ -352,7 +363,7 @@ export default function ChatPage() {
   };
 
   const LANG_VOICE_MAP: Record<string, string> = {
-    en: 'en-US',
+    en: 'en-IN',
     hi: 'hi-IN',
     ta: 'ta-IN',
     te: 'te-IN',
@@ -367,99 +378,151 @@ export default function ChatPage() {
     setLanguage(code);
     if (typeof window !== 'undefined') {
       localStorage.setItem('ip_sakti_chat_language', code);
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        setSpeakingIdx(null);
+      }
     }
-    // If there is existing chat history, translate the assistant messages to the newly chosen language
-    if (chatHistory.length > 0 && code !== 'en') {
-      try {
-        const updated = await Promise.all(
-          chatHistory.map(async (item) => {
-            if (item.sender === 'assistant' && item.data && item.data.answer) {
-              const translatedAnswer = await translateText(item.data.answer, code, 'en');
-              const translatedQuestion = item.data.next_question
-                ? await translateText(item.data.next_question, code, 'en')
-                : item.data.next_question;
-              const translatedOptions = item.data.suggested_options
-                ? await Promise.all(item.data.suggested_options.map((opt) => translateText(opt, code, 'en')))
-                : item.data.suggested_options;
 
-              return {
-                ...item,
-                data: {
-                  ...item.data,
-                  answer: translatedAnswer,
-                  next_question: translatedQuestion,
-                  suggested_options: translatedOptions,
-                },
-              };
-            }
-            return item;
-          })
-        );
-        setChatHistory(updated);
-        if (updated.length > 0 && updated[updated.length - 1].data) {
-          setLatestResponse(updated[updated.length - 1].data!);
+    // Collect all text items requiring translation across latestResponse and chat history
+    const textBatch: string[] = [];
+    const mapping: Array<{
+      type: 'latest_ans' | 'latest_q' | 'latest_opt' | 'hist_ans' | 'hist_q' | 'hist_opt';
+      histIdx?: number;
+      optIdx?: number;
+    }> = [];
+
+    if (latestResponse) {
+      if (latestResponse.answer) {
+        textBatch.push(latestResponse.answer);
+        mapping.push({ type: 'latest_ans' });
+      }
+      if (latestResponse.next_question) {
+        textBatch.push(latestResponse.next_question);
+        mapping.push({ type: 'latest_q' });
+      }
+      if (latestResponse.suggested_options) {
+        latestResponse.suggested_options.forEach((opt, oIdx) => {
+          textBatch.push(opt);
+          mapping.push({ type: 'latest_opt', optIdx: oIdx });
+        });
+      }
+    }
+
+    chatHistory.forEach((item, hIdx) => {
+      if (item.sender === 'assistant' && item.data) {
+        if (item.data.answer) {
+          textBatch.push(item.data.answer);
+          mapping.push({ type: 'hist_ans', histIdx: hIdx });
         }
-      } catch (e) {
-        console.error('Failed to translate existing chat history:', e);
+        if (item.data.next_question) {
+          textBatch.push(item.data.next_question);
+          mapping.push({ type: 'hist_q', histIdx: hIdx });
+        }
+        if (item.data.suggested_options) {
+          item.data.suggested_options.forEach((opt, oIdx) => {
+            textBatch.push(opt);
+            mapping.push({ type: 'hist_opt', histIdx: hIdx, optIdx: oIdx });
+          });
+        }
+      }
+    });
+
+    if (textBatch.length > 0) {
+      try {
+        const translatedBatch = await translateBatch(textBatch, code, 'auto');
+
+        const newLatest: ChatResponse | null = latestResponse ? { ...latestResponse } : null;
+        if (newLatest && newLatest.suggested_options) {
+          newLatest.suggested_options = [...newLatest.suggested_options];
+        }
+
+        const newHist = chatHistory.map((item) => ({
+          ...item,
+          data: item.data
+            ? {
+                ...item.data,
+                suggested_options: item.data.suggested_options ? [...item.data.suggested_options] : undefined,
+              }
+            : undefined,
+        }));
+
+        translatedBatch.forEach((trans, bIdx) => {
+          const m = mapping[bIdx];
+          if (!m) return;
+          if (m.type === 'latest_ans' && newLatest) newLatest.answer = trans;
+          else if (m.type === 'latest_q' && newLatest) newLatest.next_question = trans;
+          else if (m.type === 'latest_opt' && newLatest && newLatest.suggested_options && m.optIdx !== undefined) {
+            newLatest.suggested_options[m.optIdx] = trans;
+          } else if (m.type === 'hist_ans' && m.histIdx !== undefined && newHist[m.histIdx]?.data) {
+            newHist[m.histIdx].data!.answer = trans;
+          } else if (m.type === 'hist_q' && m.histIdx !== undefined && newHist[m.histIdx]?.data) {
+            newHist[m.histIdx].data!.next_question = trans;
+          } else if (
+            m.type === 'hist_opt' &&
+            m.histIdx !== undefined &&
+            newHist[m.histIdx]?.data?.suggested_options &&
+            m.optIdx !== undefined
+          ) {
+            newHist[m.histIdx].data!.suggested_options![m.optIdx] = trans;
+          }
+        });
+
+        if (newLatest) setLatestResponse(newLatest);
+        setChatHistory(newHist);
+      } catch (err) {
+        console.error('Batch translation on language change failed:', err);
       }
     }
   };
 
 
-  // Helper: Find Natural Voice specifically matching the target language
-  const getLanguageVoice = (targetLangCode: string): SpeechSynthesisVoice | null => {
+  // Helper: Find Natural Female Voice (preferring Indian accent or target language female voice)
+  const getFemaleVoice = (targetLangCode?: string): SpeechSynthesisVoice | null => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
     const voices = window.speechSynthesis.getVoices();
     if (!voices || voices.length === 0) return null;
 
-    const langTag = (LANG_VOICE_MAP[targetLangCode] || targetLangCode).toLowerCase();
-    const prefix = targetLangCode.toLowerCase().slice(0, 2);
+    const prefix = (targetLangCode || language).slice(0, 2).toLowerCase();
+    
+    // Priority order for natural, pleasant voices (Indian English / Hindi / Natural Female)
+    const femaleKeywords = [
+      'heera', 'kalpana', 'swara', 'veena', 'geeta', 'neerja', 'priya',
+      'google uk english female', 'samantha', 'zira', 'karen', 'victoria', 'female'
+    ];
 
-    // 1. Target language exact or prefix match
-    const langVoices = voices.filter((v) => {
-      const vLang = v.lang.toLowerCase().replace('_', '-');
-      return (
-        vLang === langTag ||
-        vLang.startsWith(prefix) ||
-        v.name.toLowerCase().includes(targetLangCode.toLowerCase())
-      );
+    // 1. Try to find an exact language match first
+    const langVoices = voices.filter((v) => v.lang.toLowerCase().startsWith(prefix));
+    if (langVoices.length > 0) {
+      const foundInLang = langVoices.find((v) => {
+        const n = v.name.toLowerCase();
+        return femaleKeywords.some((k) => n.includes(k));
+      });
+      if (foundInLang) return foundInLang;
+      return langVoices[0];
+    }
+
+    // 2. Try to find Indian English female voice (Heera / en-IN)
+    const indianEnglishVoices = voices.filter((v) => v.lang.toLowerCase().includes('en-in') || v.name.toLowerCase().includes('india') || v.name.toLowerCase().includes('heera'));
+    if (indianEnglishVoices.length > 0) {
+      const foundIndian = indianEnglishVoices.find((v) => {
+        const n = v.name.toLowerCase();
+        return femaleKeywords.some((k) => n.includes(k));
+      });
+      if (foundIndian) return foundIndian;
+      return indianEnglishVoices[0];
+    }
+
+    // 3. Fallback to clean, pleasant natural female voices (e.g. Samantha, Zira)
+    const foundGeneral = voices.find((v) => {
+      const n = v.name.toLowerCase();
+      return femaleKeywords.some((k) => n.includes(k));
     });
 
-    if (langVoices.length > 0) {
-      // Find female / natural / Google / neural voice in this language
-      const preferred = langVoices.find((v) => {
-        const n = v.name.toLowerCase();
-        return (
-          n.includes('natural') ||
-          n.includes('neural') ||
-          n.includes('female') ||
-          n.includes('swara') ||
-          n.includes('kalpana') ||
-          n.includes('veena') ||
-          n.includes('madhur') ||
-          n.includes('valluvar') ||
-          n.includes('google')
-        );
-      });
-      return preferred || langVoices[0];
-    }
-
-    // If English, return a clean English voice
-    if (prefix === 'en') {
-      const enVoices = voices.filter((v) => v.lang.toLowerCase().startsWith('en'));
-      const preferredEn = enVoices.find((v) => {
-        const n = v.name.toLowerCase();
-        return n.includes('natural') || n.includes('zira') || n.includes('samantha') || n.includes('female');
-      });
-      return preferredEn || enVoices[0] || voices[0];
-    }
-
-    // For non-English when no explicit voice object is loaded yet, return null
-    // so the browser does NOT accidentally use an English US voice like Zira!
-    return null;
+    return foundGeneral || voices[0] || null;
   };
 
-  // Extract clean 2-sentence conversational executive summary for speech
+  // Extract clean 2-sentence conversational executive summary for speech without punctuation anomalies
   const extractSpokenSummary = (rawText: string, nextQuestion?: string): string => {
     if (!rawText) return '';
     let clean = rawText
@@ -468,11 +531,19 @@ export default function ChatPage() {
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
       .replace(/^#{1,6}\s+.*/gm, '')
       .replace(/>\s+.*Notice.*/gi, '')
-      .replace(/>/g, '')
-      .replace(/\|.*?\|/g, '')
-      .replace(/[-*•]\s+/g, '')
-      .replace(/\b(Section|Sec\.)\s+\d+[\w()]*/gi, '')
-      .replace(/[*_~`#]/g, '')
+      .replace(/\(\s*Section\s+[^)]+\)/gi, '')
+      .replace(/\[\s*Section\s+[^\]]+\]/gi, '')
+      .replace(/https?:\/\/\S+/gi, '')
+      .replace(/\bCGPDTM\b/gi, 'Controller General of Patents Designs and Trade Marks')
+      .replace(/\bNBA\b/gi, 'National Biodiversity Authority')
+      .replace(/\bTKDL\b/gi, 'Traditional Knowledge Digital Library')
+      .replace(/\bCSIR\b/gi, 'Council of Scientific and Industrial Research')
+      .replace(/\bAYUSH\b/gi, 'Ayush')
+      .replace(/[\/\\|•*_\-~`#§()[\]{}]/g, ' ')
+      .replace(/\b(Sec\.|Section)\s+(\d+[\w()]*)/gi, 'Section $2')
+      .replace(/\be\.g\.\b/gi, 'for example')
+      .replace(/\bi\.e\.\b/gi, 'that is')
+      .replace(/\bvs\.?\b/gi, 'versus')
       .replace(/\s+/g, ' ')
       .trim();
 
@@ -483,7 +554,13 @@ export default function ChatPage() {
     }
 
     if (nextQuestion && nextQuestion.trim()) {
-      const cleanQ = nextQuestion.replace(/[*_`#]/g, '').trim();
+      const cleanQ = nextQuestion
+        .replace(/\bCGPDTM\b/gi, 'Controller General of Patents Designs and Trade Marks')
+        .replace(/\bNBA\b/gi, 'National Biodiversity Authority')
+        .replace(/\bTKDL\b/gi, 'Traditional Knowledge Digital Library')
+        .replace(/[\/\\|•*_\-~`#§()[\]{}]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
       summary += ` Regarding your next step: ${cleanQ}`;
     }
 
@@ -507,7 +584,7 @@ export default function ChatPage() {
     const recognition = new SpeechRecClass();
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.lang = LANG_VOICE_MAP[language] || 'en-US';
+    recognition.lang = LANG_VOICE_MAP[language] || 'en-IN';
 
     recognition.onstart = () => {
       setIsListening(true);
@@ -535,8 +612,8 @@ export default function ChatPage() {
     recognition.start();
   };
 
-  // Speech Synthesis (Text-to-Speech / Executive 2-sentence summary in target language voice)
-  const speakText = (text: string, idx?: number, nextQuestion?: string) => {
+  // Speech Synthesis (Script-aware natural voice engine)
+  const speakText = async (text: string, idx?: number, nextQuestion?: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
     window.speechSynthesis.cancel();
@@ -546,18 +623,36 @@ export default function ChatPage() {
       return;
     }
 
-    const spokenSummary = extractSpokenSummary(text, nextQuestion);
-    const utterance = new SpeechSynthesisUtterance(spokenSummary);
+    let spokenSummary = extractSpokenSummary(text, nextQuestion);
+    if (!spokenSummary.trim()) return;
 
-    utterance.rate = 0.88;
+    const targetVoice = getFemaleVoice(language);
+    const hasIndicChars = /[\u0900-\u0D7F]/.test(spokenSummary);
+    const voiceIsEnglish = !targetVoice || targetVoice.lang.toLowerCase().startsWith('en');
+
+    // If client OS lacks native Indic TTS (e.g. Kannada/Telugu on Windows),
+    // convert spoken text to fluent English summary so the English voice speaks the full guidance
+    // instead of skipping Indic characters and only uttering acronyms/numbers!
+    if (hasIndicChars && voiceIsEnglish) {
+      try {
+        const trans = await translateText(spokenSummary, 'en', 'auto');
+        if (trans && trans.trim()) {
+          spokenSummary = extractSpokenSummary(trans);
+        }
+      } catch (err) {
+        console.warn('Speech translation fallback:', err);
+      }
+    }
+
+    const utterance = new SpeechSynthesisUtterance(spokenSummary);
+    utterance.rate = 0.90;
     utterance.pitch = 1.05;
 
-    const targetVoice = getLanguageVoice(language);
     if (targetVoice) {
       utterance.voice = targetVoice;
       utterance.lang = targetVoice.lang;
     } else {
-      utterance.lang = LANG_VOICE_MAP[language] || 'en-US';
+      utterance.lang = LANG_VOICE_MAP[language] || 'en-IN';
     }
 
     if (idx !== undefined) setSpeakingIdx(idx);
@@ -567,6 +662,7 @@ export default function ChatPage() {
 
     window.speechSynthesis.speak(utterance);
   };
+
 
   // Master Global Audio Toggle
   const toggleGlobalSound = () => {
@@ -666,42 +762,20 @@ export default function ChatPage() {
         }
       }
 
-      let processedRes = res;
-      if (language !== 'en' && res.answer) {
-        const hasIndicChars = /[\u0900-\u0D7F]/.test(res.answer);
-        if (!hasIndicChars) {
-          try {
-            const [translatedAnswer, translatedQuestion, translatedOptions] = await Promise.all([
-              translateText(res.answer, language, 'en'),
-              res.next_question ? translateText(res.next_question, language, 'en') : Promise.resolve(res.next_question),
-              res.suggested_options ? Promise.all(res.suggested_options.map(opt => translateText(opt, language, 'en'))) : Promise.resolve(res.suggested_options)
-            ]);
-            processedRes = {
-              ...res,
-              answer: translatedAnswer,
-              next_question: translatedQuestion,
-              suggested_options: translatedOptions
-            };
-          } catch (tErr) {
-            console.warn('Multilingual client auto-translate fallback:', tErr);
-          }
-        }
-      }
-
       const newIdx = chatHistory.length + 1;
-      setChatHistory((prev) => [...prev, { sender: 'assistant', data: processedRes }]);
-      setLatestResponse(processedRes);
+      setChatHistory((prev) => [...prev, { sender: 'assistant', data: res }]);
+      setLatestResponse(res);
       refreshCaseState(effectiveCaseId);
       fetchUserCases();
 
       // Auto-open sources if citations returned
-      if (processedRes.citations && processedRes.citations.length > 0) {
+      if (res.citations && res.citations.length > 0) {
         setIsSourcesOpen(true);
       }
 
       // Auto-speak natural 2-sentence conversational summary in target voice if Sound is enabled
-      if (soundEnabled && processedRes.answer) {
-        speakText(processedRes.answer, newIdx, processedRes.next_question);
+      if (soundEnabled && res.answer) {
+        speakText(res.answer, newIdx, res.next_question);
       }
     } catch (err) {
       console.error('Chat error:', err);
@@ -770,7 +844,7 @@ export default function ChatPage() {
     return { animationDelay: `${fromEnd * 70}ms` };
   };
 
-  const t = getTranslation(language);
+  const t = getTranslation(mounted ? language : 'en');
 
   return (
     <div className="app-fill flex flex-col gap-3 sm:gap-4">

@@ -45,7 +45,7 @@ class BhashiniTranslationAdapter:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=2.0) as client:
                 res = await client.post(
                     bhashini_client.base_url,
                     headers=bhashini_client.get_auth_headers(),

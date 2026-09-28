@@ -340,16 +340,16 @@ export default function CaseWorkspacePage() {
                         setCaseIdInput(c.case_id);
                         handleFetchCase(c.case_id);
                       }}
-                      className="flex-1 py-1.5 rounded-lg border border-line bg-surface text-ink text-xs font-semibold transition-all cursor-pointer text-center"
+                      className="flex-1 inline-flex items-center justify-center py-2 rounded-lg border border-line bg-surface hover:bg-surface-sunken text-ink text-xs font-semibold transition-all cursor-pointer text-center"
                     >
                       Inspect
                     </button>
                     <button
                       onClick={() => handleContinueChatting(c)}
-                      className="flex-1 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold transition-all shadow-xs cursor-pointer text-center"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded-lg bg-accent text-accent-fg hover:opacity-95 text-xs font-bold transition-all shadow-xs cursor-pointer text-center"
                     >
-                      <MessageIcon size={12} className="mr-1" />
-                      Chat &rarr;
+                      <MessageIcon size={13} className="shrink-0" />
+                      <span>Chat &rarr;</span>
                     </button>
                   </div>
                 </div>

@@ -73,8 +73,8 @@ class BhashiniClient:
         return settings.BHASHINI_TTS_SERVICE_ID
 
     def are_credentials_present(self) -> bool:
-        """Check if any valid Bhashini credential is configured."""
-        return bool(self.inference_key or self.udyat_key or self.api_key)
+        """Check if valid Bhashini credential and pipeline ID are configured."""
+        return bool((self.inference_key or self.udyat_key or self.api_key) and self.pipeline_id)
 
     def get_auth_token(self) -> str:
         """Get the primary auth token without exposing it in logs."""

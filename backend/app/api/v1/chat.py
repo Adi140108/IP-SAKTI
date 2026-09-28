@@ -6,10 +6,12 @@ from app.schemas.chat import (
     ChatResponse,
     TranslateRequest,
     TranslateResponse,
+    TranslateBatchRequest,
+    TranslateBatchResponse,
     ComparisonRequest,
     ComparisonResponse
 )
-from app.orchestration.conversation_pipeline import conversation_pipeline, robust_translate
+from app.orchestration.conversation_pipeline import conversation_pipeline, robust_translate, robust_translate_batch
 from app.modules.comparison.engine import comparative_law_engine, AVAILABLE_COMPARISON_TARGETS
 from app.db.firestore import firestore_service
 from app.case.models import CaseState
@@ -38,6 +40,21 @@ async def translate_chat_text(request: TranslateRequest):
     return TranslateResponse(
         translated_text=translated,
         source_lang=request.source_lang or "en",
+        target_lang=request.target_lang
+    )
+
+@router.post("/chat/translate-batch", response_model=TranslateBatchResponse)
+async def translate_chat_batch(request: TranslateBatchRequest):
+    """
+    Atomically translates a batch of text items into target Indic language in a single call.
+    """
+    translated_list = await robust_translate_batch(
+        texts=request.texts,
+        target_lang=request.target_lang,
+        source_lang=request.source_lang or "auto"
+    )
+    return TranslateBatchResponse(
+        translated_texts=translated_list,
         target_lang=request.target_lang
     )
 

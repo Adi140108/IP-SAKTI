@@ -1,8 +1,9 @@
 import uuid
+import json
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from app.schemas.chat import ChatRequest, ChatResponse, Citation
 from app.case.models import CaseState
 from app.case.state_manager import case_state_manager
@@ -40,39 +41,107 @@ logger = logging.getLogger("IP-SAKTI.ConversationPipeline")
 async def robust_translate(text: str, source_lang: str, target_lang: str) -> str:
     """
     Translates text with Bhashini NMT prioritized, seamlessly falling back
-    to high-speed Groq neural Indic translation if Bhashini is unconfigured or unreachable.
+    to ultra-fast Groq neural Indic translation with strict target script enforcement.
     """
     if not text or not text.strip() or source_lang == target_lang:
         return text
     target_name = LANGUAGE_NAMES.get(target_lang, target_lang)
     
-    # 1. Primary: Government of India Bhashini NMT
+    # 1. Primary: Government of India Bhashini NMT (if pipeline configured)
     if bhashini_service.is_configured():
         try:
             translated = await bhashini_service.translate_text(text, source_lang=source_lang, target_lang=target_lang)
             if translated and translated.strip():
-                return translated
+                return translated.strip()
         except Exception as e:
             logger.warning(f"Bhashini NMT translation ({source_lang} -> {target_lang}) failed: {e}. Falling back to Groq neural translation.")
             
-    # 2. Resilient Fallback: Groq Neural Multilingual Translation Engine
+    # 2. Resilient Fallback: Ultra-fast Groq Neural Multilingual Translation Engine
     try:
         translation_prompt = (
-            f"You are an expert statutory legal translator for AYUSH and IP law in India.\n"
-            f"Translate the following text accurately and idiomatically from {source_lang} into {target_name} ({target_lang}).\n"
+            f"You are a professional legal translator specializing in Indian IP Law and Ayurvedic Regulations.\n"
+            f"Translate the following text accurately and idiomatically into {target_name} ({target_lang}).\n"
             f"STRICT RULES:\n"
-            f"- Use natural, authentic {target_name} script (e.g. Devanagari for Hindi/Marathi, Tamil script for Tamil, Telugu for Telugu, etc.).\n"
-            f"- Retain exact section numbers, Act citations (e.g. Section 3(p), Patents Act 1970, Form I, BDA 2002), and bullet point structure.\n"
-            f"- Do NOT add conversational fluff or meta-explanations. Output ONLY the translated text.\n\n"
+            f"1. Output the entire translation in authentic {target_name} script (e.g., Devanagari for Hindi/Marathi, Tamil script for Tamil, Telugu for Telugu, Kannada for Kannada, Bengali for Bengali, Gujarati for Gujarati, Malayalam for Malayalam).\n"
+            f"2. Even if the input contains text from another Indian language or English, translate 100% of the text cleanly into {target_name}.\n"
+            f"3. Retain exact section numbers, Act citations (e.g., Section 3(p), Patents Act 1970, Form I, BDA 2002), and formatting.\n"
+            f"4. Do NOT output english explanations, conversational preambles, or markdown quote blocks. Output ONLY the raw translated text.\n\n"
             f"{text}"
         )
         translated = await groq_provider.generate_text(translation_prompt)
         if translated and translated.strip():
-            return translated.strip()
+            clean = translated.strip()
+            if clean.startswith('```') and clean.endswith('```'):
+                clean = clean.split('\n', 1)[-1].rsplit('\n', 1)[0].strip()
+            return clean
     except Exception as e:
         logger.error(f"Groq translation fallback failed ({source_lang} -> {target_lang}): {e}")
 
     return text
+
+async def robust_translate_batch(texts: List[str], target_lang: str, source_lang: str = "auto") -> List[str]:
+    """
+    Translates a batch of text items into target_lang in a single atomic LLM request.
+    Prevents HTTP 429 rate limit spikes and guarantees uniform Indic script translation.
+    """
+    if not texts or (target_lang == "en" and source_lang == "en"):
+        return texts
+    
+    non_empty_indices = [i for i, t in enumerate(texts) if t and t.strip()]
+    if not non_empty_indices:
+        return texts
+    
+    target_name = LANGUAGE_NAMES.get(target_lang, target_lang)
+    items_to_translate = [texts[i] for i in non_empty_indices]
+
+    prompt = (
+        f"You are a professional legal and technical translator specializing in Indian IP Law and Ayurvedic Regulations.\n"
+        f"Translate each text item in the JSON array below into 100% authentic {target_name} ({target_lang}) script.\n"
+        f"CRITICAL COMPLIANCE RULES:\n"
+        f"1. Target Language is STRICTLY {target_name} ({target_lang}). Output script MUST be authentic {target_name} script (e.g. Kannada script for Kannada, Devanagari for Hindi, Tamil script for Tamil, Telugu for Telugu, Bengali for Bengali, Gujarati for Gujarati, Malayalam for Malayalam, Marathi for Marathi).\n"
+        f"2. Every single text item—regardless of whether it is currently in English, Hindi, or any other language—MUST be completely translated into {target_name}. DO NOT leave any text in Hindi or English when target is {target_name}.\n"
+        f"3. Return ONLY a valid JSON array of strings with the exact same length ({len(items_to_translate)} items): [\"translation 1\", \"translation 2\", ...].\n"
+        f"4. Retain exact section numbers, statutory citations (Section 3(p), Patents Act 1970, NBA), and emojis.\n"
+        f"5. Do NOT output markdown code ticks, notes, or explanations. Output ONLY the raw JSON array.\n\n"
+        f"{json.dumps(items_to_translate, ensure_ascii=False)}"
+    )
+
+    system_prompt = (
+        f"You are a professional legal translator specializing in Indian IP Law and Ayurvedic Regulations. "
+        f"Translate the provided JSON array into authentic {target_name} ({target_lang}) script. "
+        f"CRITICAL REQUIREMENT: Respond ONLY with a valid JSON array of strings. Do NOT include explanations."
+    )
+
+    try:
+        raw_output = await groq_provider.generate_text(prompt, system_prompt=system_prompt)
+        cleaned = raw_output.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        elif cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+
+        first_bracket = cleaned.find('[')
+        last_bracket = cleaned.rfind(']')
+        if first_bracket != -1 and last_bracket != -1 and last_bracket > first_bracket:
+            cleaned = cleaned[first_bracket:last_bracket + 1]
+
+        parsed = json.loads(cleaned, strict=False)
+        if isinstance(parsed, list) and len(parsed) == len(items_to_translate):
+            res_list = list(texts)
+            for idx, orig_idx in enumerate(non_empty_indices):
+                res_list[orig_idx] = str(parsed[idx]).strip()
+            return res_list
+    except Exception as e:
+        logger.warning(f"Batch translation JSON parsing failed ({e}). Falling back to individual translations.")
+
+    # Fallback to individual translations
+    results = list(texts)
+    for orig_idx in non_empty_indices:
+        results[orig_idx] = await robust_translate(texts[orig_idx], source_lang=source_lang, target_lang=target_lang)
+    return results
 
 class ConversationPipeline:
     """
@@ -116,7 +185,7 @@ class ConversationPipeline:
         existing_data = await firestore_service.get_case_state(case_id)
         if existing_data:
             case_state = CaseState(**existing_data)
-            if request.language and request.language != "en":
+            if request.language:
                 lang = request.language
                 case_state.language = request.language
             elif case_state.language:
@@ -234,25 +303,13 @@ class ConversationPipeline:
                 "4. Never invent sections, acts, treaties, fees, or procedural deadlines."
             )
 
-            if lang != "en":
-                system_prompt += (
-                    f"\n5. MANDATORY MULTILINGUAL REQUIREMENT: The user has selected the language '{lang_name}' ({lang}). "
-                    f"You MUST generate the entire 'answer' text in {lang_name} using natural, authentic Indic script (e.g. Devanagari for Hindi/Marathi, Tamil script for Tamil, Telugu for Telugu, etc.). "
-                    f"Do NOT write the 'answer' in English."
-                )
-
-            task_instruction = (
-                f"Provide concise, high-impact informational guidance completely written in {lang_name} ({lang}) (MAX 5-8 BULLET POINTS TOTAL) using natural Indic script."
-                if lang != "en"
-                else "Provide concise, high-impact informational guidance (MAX 5-8 BULLET POINTS TOTAL)."
-            )
+            task_instruction = "Provide concise, high-impact informational guidance (MAX 5-8 BULLET POINTS TOTAL)."
 
             user_prompt = f"""
 Case Parameters:
 - Jurisdiction: {case_state.jurisdiction} ({case_state.country or 'India'})
 - Formulation Category: {case_state.formulation_classification}
 - Relevant IP Domains: {', '.join(case_state.intellectual_property_objective)}
-- Target Language: {lang_name} ({lang})
 
 Authoritative RAG Statutory Evidence Context:
 {evidence_prompt_text}
@@ -266,7 +323,7 @@ List explicit statutory section citations.
 
 Return JSON:
 {{
-  "answer": "Concise guidance formatted in maximum 5-8 bullet points written completely in {lang_name} ({lang}) script",
+  "answer": "Concise guidance formatted in maximum 5-8 bullet points in clear English",
   "citations": [
     {{
       "source": "Exact Statute Title",
@@ -405,17 +462,56 @@ Return JSON:
             )
             final_answer += insufficient_info_notice
 
-        # 10. Multilingual Translation & TTS Audio
+        # 10. High-Speed Parallel Multilingual Translation
         translated_options = q_res.suggested_options if next_question else None
+        comparison_options = None
+        if case_state.jurisdiction == "India" or "india" in str(case_state.jurisdiction).lower():
+            comparison_options = [
+                "🌐 Compare with International Standards (WIPO/PCT/Nagoya)",
+                "🇺🇸 Compare with US Law (USPTO - 35 U.S.C.)",
+                "🇪🇺 Compare with European Law (EPO / EPC)",
+                "🇩🇪 Compare with German Law (DPMA / PatG)"
+            ]
+
         if lang != "en":
             try:
-                final_answer = await robust_translate(final_answer, source_lang="en", target_lang=lang)
-                if next_question:
-                    next_question = await robust_translate(next_question, source_lang="en", target_lang=lang)
+                meta_items: List[str] = []
+                has_next_q = bool(next_question)
+                if has_next_q:
+                    meta_items.append(next_question)
+
+                opt_count = len(translated_options) if translated_options else 0
                 if translated_options:
-                    translated_options = [await robust_translate(opt, source_lang="en", target_lang=lang) for opt in translated_options]
+                    meta_items.extend(translated_options)
+
+                comp_count = len(comparison_options) if comparison_options else 0
+                if comparison_options:
+                    meta_items.extend(comparison_options)
+
+                ans_task = robust_translate(final_answer, source_lang="en", target_lang=lang)
+                meta_task = robust_translate_batch(meta_items, target_lang=lang, source_lang="en") if meta_items else None
+
+                if meta_task:
+                    trans_ans, trans_meta = await asyncio.gather(ans_task, meta_task)
+                else:
+                    trans_ans = await ans_task
+                    trans_meta = []
+
+                if trans_ans and trans_ans.strip():
+                    final_answer = trans_ans
+
+                if trans_meta:
+                    idx = 0
+                    if has_next_q:
+                        next_question = trans_meta[idx]
+                        idx += 1
+                    if opt_count > 0:
+                        translated_options = list(trans_meta[idx:idx + opt_count])
+                        idx += opt_count
+                    if comp_count > 0:
+                        comparison_options = list(trans_meta[idx:idx + comp_count])
             except Exception as e:
-                logger.error(f"Response translation failed (en -> {lang}): {e}")
+                logger.error(f"Multilingual translation failed (en -> {lang}): {e}")
 
         # Record complete translated turn into conversation_history
         turn_record = {
@@ -435,20 +531,6 @@ Return JSON:
         # Save updated state
         await firestore_service.save_case_state(case_id, case_state.model_dump())
 
-        # 11. Comparison Options for Indian Law Consultations
-        comparison_options = None
-        if case_state.jurisdiction == "India" or "india" in str(case_state.jurisdiction).lower():
-            comparison_options = [
-                "🌐 Compare with International Standards (WIPO/PCT/Nagoya)",
-                "🇺🇸 Compare with US Law (USPTO - 35 U.S.C.)",
-                "🇪🇺 Compare with European Law (EPO / EPC)",
-                "🇩🇪 Compare with German Law (DPMA / PatG)"
-            ]
-            if lang != "en":
-                try:
-                    comparison_options = [await robust_translate(opt, source_lang="en", target_lang=lang) for opt in comparison_options]
-                except Exception as e:
-                    logger.error(f"Comparison options translation error: {e}")
 
         return ChatResponse(
             case_id=case_id,

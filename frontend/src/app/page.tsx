@@ -45,7 +45,7 @@ export default function HomePage() {
   return (
     <div className="pb-12">
       {/* Hero */}
-      <section className="grid grid-cols-1 items-end gap-10 border-b border-line pb-14 sm:gap-12 sm:pb-20 lg:grid-cols-12 lg:gap-10">
+      <section className="grid grid-cols-1 items-center gap-10 border-b border-line pb-14 sm:gap-12 sm:pb-20 lg:grid-cols-12 lg:gap-12">
         <div className="lg:col-span-7">
           <p className="eyebrow">SIH Problem Statement PS-26045</p>
           <h1 className="font-display mt-6 text-[clamp(2.75rem,6.5vw,4.75rem)] leading-[1.02] text-ink">
@@ -60,7 +60,7 @@ export default function HomePage() {
           <div className="mt-10 flex flex-wrap items-center gap-3">
             <button
               onClick={handleLaunchConsultation}
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-5 py-3 text-[13.5px] font-medium text-accent-fg transition-colors hover:bg-accent-hover cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-5 py-3 text-[13.5px] font-medium text-accent-fg transition-colors hover:bg-accent-hover cursor-pointer shadow-xs"
             >
               Launch AI Consultation
               <ArrowRightIcon size={15} />
@@ -89,19 +89,20 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="lg:col-span-5 lg:justify-self-end">
-          <figure className="mx-auto w-full max-w-[260px] sm:max-w-[300px] lg:ml-auto">
-            <div className="flex aspect-square items-center justify-center rounded-lg border border-line bg-surface p-10 sm:p-12">
+        <div className="lg:col-span-5 flex flex-col items-center justify-center lg:items-start lg:pl-10">
+          <figure className="mx-auto lg:mx-0 w-full max-w-[280px] sm:max-w-[310px]">
+            <div className="relative flex aspect-square items-center justify-center rounded-2xl border border-line bg-surface/90 p-7 shadow-sm backdrop-blur-sm transition-all hover:border-accent/40">
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-accent/5 to-transparent pointer-events-none" />
               <Image
                 src="/logo-emblem.png"
                 alt="IP-SAKTI Sahayak emblem"
                 width={400}
                 height={400}
-                className="h-full w-full object-contain"
+                className="relative h-full w-full object-contain drop-shadow-md"
                 priority
               />
             </div>
-            <figcaption className="mt-4 text-[11px] leading-relaxed text-faint">
+            <figcaption className="mt-4 text-center text-[11.5px] leading-relaxed text-faint">
               Ayush &amp; bio-resource intellectual property assistant for Indian and international
               statutory regimes.
             </figcaption>
