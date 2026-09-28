@@ -24,12 +24,25 @@ class CaseState(BaseModel):
     traditional_knowledge_involved: Optional[bool] = None
     biological_resources_involved: Optional[bool] = None
     access_and_benefit_sharing: Optional[bool] = None
+    synergistic_efficacy_proven: Optional[bool] = None
+    applicant_entity_type: Optional[str] = None # "indian_entity", "foreign_entity_or_nri", "individual_innovator"
+    
+    # Patent-Specific Intake Fields
+    novelty_aspect: Optional[str] = None
+    composition_details: Optional[str] = None
+    technical_improvement: Optional[str] = None
+    experimental_evidence: Optional[str] = None
+    public_disclosure: Optional[bool] = None
+    public_disclosure_details: Optional[str] = None
+    prior_art_known: Optional[bool] = None
+    prior_art_details: Optional[str] = None
 
     intellectual_property_objective: List[str] = Field(
         default_factory=list,
         validation_alias=AliasChoices("intellectual_property_objective", "ip_objective")
     ) # ["patent", "trademark", "gi", "copyright", "design", "plant_variety", "trade_secret", "tkdl_prior_art", "regulatory", "unknown"]
     international_market: List[str] = Field(default_factory=list)
+    questions_asked_count: int = 0
 
     uploaded_documents: List[str] = Field(default_factory=list)
     previous_answers: List[Dict[str, Any]] = Field(default_factory=list)

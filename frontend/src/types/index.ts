@@ -7,10 +7,31 @@ export interface Citation {
   country?: string;
   region?: string;
   effective_date?: string;
+  authority?: string;
   snippet?: string;
   is_authoritative: boolean;
   support_status?: 'SUPPORTED' | 'PARTIALLY_SUPPORTED' | 'UNSUPPORTED' | 'UNVERIFIED';
   source_url?: string;
+  checksum_sha256?: string;
+  checksum?: string;
+}
+
+export interface PriorArtMatch {
+  title: string;
+  source_id?: string;
+  source_type: string;
+  jurisdiction: string;
+  country?: string;
+  publication_number?: string;
+  filing_date?: string;
+  matched_features: string[];
+  relevance_score: number;
+  match_category: string;
+  provenance: string;
+  source_url?: string;
+  citation_metadata?: Record<string, any>;
+  explanation?: string;
+  disclaimer: string;
 }
 
 export interface ChatResponse {
@@ -26,6 +47,7 @@ export interface ChatResponse {
   confidence_explanation: string;
   next_question?: string;
   suggested_options?: string[];
+  prior_art_matches?: PriorArtMatch[];
   audio_url?: string;
   requires_human_escalation: boolean;
   safe_abstention: boolean;
@@ -49,9 +71,14 @@ export interface EvidenceReference {
 
 export interface ConversationHistoryItem {
   id?: string;
-  sender: 'user' | 'assistant';
+  sender?: 'user' | 'assistant';
   content?: string;
   text?: string;
+  user_message?: string;
+  assistant_answer?: string;
+  next_question?: string;
+  suggested_options?: string[];
+  citations?: Citation[];
   timestamp?: string;
   data?: ChatResponse;
 }
@@ -72,9 +99,23 @@ export interface CaseState {
   manufacturing_context?: string;
   formulation_classification: string;
   classical_reference?: string;
+  classical_or_proprietary?: string;
   traditional_knowledge_involved?: boolean;
   biological_resources_involved?: boolean;
   access_and_benefit_sharing?: boolean;
+  synergistic_efficacy_proven?: boolean;
+  applicant_entity_type?: string;
+
+  // Patent-specific intake fields
+  composition_details?: string;
+  novelty_aspect?: string;
+  technical_improvement?: string;
+  experimental_evidence?: string;
+  public_disclosure?: boolean;
+  public_disclosure_details?: string;
+  prior_art_known?: boolean;
+  prior_art_details?: string;
+
   intellectual_property_objective: string[];
   international_market: string[];
   uploaded_documents: string[];
@@ -134,18 +175,85 @@ export interface DiagnosticsStatus {
 }
 
 export interface EscalationDossier {
+  dossier_id?: string;
   case_id: string;
-  user_objective: string;
-  product_classification: string;
+  created_at?: string;
+  submitted_at?: string;
+  reviewed_at?: string;
+  status?: 'draft' | 'ready_for_submission' | 'submitted' | 'under_review' | 'resolved' | 'cancelled';
   jurisdiction: string;
   country?: string;
-  relevant_ip_domains: string[];
-  known_information: string[];
-  missing_information: string[];
-  sources_found: EvidenceReference[];
-  questions_requiring_human_review: string[];
-  generated_at: string;
+  region?: string;
+  language?: string;
+
+  user_question?: string;
+  case_summary?: string;
+  product_name?: string;
+  product_type?: string;
+  formulation_classification?: string;
+  classical_reference?: string;
+  ingredients?: string[];
+  composition_details?: string;
+  intended_use?: string;
+  dosage_or_form?: string;
+  manufacturing_context?: string;
+
+  intellectual_property_objective?: string[];
+  relevant_ip_types?: string[];
+  novelty_aspect?: string;
+  technical_improvement?: string;
+  experimental_evidence?: string;
+  public_disclosure?: boolean;
+  public_disclosure_details?: string;
+  prior_art_known?: boolean;
+  prior_art_details?: string;
+
+  traditional_knowledge_involved?: boolean;
+  biological_resources_involved?: boolean;
+  access_and_benefit_sharing?: boolean;
+  source_of_ingredients?: string;
+  applicant_entity_type?: string;
+  abs_assessment?: string;
+  tkdl_pointers?: Record<string, any>;
+
+  retrieved_sources?: Array<Record<string, any>>;
+  authoritative_sources?: Array<Record<string, any>>;
+  citations?: Citation[];
+  relevant_sections?: string[];
+  prior_art_matches?: PriorArtMatch[];
+
+  confidence?: number;
+  confidence_level?: string;
+  confidence_reason?: string;
+  unresolved_questions?: string[];
+  abstention_reason?: string;
+  escalation_reason?: string;
+  user_note?: string;
+  facilitator_notes?: string;
+
+  audit_log?: Array<Record<string, any>>;
+  disclaimer?: string;
+
+  // Backward compatibility fields
+  user_objective?: string;
+  product_classification?: string;
+  relevant_ip_domains?: string[];
+  known_information?: string[];
+  missing_information?: string[];
+  sources_found?: EvidenceReference[];
+  questions_requiring_human_review?: string[];
+  generated_at?: string;
 }
+
+export interface EscalationSubmissionResponse {
+  dossier_id: string;
+  case_id: string;
+  status: string;
+  created_at: string;
+  message: string;
+  dossier?: EscalationDossier;
+}
+
 
 export interface LegalSourceItem {
   source_id: string;

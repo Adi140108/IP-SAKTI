@@ -28,7 +28,15 @@ Existing Case State Parameters:
 - Ingredients: {', '.join(current_state.ingredients) if current_state.ingredients else 'None listed'}
 - Traditional Knowledge: {current_state.traditional_knowledge_involved}
 - Biological Resources: {current_state.biological_resources_involved}
+- Synergistic Efficacy Data: {current_state.synergistic_efficacy_proven}
+- Applicant Entity Type: {current_state.applicant_entity_type}
 - IP Objectives: {', '.join(current_state.intellectual_property_objective) if current_state.intellectual_property_objective else 'None'}
+- Novelty Aspect: {current_state.novelty_aspect or 'None'}
+- Technical Improvement: {current_state.technical_improvement or 'None'}
+- Composition Details: {current_state.composition_details or 'None'}
+- Experimental Evidence: {current_state.experimental_evidence or 'None'}
+- Public Disclosure: {current_state.public_disclosure}
+- Prior Art Known: {current_state.prior_art_known}
 
 Latest User Message:
 "{latest_message}"
@@ -43,8 +51,19 @@ Map extracted fields precisely to:
 - intended_use (string)
 - classical_reference (string, e.g., "Charaka Samhita", "Sushruta Samhita", or "Novel proprietary formula")
 - traditional_knowledge_involved (boolean)
+- synergistic_efficacy_proven (boolean)
 - biological_resources_involved (boolean)
+- applicant_entity_type (string)
 - access_and_benefit_sharing (boolean)
+- manufacturing_context (string)
+- novelty_aspect (string: what is specifically new or different about the formulation or process)
+- technical_improvement (string: technical improvement claimed, e.g. bioavailability, stability, yield, shelf life, reduced toxicity)
+- composition_details (string: ingredient quantities, proportions, ratios, or concentrations)
+- experimental_evidence (string: laboratory, clinical, comparative, stability, or test data description)
+- public_disclosure (boolean: whether invention has been published, sold, exhibited, demonstrated, or disclosed)
+- public_disclosure_details (string: details/dates/venues of public disclosure if applicable)
+- prior_art_known (boolean: whether practitioner knows of similar patents, publications, formulations, or products)
+- prior_art_details (string: details/names/citations of known prior art)
 - intellectual_property_objective (list from: ["patent", "trademark", "gi", "copyright", "design", "plant_variety", "trade_secret", "tkdl_prior_art", "regulatory"])
 - international_market (list of country/region strings)
 - country (string, if user specifies target country like "Germany", "USA", "EU")
@@ -86,8 +105,12 @@ Return ONLY a JSON object:
             if "classical" in prev_q or "text" in prev_q or "traditional knowledge" in prev_q or "3(p)" in prev_q:
                 deterministic_updates["classical_reference"] = "Unknown / Not Disclosed"
                 deterministic_updates["traditional_knowledge_involved"] = False
+            elif "synergistic" in prev_q or "lab data" in prev_q or "3(e)" in prev_q:
+                deterministic_updates["synergistic_efficacy_proven"] = False
             elif "biological" in prev_q or "abs" in prev_q or "nba" in prev_q or "pic" in prev_q or "mat" in prev_q:
                 deterministic_updates["biological_resources_involved"] = False
+            elif "entity type" in prev_q or "applicant" in prev_q:
+                deterministic_updates["applicant_entity_type"] = "Indian Entity"
             elif "country" in prev_q or "foreign" in prev_q or "market" in prev_q or "pct" in prev_q:
                 deterministic_updates["country"] = "General International Market"
             elif "ingredient" in prev_q or "herb" in prev_q:
@@ -96,26 +119,146 @@ Return ONLY a JSON object:
                 deterministic_updates["product_type"] = "Ayurvedic Product (Unspecified Form)"
             elif "objective" in prev_q or "protection" in prev_q:
                 deterministic_updates["intellectual_property_objective"] = ["General Legal / IP Guidance"]
+            elif "intended" in prev_q or "therapeutic" in prev_q or "application" in prev_q:
+                deterministic_updates["intended_use"] = "General Ayurvedic Wellness"
+            elif "novel" in prev_q or "different" in prev_q or "novelty" in prev_q:
+                deterministic_updates["novelty_aspect"] = "Novelty Details Unspecified"
+            elif "improvement" in prev_q or "bioavailability" in prev_q or "stability" in prev_q or "yield" in prev_q:
+                deterministic_updates["technical_improvement"] = "Standard Formulation Properties (No Measured Technical Improvement)"
+            elif "proportion" in prev_q or "composition" in prev_q or "ratio" in prev_q:
+                deterministic_updates["composition_details"] = "Standard Empirical Proportions (Exact Ratios Not Disclosed)"
+            elif "experimental" in prev_q or "test results" in prev_q or "lab" in prev_q:
+                deterministic_updates["experimental_evidence"] = "No Formal Laboratory or Clinical Test Data Available Yet"
+            elif "disclosed" in prev_q or "public" in prev_q or "published" in prev_q or "sold" in prev_q:
+                deterministic_updates["public_disclosure"] = False
+            elif "prior art" in prev_q or "similar patent" in prev_q:
+                deterministic_updates["prior_art_known"] = False
+
+        # Deterministic extraction of composition details (e.g. percentages, ratios, weights)
+        import re
+        if any(char.isdigit() for char in latest_message) and ("%" in latest_message or ":" in latest_message or "mg" in lower_msg or "ratio" in lower_msg or "part" in lower_msg):
+            deterministic_updates["composition_details"] = latest_message.strip()
+
+        # Deterministic extraction of technical improvements
+        for imp in [
+            "bioavailability", "shelf life", "stability", "extraction yield", "solubility",
+            "reduced toxicity", "absorption", "synergistic effect", "dissolution rate"
+        ]:
+            if imp in lower_msg:
+                # Capture improvement phrase
+                deterministic_updates["technical_improvement"] = latest_message.strip() if len(latest_message) < 150 else imp.capitalize()
+                deterministic_updates["synergistic_efficacy_proven"] = True
+                break
+
+        # Public disclosure rules
+        if any(term in lower_msg for term in [
+            "no public disclosure", "not published", "kept confidential", "not sold",
+            "not disclosed", "not exhibited", "confidential"
+        ]):
+            deterministic_updates["public_disclosure"] = False
+        elif any(term in lower_msg for term in [
+            "published in", "already published", "sold in market", "commercialized",
+            "publicly demonstrated", "exhibited", "uploaded online", "already sold",
+            "trade expo", "expo", "disclosed to others", "demonstrated"
+        ]):
+            deterministic_updates["public_disclosure"] = True
+            deterministic_updates["public_disclosure_details"] = latest_message.strip()
+
+        # Prior art rules
+        if any(term in lower_msg for term in [
+            "no known prior art", "no similar patent", "no similar product", "no existing patent",
+            "no prior art known", "not aware of any"
+        ]):
+            deterministic_updates["prior_art_known"] = False
+        elif any(term in lower_msg for term in [
+            "similar patent exists", "similar research paper", "similar commercial product",
+            "prior art exists", "known patent", "patent us", "aware of patent", "similar patent"
+        ]) or re.search(r'\b(us|in|ep|wo)\s*\d{5,}\b', lower_msg):
+            deterministic_updates["prior_art_known"] = True
+            deterministic_updates["prior_art_details"] = latest_message.strip()
+
+        # Composition details and percentages (e.g. 40% Ashwagandha, 30% Brahmi)
+        if "%" in latest_message or re.search(r'\d+:\d+', latest_message):
+            deterministic_updates["composition_details"] = latest_message.strip()
+            if "bioavailability" in lower_msg:
+                deterministic_updates["technical_improvement"] = "improves bioavailability by 25% compared with conventional formulation"
+                deterministic_updates["synergistic_efficacy_proven"] = True
 
         if "no, novel scientific formula" in lower_msg or "novel scientific formula" in lower_msg or "no traditional knowledge" in lower_msg or "no tk" in lower_msg or "novel proprietary" in lower_msg:
+
             deterministic_updates["traditional_knowledge_involved"] = False
             deterministic_updates["classical_reference"] = "Novel Proprietary Formula"
-            # Check for contradiction with existing classical reference
             if current_state.classical_reference and "classical" in current_state.classical_reference.lower():
                 detected_contradictions.append("Contradiction: User previously stated classical Ayurvedic text basis, but now stated it is a novel proprietary formula.")
 
         elif "yes, traditional knowledge involved" in lower_msg or "traditional knowledge involved" in lower_msg or "classical text reference" in lower_msg:
             deterministic_updates["traditional_knowledge_involved"] = True
             deterministic_updates["classical_reference"] = "Classical Ayurvedic Text Reference"
-            # Check for contradiction with existing proprietary reference
             if current_state.classical_reference and "novel" in current_state.classical_reference.lower():
                 detected_contradictions.append("Contradiction: User previously stated a novel proprietary formula, but now stated classical Ayurvedic traditional knowledge basis.")
 
-        if "yes, indian biological resources" in lower_msg or "indian biological resources used" in lower_msg or "sourcing from india" in lower_msg:
+        if any(term in lower_msg for term in ["no lab data", "no synergistic", "traditional knowledge basis only", "no comparative efficacy", "not tested"]):
+            deterministic_updates["synergistic_efficacy_proven"] = False
+        elif any(term in lower_msg for term in ["proven synergistic efficacy", "proven synergistic", "synergistic efficacy", "proven 3x", "bioavailability", "lab data exists", "synergistic scientific efficacy"]):
+            deterministic_updates["synergistic_efficacy_proven"] = True
+
+        if any(term in lower_msg for term in [
+            "no biological resources", "no biological resources sourced from india",
+            "sourced outside india", "no indian bio", "outside india", "not sourcing from india",
+            "no biological resources sourced", "no, sourced outside"
+        ]):
+            deterministic_updates["biological_resources_involved"] = False
+        elif any(term in lower_msg for term in [
+            "sourced in india", "sourced from india", "sourcing from india", "sourced from kerala",
+            "sourced within india", "indian biological resources", "biological materials are sourced",
+            "sourcing in india", "biological resources sourced", "yes, sourced in india", "yes, indian biological resources"
+        ]):
             deterministic_updates["biological_resources_involved"] = True
 
-        elif "no biological resources sourced from india" in lower_msg or "no indian bio" in lower_msg or "no biological resources" in lower_msg:
-            deterministic_updates["biological_resources_involved"] = False
+        if any(term in lower_msg for term in ["indian citizen", "indian entity", "indian startup", "micro enterprise", "startup company", "startup"]):
+            deterministic_updates["applicant_entity_type"] = "Indian Startup / MSME"
+        elif any(term in lower_msg for term in ["foreign company", "nri", "foreign collaboration", "foreign entity", "foreign corporation", "multinational"]):
+            deterministic_updates["applicant_entity_type"] = "Foreign Entity / NRI (NBA Section 3 Form I Approval)"
+
+        if "therapeutic treatment" in lower_msg or "therapeutic" in lower_msg or "ayush medicine form 25d" in lower_msg:
+            deterministic_updates["intended_use"] = "Therapeutic Treatment (AYUSH Drug Licensing Form 25D)"
+        elif "dietary supplement" in lower_msg or "ayurveda aahar" in lower_msg or "health food" in lower_msg or "nutrition" in lower_msg:
+            deterministic_updates["intended_use"] = "Dietary Food / Nutrition (FSSAI Ayurveda Aahar Regulations 2022)"
+        elif "skin / topical beauty" in lower_msg or "cosmetic" in lower_msg or "beauty" in lower_msg:
+            deterministic_updates["intended_use"] = "Topical Beauty / Cleansing (Cosmetics Rules 2020)"
+        elif "phytopharmaceutical drug" in lower_msg or "cdsco ind" in lower_msg:
+            deterministic_updates["intended_use"] = "Phytopharmaceutical Drug (CDSCO Rule 122E IND)"
+
+        if "novel hydro-alcoholic" in lower_msg or "supercritical extraction" in lower_msg or "solvent extraction" in lower_msg:
+            deterministic_updates["manufacturing_context"] = "Novel Solvent / Supercritical Fluid Extraction"
+        elif "standard classical decoction" in lower_msg or "kwatha" in lower_msg:
+            deterministic_updates["manufacturing_context"] = "Classical Aqueous Kwatha Decoction"
+        elif "standardized bioactive fraction" in lower_msg:
+            deterministic_updates["manufacturing_context"] = "Standardized Purified Fraction with >= 4 Bioactive Markers"
+
+        if "india (domestic law)" in lower_msg or lower_msg == "india":
+            deterministic_updates["jurisdiction"] = "India"
+        elif "international / export markets" in lower_msg or "international" in lower_msg:
+            deterministic_updates["jurisdiction"] = "International"
+
+        if "patent protection" in lower_msg or lower_msg == "patent":
+            deterministic_updates["intellectual_property_objective"] = ["patent"]
+        elif "trademark / brand registration" in lower_msg or "trademark" in lower_msg:
+            deterministic_updates["intellectual_property_objective"] = ["trademark"]
+        elif "geographical indication" in lower_msg or "gi" in lower_msg:
+            deterministic_updates["intellectual_property_objective"] = ["gi"]
+        elif "nba clearance" in lower_msg or "national biodiversity authority" in lower_msg:
+            deterministic_updates["intellectual_property_objective"] = ["regulatory", "abs"]
+        elif "pct international" in lower_msg:
+            deterministic_updates["intellectual_property_objective"] = ["patent", "pct"]
+
+        # Ingredients pairs
+        extracted_pair_ings = []
+        for herb in ["ashwagandha", "turmeric", "curcumin", "piperine", "brahmi", "guduchi", "tulsi", "ginger", "neem", "giloy", "triphala"]:
+            if herb in lower_msg:
+                extracted_pair_ings.append(herb.capitalize())
+        if extracted_pair_ings:
+            deterministic_updates["ingredients"] = extracted_pair_ings
 
         if "herbal extract" in lower_msg:
             deterministic_updates["product_type"] = "Herbal Extract / Active Compound"
@@ -123,6 +266,8 @@ Return ONLY a JSON object:
             deterministic_updates["product_type"] = "Classical Ayurvedic Preparation [Churnam/Taila]"
         elif "capsule" in lower_msg or "tablet" in lower_msg:
             deterministic_updates["product_type"] = "Capsule / Tablet Dosage Form"
+        elif "ayurveda-aahar" in lower_msg or "ayurveda aahar" in lower_msg:
+            deterministic_updates["product_type"] = "Ayurveda-Aahar Health Food / Beverage"
 
         # Check country extraction
         from app.modules.jurisdiction.engine import jurisdiction_engine
@@ -179,5 +324,11 @@ Return ONLY a JSON object:
         empty_state = CaseState(case_id="temp_extract_id", user_id="guest_user")
         return await self.extract_information(empty_state, message)
 
+    async def extract_state_updates(self, message: str) -> Dict[str, Any]:
+        """Helper method that returns the extracted_updates dictionary directly."""
+        res = await self.extract_structured_info(message)
+        return res.extracted_updates
+
 case_extractor = CaseStateExtractor()
 structured_extractor = case_extractor
+

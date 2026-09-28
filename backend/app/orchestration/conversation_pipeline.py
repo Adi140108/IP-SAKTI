@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 from app.schemas.chat import ChatRequest, ChatResponse, Citation
 from app.case.models import CaseState
+from app.case.state_manager import case_state_manager
 from app.db.firestore import firestore_service
 from app.ai.groq.provider import groq_provider
 from app.ai.bhashini.service import bhashini_service
@@ -18,8 +19,59 @@ from app.modules.citations.claim_extractor import claim_extractor
 from app.modules.citations.validator import citation_validator
 from app.modules.confidence.engine import confidence_engine
 from app.modules.questioning.engine import questioning_engine
+from app.modules.prior_art.matching import prior_art_matcher
+
+
+LANGUAGE_NAMES = {
+    "en": "English",
+    "hi": "Hindi (हिंदी)",
+    "ta": "Tamil (தமிழ்)",
+    "te": "Telugu (తెలుగు)",
+    "mr": "Marathi (मराठी)",
+    "bn": "Bengali (বাংলা)",
+    "gu": "Gujarati (ગુજરાતી)",
+    "kn": "Kannada (ಕನ್ನಡ)",
+    "ml": "Malayalam (മലയാളം)",
+}
 
 logger = logging.getLogger("IP-SAKTI.ConversationPipeline")
+
+async def robust_translate(text: str, source_lang: str, target_lang: str) -> str:
+    """
+    Translates text with Bhashini NMT prioritized, seamlessly falling back
+    to high-speed Groq neural Indic translation if Bhashini is unconfigured or unreachable.
+    """
+    if not text or not text.strip() or source_lang == target_lang:
+        return text
+    target_name = LANGUAGE_NAMES.get(target_lang, target_lang)
+    
+    # 1. Primary: Government of India Bhashini NMT
+    if bhashini_service.is_configured():
+        try:
+            translated = await bhashini_service.translate_text(text, source_lang=source_lang, target_lang=target_lang)
+            if translated and translated.strip():
+                return translated
+        except Exception as e:
+            logger.warning(f"Bhashini NMT translation ({source_lang} -> {target_lang}) failed: {e}. Falling back to Groq neural translation.")
+            
+    # 2. Resilient Fallback: Groq Neural Multilingual Translation Engine
+    try:
+        translation_prompt = (
+            f"You are an expert statutory legal translator for AYUSH and IP law in India.\n"
+            f"Translate the following text accurately and idiomatically from {source_lang} into {target_name} ({target_lang}).\n"
+            f"STRICT RULES:\n"
+            f"- Use natural, authentic {target_name} script (e.g. Devanagari for Hindi/Marathi, Tamil script for Tamil, Telugu for Telugu, etc.).\n"
+            f"- Retain exact section numbers, Act citations (e.g. Section 3(p), Patents Act 1970, Form I, BDA 2002), and bullet point structure.\n"
+            f"- Do NOT add conversational fluff or meta-explanations. Output ONLY the translated text.\n\n"
+            f"{text}"
+        )
+        translated = await groq_provider.generate_text(translation_prompt)
+        if translated and translated.strip():
+            return translated.strip()
+    except Exception as e:
+        logger.error(f"Groq translation fallback failed ({source_lang} -> {target_lang}): {e}")
+
+    return text
 
 class ConversationPipeline:
     """
@@ -63,10 +115,17 @@ class ConversationPipeline:
         existing_data = await firestore_service.get_case_state(case_id)
         if existing_data:
             case_state = CaseState(**existing_data)
+            if request.language and request.language != "en":
+                lang = request.language
+                case_state.language = request.language
+            elif case_state.language:
+                lang = case_state.language
+            if request.user_id and request.user_id != "guest_user" and case_state.user_id in ["guest_user", None]:
+                case_state.user_id = request.user_id
         else:
             case_state = CaseState(
                 case_id=case_id,
-                user_id="guest_user",
+                user_id=request.user_id or "guest_user",
                 language=lang,
                 jurisdiction=jur_norm["jurisdiction"],
                 country=jur_norm["country"],
@@ -81,7 +140,7 @@ class ConversationPipeline:
         # Translate input for reasoning if non-English
         processed_text = user_text
         if lang != "en":
-            processed_text = await bhashini_service.translate_text(user_text, source_lang=lang, target_lang="en")
+            processed_text = await robust_translate(user_text, source_lang=lang, target_lang="en")
 
         # 3 & 4. Parallelized Parameter Extraction, Classification & IP Domain Routing
         state_task = case_orchestrator.extract_and_update_state(case_state, processed_text)
@@ -104,6 +163,7 @@ class ConversationPipeline:
         # 6. Groq / LLM Answer Generation with EvidenceContext
         jurisdiction_prompt = jurisdiction_engine.get_jurisdiction_prompt_filter(jur_norm)
         evidence_prompt_text = evidence_context.to_formatted_prompt_text()
+        lang_name = LANGUAGE_NAMES.get(lang, "English")
 
         system_prompt = (
             "You are IP-SAKTI Sahayak, an authoritative legal and regulatory AI assistant "
@@ -115,6 +175,12 @@ class ConversationPipeline:
             "3. Do NOT write long narrative essays or repetitive fluff.\n"
             "4. Never invent sections, acts, treaties, fees, or procedural deadlines."
         )
+
+        if lang != "en":
+            system_prompt += (
+                f"\n5. MULTILINGUAL INSTRUCTION: The user has selected the language '{lang_name}'. "
+                f"You MUST formulate and write the entire 'answer' text in {lang_name} using natural, authentic Indic script and proper terminology."
+            )
 
         user_prompt = f"""
 Case Parameters:
@@ -215,6 +281,7 @@ Return JSON:
             validated_citations=validated_cits,
             jurisdiction=case_state.jurisdiction
         )
+        case_state.confidence = conf_score
 
         final_answer = raw_answer
         if safe_abstain:
@@ -224,9 +291,55 @@ Return JSON:
                 "To prevent inaccurate legal guidance, please consult an official AYUSH IP attorney or use the Human Escalation option."
             )
 
+        # 8b. Prior-Art & Existing-Record Retrieval (Separated from legal verdict)
+        is_patent_case = (
+            bool(case_state.ingredients) or
+            "patent" in [d.lower() for d in case_state.intellectual_property_objective] or
+            case_state.formulation_classification in ["proprietary", "new_non_classical", "phytopharmaceutical", "classical", "unknown"] or
+            "patent" in processed_text.lower() or
+            "prior art" in processed_text.lower() or
+            "similar" in processed_text.lower() or
+            "herbal" in processed_text.lower() or
+            "extract" in processed_text.lower() or
+            "formulation" in processed_text.lower() or
+            bool(case_state.novelty_aspect or case_state.technical_improvement)
+        )
+        
+        prior_art_matches = None
+        prior_art_res = None
+        if is_patent_case:
+            prior_art_res = await prior_art_matcher.search_prior_art(case_state, user_query=processed_text)
+            if prior_art_res and prior_art_res.matches:
+                prior_art_matches = prior_art_res.matches
+
+        requires_escalation = safe_abstain
+        # Public Disclosure Warning (Part 12)
+        if is_patent_case and case_state.public_disclosure:
+            disclosure_notice = (
+                "\n\n> ⚠️ **Notice on Prior Public Disclosure**:\n"
+                "> Public disclosure may be relevant to patent filing strategy. "
+                "The assistant cannot determine the legal effect without jurisdiction-specific review."
+            )
+            final_answer += disclosure_notice
+            requires_escalation = True
+
+        if prior_art_res and prior_art_res.requires_human_escalation:
+            requires_escalation = True
+
         # 9. Dynamic Next Question Generation
         q_res = await questioning_engine.generate_next_question(case_state)
         next_question = q_res.next_question if not q_res.is_clarification_complete else None
+
+        # If clarification is complete or cap reached, but essential parameters remain missing, attach Incomplete Information Notice
+        if q_res.is_clarification_complete and case_state.missing_information:
+            missing_labels = [case_state_manager.MANDATORY_FIELDS.get(f, f.replace('_', ' ')) for f in case_state.missing_information]
+            insufficient_info_notice = (
+                f"\n\n> ⚠️ **Notice on Incomplete Formulation Information**:\n"
+                f"> Key parameters ({', '.join(missing_labels)}) were not fully disclosed. "
+                f"Without these specific details, a definitive statutory determination under patent and biodiversity laws (e.g. Section 3(p) TKDL prior art bar or Section 3(e) synergistic efficacy defense) cannot be finalized. "
+                f"The assessment above provides general statutory legal frameworks."
+            )
+            final_answer += insufficient_info_notice
 
         # Record complete turn into conversation_history
         turn_record = {
@@ -241,11 +354,14 @@ Return JSON:
         case_state.conversation_history.append(turn_record)
 
         # 10. Multilingual Translation & TTS Audio
+        translated_options = q_res.suggested_options if next_question else None
         if lang != "en":
             try:
-                final_answer = await bhashini_service.translate_text(final_answer, source_lang="en", target_lang=lang)
+                final_answer = await robust_translate(final_answer, source_lang="en", target_lang=lang)
                 if next_question:
-                    next_question = await bhashini_service.translate_text(next_question, source_lang="en", target_lang=lang)
+                    next_question = await robust_translate(next_question, source_lang="en", target_lang=lang)
+                if translated_options:
+                    translated_options = [await robust_translate(opt, source_lang="en", target_lang=lang) for opt in translated_options]
             except Exception as e:
                 logger.error(f"Response translation failed (en -> {lang}): {e}")
 
@@ -267,10 +383,12 @@ Return JSON:
             confidence_score=conf_score,
             confidence_explanation=conf_exp,
             next_question=next_question,
-            suggested_options=q_res.suggested_options if next_question else None,
+            suggested_options=translated_options,
+            prior_art_matches=prior_art_matches,
             audio_url=audio_output,
-            requires_human_escalation=safe_abstain,
+            requires_human_escalation=requires_escalation,
             safe_abstention=safe_abstain
         )
+
 
 conversation_pipeline = ConversationPipeline()

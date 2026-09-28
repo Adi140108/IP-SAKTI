@@ -17,12 +17,51 @@ def mock_llm_providers(monkeypatch):
         p_lower = prompt.lower()
 
         if "structured legal information extractor" in sp_lower:
+            extracted_msg = ""
+            lines = prompt.split("\n")
+            for idx, l in enumerate(lines):
+                if "Latest User Message:" in l and idx + 1 < len(lines):
+                    extracted_msg = lines[idx + 1].strip().strip('"')
+            if not extracted_msg:
+                extracted_msg = prompt
+
+            u_lower = extracted_msg.lower()
+            ext_updates = {}
+
+            # Detect herbs
+            ings = []
+            for herb in ["ashwagandha", "ginger", "turmeric", "curcumin", "piperine", "brahmi", "guduchi", "tulsi", "neem", "giloy", "triphala"]:
+                if herb in u_lower:
+                    ings.append(herb.capitalize())
+            if ings:
+                ext_updates["ingredients"] = ings
+
+            # Detect classical vs proprietary
+            if any(k in u_lower for k in ["classical", "charaka", "sushruta", "samhita"]):
+                ext_updates["classical_reference"] = "Classical Ayurvedic Text Reference"
+                ext_updates["traditional_knowledge_involved"] = True
+            elif any(k in u_lower for k in ["novel", "proprietary"]):
+                ext_updates["classical_reference"] = "Novel Proprietary Formulation"
+                ext_updates["traditional_knowledge_involved"] = False
+
+            # Detect IP objective
+            if "patent" in u_lower:
+                ext_updates["intellectual_property_objective"] = ["patent"]
+            elif "trademark" in u_lower:
+                ext_updates["intellectual_property_objective"] = ["trademark"]
+
+            # Detect jurisdiction & country
+            if "india" in u_lower and "germany" not in u_lower and "usa" not in u_lower:
+                ext_updates["jurisdiction"] = "India"
+            elif "germany" in u_lower:
+                ext_updates["jurisdiction"] = "International"
+                ext_updates["country"] = "Germany"
+            elif "usa" in u_lower or "united states" in u_lower:
+                ext_updates["jurisdiction"] = "International"
+                ext_updates["country"] = "USA"
+
             return {
-                "extracted_updates": {
-                    "ingredients": ["Ashwagandha", "Ginger"],
-                    "traditional_knowledge_involved": True,
-                    "intellectual_property_objective": ["patent"]
-                },
+                "extracted_updates": ext_updates,
                 "uncertain_fields": [],
                 "contradictions": []
             }

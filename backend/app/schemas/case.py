@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from app.case.models import CaseState
 
 class CaseStateUpdate(BaseModel):
+    user_id: Optional[str] = None
     language: Optional[str] = None
     jurisdiction: Optional[str] = None
     country: Optional[str] = None
@@ -14,6 +15,14 @@ class CaseStateUpdate(BaseModel):
     classical_or_proprietary: Optional[str] = None
     traditional_knowledge_involved: Optional[bool] = None
     biological_resources_involved: Optional[bool] = None
+    novelty_aspect: Optional[str] = None
+    composition_details: Optional[str] = None
+    technical_improvement: Optional[str] = None
+    experimental_evidence: Optional[str] = None
+    public_disclosure: Optional[bool] = None
+    public_disclosure_details: Optional[str] = None
+    prior_art_known: Optional[bool] = None
+    prior_art_details: Optional[str] = None
     ip_objective: Optional[List[str]] = None
     international_market: Optional[List[str]] = None
     known_information: Optional[List[str]] = None

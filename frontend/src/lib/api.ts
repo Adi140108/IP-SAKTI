@@ -4,6 +4,7 @@ import {
   DocumentMetadata,
   DiagnosticsStatus,
   EscalationDossier,
+  EscalationSubmissionResponse,
   LegalSourceItem
 } from '@/types';
 
@@ -44,12 +45,32 @@ async function handleResponse<T>(res: Response): Promise<T> {
     try {
       const errorJson = await res.json();
       if (errorJson && typeof errorJson === 'object') {
-        errorDetail = errorJson.detail || errorJson.error || errorJson.message || JSON.stringify(errorJson);
+        const d = errorJson.detail ?? errorJson.error ?? errorJson.message;
+        if (typeof d === 'string' && d.trim()) {
+          errorDetail = d;
+        } else if (Array.isArray(d)) {
+          errorDetail = d
+            .map((item: any) => {
+              if (typeof item === 'string') return item;
+              if (item && typeof item === 'object') {
+                const loc = Array.isArray(item.loc) ? item.loc.filter((x: any) => x !== 'body').join('.') : item.loc;
+                const msg = item.msg || item.message || JSON.stringify(item);
+                return loc ? `${loc}: ${msg}` : msg;
+              }
+              return String(item);
+            })
+            .filter(Boolean)
+            .join('; ');
+        } else if (typeof d === 'object' && d !== null) {
+          errorDetail = JSON.stringify(d);
+        } else if (errorJson) {
+          errorDetail = JSON.stringify(errorJson);
+        }
       }
     } catch {
       // Non-JSON error response
     }
-    throw new Error(errorDetail);
+    throw new Error(errorDetail || `Request failed with status ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
@@ -76,6 +97,13 @@ export async function createCase(initialData: Partial<CaseState>): Promise<CaseS
   return handleResponse<CaseState>(res);
 }
 
+export async function listCases(userId?: string): Promise<CaseState[]> {
+  const baseUrl = getApiBaseUrl();
+  const url = userId ? `${baseUrl}/cases?user_id=${encodeURIComponent(userId)}` : `${baseUrl}/cases`;
+  const res = await fetch(url);
+  return handleResponse<CaseState[]>(res);
+}
+
 export async function getCase(caseId: string): Promise<CaseState> {
   const baseUrl = getApiBaseUrl();
   const res = await fetch(`${baseUrl}/cases/${encodeURIComponent(caseId)}`);
@@ -94,6 +122,7 @@ export async function updateCase(caseId: string, updates: Partial<CaseState>): P
 
 export async function sendChatMessage(params: {
   case_id: string;
+  user_id?: string;
   message: string;
   language: string;
   jurisdiction: string;
@@ -129,10 +158,110 @@ export async function fetchLegalSources(jurisdiction?: string): Promise<LegalSou
   return handleResponse<LegalSourceItem[]>(res);
 }
 
-export async function fetchEscalationDossier(caseId: string, reason: string = 'User request'): Promise<EscalationDossier> {
+export async function fetchEscalationDossier(caseId: string, reason: string = 'User requested expert review', userNote?: string): Promise<EscalationDossier> {
   const baseUrl = getApiBaseUrl();
-  const res = await fetch(`${baseUrl}/escalation/dossier?case_id=${encodeURIComponent(caseId)}&reason=${encodeURIComponent(reason)}`, {
-    method: 'POST'
+  try {
+    const url = `${baseUrl}/escalation/dossier?case_id=${encodeURIComponent(caseId)}`;
+    const res = await fetch(url, { method: 'GET' });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // Try POST fallback
+  }
+
+  const postUrl = `${baseUrl}/escalation/dossier?case_id=${encodeURIComponent(caseId)}`;
+  const res = await fetch(postUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      case_id: caseId,
+      reason,
+      user_note: userNote,
+      trigger_type: 'user'
+    })
   });
   return handleResponse<EscalationDossier>(res);
 }
+
+export async function submitEscalationRequest(
+  caseIdOrPayload: string | { case_id: string; reason?: string; user_note?: string; trigger_type?: string },
+  reason: string = 'User requested expert review',
+  userNote?: string
+): Promise<EscalationSubmissionResponse> {
+  const baseUrl = getApiBaseUrl();
+  let caseId = '';
+  let payloadReason = reason;
+  let payloadNote = userNote;
+  let triggerType = 'user';
+
+  if (typeof caseIdOrPayload === 'object' && caseIdOrPayload !== null) {
+    caseId = caseIdOrPayload.case_id;
+    if (caseIdOrPayload.reason) payloadReason = caseIdOrPayload.reason;
+    if (caseIdOrPayload.user_note) payloadNote = caseIdOrPayload.user_note;
+    if (caseIdOrPayload.trigger_type) triggerType = caseIdOrPayload.trigger_type;
+  } else {
+    caseId = caseIdOrPayload;
+  }
+
+  const payload = {
+    case_id: caseId,
+    reason: payloadReason,
+    user_note: payloadNote || undefined,
+    trigger_type: triggerType
+  };
+
+  const res = await fetch(`${baseUrl}/escalation/submit?case_id=${encodeURIComponent(caseId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (res.ok) {
+    return (await res.json()) as EscalationSubmissionResponse;
+  }
+
+  // Fallback to /escalation/dossier if /escalation/submit was not found (404)
+  if (res.status === 404) {
+    const dossierRes = await fetch(`${baseUrl}/escalation/dossier?case_id=${encodeURIComponent(caseId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const dossierData = await handleResponse<EscalationDossier>(dossierRes);
+    return {
+      dossier_id: dossierData.dossier_id || `dos_${Date.now().toString(36)}`,
+      case_id: caseId,
+      status: 'submitted',
+      created_at: dossierData.created_at || new Date().toISOString(),
+      message: 'Human review request submitted successfully.',
+      dossier: dossierData
+    };
+  }
+
+  return handleResponse<EscalationSubmissionResponse>(res);
+}
+
+export async function fetchEscalationRequests(limit: number = 50, status?: string): Promise<EscalationDossier[]> {
+  const baseUrl = getApiBaseUrl();
+  const url = status
+    ? `${baseUrl}/escalation/requests?limit=${limit}&status=${encodeURIComponent(status)}`
+    : `${baseUrl}/escalation/requests?limit=${limit}`;
+  const res = await fetch(url);
+  return handleResponse<EscalationDossier[]>(res);
+}
+
+export async function updateEscalationStatus(dossierId: string, status: string, facilitatorNote?: string): Promise<EscalationDossier> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/escalation/dossier/${encodeURIComponent(dossierId)}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      status,
+      facilitator_note: facilitatorNote,
+      facilitator_id: 'ip_facilitator_portal'
+    })
+  });
+  return handleResponse<EscalationDossier>(res);
+}
+
