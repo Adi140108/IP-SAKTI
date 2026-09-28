@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
-import { CaseState, ChatResponse } from '@/types';
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { CaseState, ChatResponse, EscalationDossier } from '@/types';
 import { getTierFromClassification } from '@/lib/formulationTaxonomy';
+import { fetchEscalationDossier, submitEscalationRequest } from '@/lib/api';
+import { persistDossier } from '@/lib/caseRegistry';
 import Dialog from './Dialog';
 import {
   FileTextIcon,
@@ -23,6 +26,7 @@ interface DossierExportModalProps {
   chatHistory: Array<{ sender: 'user' | 'assistant'; data?: ChatResponse; text?: string }>;
   jurisdiction: string;
   country?: string;
+  initialReason?: string;
 }
 
 export default function DossierExportModal({
@@ -32,14 +36,38 @@ export default function DossierExportModal({
   chatHistory,
   jurisdiction,
   country,
+  initialReason = 'User requested expert review',
 }: DossierExportModalProps) {
   const [copied, setCopied] = useState<boolean>(false);
+  const [escalationReason, setEscalationReason] = useState<string>(initialReason);
+  const [userNote, setUserNote] = useState<string>('');
+  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [submissionSuccess, setSubmissionSuccess] = useState<boolean>(false);
+  const [submittedDossierId, setSubmittedDossierId] = useState<string>('');
+  const [dossierData, setDossierData] = useState<EscalationDossier | null>(null);
+  const [loadingDossier, setLoadingDossier] = useState<boolean>(false);
+
+  const caseId = caseState?.case_id || 'IP-SAKTI-SESSION';
+
+  // Fetch authoritative dossier data from backend on open
+  useEffect(() => {
+    if (isOpen && caseId && caseId !== 'IP-SAKTI-SESSION') {
+      setLoadingDossier(true);
+      fetchEscalationDossier(caseId, escalationReason)
+        .then((data) => {
+          setDossierData(data);
+          setLoadingDossier(false);
+        })
+        .catch(() => {
+          setLoadingDossier(false);
+        });
+    }
+  }, [isOpen, caseId, escalationReason]);
 
   if (!isOpen) return null;
 
   const tier = getTierFromClassification(caseState?.formulation_classification || caseState?.product_type);
   const now = new Date().toLocaleString();
-  const caseId = caseState?.case_id || 'IP-SAKTI-SESSION';
 
   // Extract all unique citations from chatHistory
   const allCitations: Array<{ source: string; section_or_rule?: string; snippet?: string }> = [];
@@ -133,6 +161,39 @@ ${
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleSubmitEscalation = async () => {
+    if (!caseState) {
+      alert('No active case found. Please start a consultation first.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await submitEscalationRequest(caseId, escalationReason, userNote);
+      setSubmissionSuccess(true);
+      const returnedDossier = res.dossier || dossierData || {
+        dossier_id: res.dossier_id || `dos_${Date.now().toString(36)}`,
+        case_id: caseId,
+        product_name: caseState?.product_name || caseState?.product_type || 'Ayurvedic Case',
+        product_type: caseState?.product_type || 'Formulation',
+        formulation_classification: caseState?.formulation_classification || 'proprietary',
+        ingredients: caseState?.ingredients || [],
+        jurisdiction: jurisdiction,
+        country: country,
+        escalation_reason: escalationReason,
+        user_note: userNote,
+        status: 'submitted',
+        submitted_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      };
+      persistDossier(returnedDossier);
+      setSubmittedDossierId(res.dossier_id || res.dossier?.dossier_id || 'SUBMITTED');
+    } catch {
+      alert('Failed to submit escalation request. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -314,6 +375,98 @@ ${
               </span>
             ))}
           </div>
+        </section>
+
+        {/* ========================================================================= */}
+        {/* ESCALATE TO HUMAN IP FACILITATOR — screen-only, never printed          */}
+        {/* ========================================================================= */}
+        <section className="print:hidden space-y-3 border-t border-line pt-5">
+          <h2 className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ink">
+            <ScrollIcon size={13} className="text-accent" />
+            Escalate to a Human IP Facilitator
+          </h2>
+
+          {submissionSuccess ? (
+            <div className="panel-sunken space-y-2.5 p-4">
+              <div className="flex items-center gap-2 text-[12.5px] font-medium text-ok">
+                <CheckIcon size={14} />
+                Escalation request submitted successfully.
+              </div>
+              <p className="text-[11.5px] leading-relaxed text-muted">
+                Your dossier reference is{' '}
+                <span className="mono-caps text-ink">{submittedDossierId}</span>. A human IP
+                facilitator will review this case and follow up. You can track the review status from
+                the Escalation or Facilitator portal.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Link
+                  href="/escalation"
+                  onClick={onClose}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[11.5px] font-medium text-accent-fg transition-colors hover:bg-accent-hover"
+                >
+                  View Escalation Tracker
+                </Link>
+                <button
+                  onClick={() => {
+                    setSubmissionSuccess(false);
+                    setUserNote('');
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-3 py-1.5 text-[11.5px] font-medium text-ink transition-colors hover:bg-subtle"
+                >
+                  Submit Another Request
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label htmlFor="escalation-reason" className="eyebrow">
+                  Reason for Escalation
+                </label>
+                <input
+                  id="escalation-reason"
+                  type="text"
+                  value={escalationReason}
+                  onChange={(e) => setEscalationReason(e.target.value)}
+                  className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-ink"
+                  placeholder="e.g. Potential Sec 3(p) TK conflict requires human review"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="escalation-note" className="eyebrow">
+                  Additional Context (optional)
+                </label>
+                <textarea
+                  id="escalation-note"
+                  value={userNote}
+                  onChange={(e) => setUserNote(e.target.value)}
+                  rows={3}
+                  className="w-full resize-none rounded-md border border-line bg-surface px-2.5 py-1.5 text-ink"
+                  placeholder="Share any details the facilitator should know — prior art concerns, TK holders, filing deadlines, etc."
+                />
+              </div>
+
+              {loadingDossier && (
+                <p className="text-[11.5px] text-faint">Compiling authoritative dossier data…</p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleSubmitEscalation}
+                  disabled={submitting || loadingDossier || !caseState}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3.5 py-2 text-[12px] font-medium text-accent-fg transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {submitting ? 'Submitting…' : 'Submit Escalation Request'}
+                </button>
+                {!caseState && (
+                  <span className="text-[11px] text-faint">
+                    Start a consultation to enable escalation.
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Footnote Disclaimer */}

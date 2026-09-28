@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { XIcon } from './Icons';
 
 interface DialogProps {
@@ -13,15 +14,20 @@ interface DialogProps {
   headerActions?: ReactNode;
   footer?: ReactNode;
   children: ReactNode;
-  size?: 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg';
+  bodyClassName?: string;
+  footerClassName?: string;
   /** Dossier mode: chrome collapses to a clean, full-width printed document. */
   printable?: boolean;
 }
 
 const SIZES: Record<NonNullable<DialogProps['size']>, string> = {
+  sm: 'sm:max-w-md',
   md: 'sm:max-w-3xl',
   lg: 'sm:max-w-5xl',
 };
+
+const emptySubscribe = () => () => {};
 
 export default function Dialog({
   isOpen,
@@ -33,10 +39,13 @@ export default function Dialog({
   footer,
   children,
   size = 'md',
+  bodyClassName,
+  footerClassName,
   printable = false,
 }: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -90,11 +99,11 @@ export default function Dialog({
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <div
-      className={`animate-fadeIn fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4 ${
+      className={`animate-fadeIn fixed inset-0 z-[9999] flex items-end justify-center p-0 sm:items-center sm:p-4 ${
         printable ? 'print:p-0 print:bg-white' : 'bg-ink/40'
       }`}
       onMouseDown={(e) => {
@@ -139,7 +148,7 @@ export default function Dialog({
             <button
               onClick={onClose}
               aria-label="Close dialog"
-              className="flex h-7 w-7 items-center justify-center rounded-md border border-line text-muted transition-colors hover:bg-subtle hover:text-ink"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-line text-muted transition-colors hover:bg-subtle hover:text-ink cursor-pointer"
             >
               <XIcon size={13} />
             </button>
@@ -147,19 +156,25 @@ export default function Dialog({
         </div>
 
         {/* Body */}
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-7">{children}</div>
+        <div className={bodyClassName ?? 'min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-7'}>
+          {children}
+        </div>
 
         {/* Footer */}
         {footer && (
-        <div
-          className={`flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 sm:px-6 ${
-            printable ? 'print:hidden' : 'bg-sunken'
-          }`}
-        >
+          <div
+            className={
+              footerClassName ??
+              `flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 sm:px-6 ${
+                printable ? 'print:hidden' : 'bg-sunken'
+              }`
+            }
+          >
             {footer}
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

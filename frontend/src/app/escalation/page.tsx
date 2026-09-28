@@ -28,7 +28,7 @@ function EscalationContent() {
   const { user } = useAuth();
 
   const [activeCaseId, setActiveCaseId] = useState<string>(caseIdFromQuery || '');
-  const [userCases, setUserCases] = useState<CaseState[]>(() => getPersistedCases());
+  const [userCases, setUserCases] = useState<CaseState[]>([]);
   const [caseState, setCaseState] = useState<CaseState | null>(null);
   const [dossier, setDossier] = useState<EscalationDossier | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -291,21 +291,21 @@ ${activeD?.citations && activeD.citations.length > 0
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-16">
+    <div className="min-h-screen bg-canvas text-ink pb-16">
       {/* Header Banner */}
-      <div className="border-b border-slate-200 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/80 backdrop-blur sticky top-16 z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-canvas border-b border-line">
+        <div className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xl">⚖️</span>
-              <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white">
+              <h1 className="font-display text-lg sm:text-xl leading-tight text-ink">
                 Human IP Facilitator Escalation
               </h1>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800/60">
+              <span className="chip chip-warn">
                 Informational Legal Guidance
               </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <p className="text-xs text-muted mt-0.5">
               Review authoritative case facts, statutory citations, and submit a structured dossier to an IP Facilitator.
             </p>
           </div>
@@ -313,14 +313,14 @@ ${activeD?.citations && activeD.citations.length > 0
           <div className="flex items-center gap-2">
             <button
               onClick={downloadMarkdownDossier}
-              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-800 dark:text-slate-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+              className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-3.5 py-2 text-[12px] font-medium text-ink transition-colors hover:bg-subtle cursor-pointer"
             >
               <span>📥</span>
               <span>Export Markdown</span>
             </button>
             <Link
               href={`/chat${activeCaseId ? `?case_id=${activeCaseId}` : ''}`}
-              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+              className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3.5 py-2 text-[12px] font-medium text-accent-fg transition-colors hover:bg-accent-hover cursor-pointer"
             >
               <span>💬</span>
               <span>Back to Chat</span>
@@ -329,18 +329,18 @@ ${activeD?.citations && activeD.citations.length > 0
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <div className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Case Selector and Status Card */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Active Case Selector */}
-          <div className="glass-panel p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-3">
+          <div className="panel p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <label className="eyebrow">
                 Select Active Case
               </label>
               <button
                 onClick={handleCreateNewCase}
-                className="text-[10px] text-emerald-600 dark:text-emerald-400 hover:underline font-bold cursor-pointer"
+                className="text-[11px] text-accent hover:underline font-semibold cursor-pointer"
               >
                 + New Case
               </button>
@@ -350,7 +350,7 @@ ${activeD?.citations && activeD.citations.length > 0
               <select
                 value={activeCaseId}
                 onChange={(e) => setActiveCaseId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-emerald-500"
+                className="w-full bg-surface border border-line rounded-md px-3 py-2 text-[12.5px] text-ink focus:border-accent focus:outline-none"
               >
                 {userCases.map((c) => (
                   <option key={c.case_id} value={c.case_id}>
@@ -365,52 +365,52 @@ ${activeD?.citations && activeD.citations.length > 0
                   placeholder="Enter Case ID (e.g. case_...)"
                   value={activeCaseId}
                   onChange={(e) => setActiveCaseId(e.target.value)}
-                  className="flex-1 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200"
+                  className="flex-1 bg-surface border border-line rounded-md px-3 py-2 text-[12.5px] text-ink placeholder:text-faint focus:border-accent focus:outline-none"
                 />
               </div>
             )}
 
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between pt-1">
-              <span>Jurisdiction: <strong>{caseState?.jurisdiction || dossier?.jurisdiction || 'India'}</strong></span>
-              <span>Country: <strong>{caseState?.country || dossier?.country || 'India'}</strong></span>
+            <div className="text-[11px] text-muted flex items-center justify-between pt-1">
+              <span>Jurisdiction: <strong className="text-ink">{caseState?.jurisdiction || dossier?.jurisdiction || 'India'}</strong></span>
+              <span>Country: <strong className="text-ink">{caseState?.country || dossier?.country || 'India'}</strong></span>
             </div>
           </div>
 
           {/* Lifecycle Status & Confidence Badge */}
-          <div className="glass-panel p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-3">
-            <div className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <div className="panel p-4 space-y-3">
+            <div className="eyebrow">
               Escalation Status &amp; Confidence
             </div>
-            <div className="flex items-center gap-3">
-              <div className={`px-3 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-1.5 ${
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className={`uppercase ${
                 dossier?.status === 'submitted'
-                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300 dark:border-blue-800'
+                  ? 'chip chip-info'
                   : dossier?.status === 'under_review'
-                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse'
+                  ? 'chip chip-warn animate-pulse-soft'
                   : dossier?.status === 'resolved'
-                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
-                  : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
+                  ? 'chip chip-ok'
+                  : 'chip chip-neutral'
               }`}>
                 <span>{dossier?.status === 'under_review' ? '⏳' : dossier?.status === 'resolved' ? '✅' : dossier?.status === 'submitted' ? '📨' : '📝'}</span>
                 <span>Status: {dossier?.status || 'Draft'}</span>
               </div>
 
-              <div className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300">
+              <span className="chip chip-accent">
                 Confidence: {dossier?.confidence_level || getConfidenceLevel(dossier?.confidence || computeCaseConfidence(caseState))} ({Math.round((dossier?.confidence || computeCaseConfidence(caseState)) * 100)}%)
-              </div>
+              </span>
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            <p className="text-[11px] text-muted">
               {dossier?.confidence_reason || (computeCaseConfidence(caseState) >= 0.75 ? 'Evaluated against statutory index and authoritative legal citations.' : 'Evaluated against indexed statutory provisions; additional formulation parameters can increase confidence.')}
             </p>
           </div>
 
           {/* Quick Submission Action */}
-          <div className="glass-panel p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-emerald-500/5 to-teal-500/10 border border-amber-500/30 dark:border-amber-500/25 space-y-3 flex flex-col justify-between">
+          <div className="rounded-lg border border-warn-line bg-warn-soft p-4 space-y-3 flex flex-col justify-between">
             <div>
-              <div className="text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
+              <div className="text-xs font-semibold text-warn flex items-center gap-1.5">
                 <span>⚡ Request Human Review</span>
               </div>
-              <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 leading-snug">
+              <p className="text-[11px] text-muted mt-1 leading-snug">
                 Submit this case to the Human IP Facilitator Queue for expert regulatory guidance.
               </p>
             </div>
@@ -418,11 +418,11 @@ ${activeD?.citations && activeD.citations.length > 0
             <button
               onClick={handleSubmitEscalation}
               disabled={submitting || !activeCaseId}
-              className="w-full py-2 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 text-white font-black text-xs shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95"
+              className="w-full rounded-md bg-accent px-3.5 py-2 text-[12px] font-medium text-accent-fg transition-colors hover:bg-accent-hover flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer"
             >
               {submitting ? (
                 <>
-                  <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  <div className="w-3.5 h-3.5 rounded-full border-2 border-accent-fg border-t-transparent animate-spin-slow" />
                   <span>Submitting to Facilitator...</span>
                 </>
               ) : (
@@ -436,19 +436,19 @@ ${activeD?.citations && activeD.citations.length > 0
 
         {/* Feedback Notifications */}
         {submitSuccess && (
-          <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 text-xs flex items-center justify-between gap-3 shadow-xs animate-in fade-in">
+          <div className="rounded-lg border border-ok-line bg-ok-soft p-4 text-xs flex items-center justify-between gap-3 animate-fadeIn">
             <div className="flex items-center gap-2">
               <span className="text-lg">🎉</span>
               <div>
-                <strong>{submitSuccess}</strong>
-                <p className="text-[11px] text-emerald-800/90 dark:text-emerald-300/90 mt-0.5">
+                <strong className="text-ok">{submitSuccess}</strong>
+                <p className="text-[11px] text-ok mt-0.5">
                   An IP facilitator can now inspect this case dossier in the Facilitator Review Portal.
                 </p>
               </div>
             </div>
             <Link
               href="/facilitator"
-              className="px-3 py-1.5 rounded-lg bg-emerald-700 text-white font-bold text-[11px] hover:bg-emerald-800 transition-all whitespace-nowrap cursor-pointer"
+              className="inline-flex items-center rounded-md bg-accent px-3.5 py-2 text-[12px] font-medium text-accent-fg transition-colors hover:bg-accent-hover whitespace-nowrap cursor-pointer"
             >
               View Facilitator Portal ➔
             </Link>
@@ -456,28 +456,28 @@ ${activeD?.citations && activeD.citations.length > 0
         )}
 
         {error && (
-          <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200 text-xs flex items-center gap-2">
+          <div className="rounded-lg border border-danger-line bg-danger-soft p-4 text-danger text-xs flex items-center gap-2">
             <span>⚠️</span>
             <span>{error}</span>
           </div>
         )}
 
         {/* Reason & User Note Customization Card */}
-        <div className="glass-panel p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4 shadow-xs">
-          <h2 className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-2">
+        <div className="panel p-5 space-y-4">
+          <h2 className="font-display text-[15px] text-ink flex items-center gap-2">
             <span>📝</span>
             <span>Escalation Request Parameters</span>
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+              <label className="eyebrow">
                 Primary Reason for Escalation
               </label>
               <select
                 value={selectedReason}
                 onChange={(e) => setSelectedReason(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-emerald-500"
+                className="w-full bg-surface border border-line rounded-md px-3 py-2 text-[12.5px] text-ink focus:border-accent focus:outline-none"
               >
                 {ESCALATION_REASONS.map((r, idx) => (
                   <option key={idx} value={r}>
@@ -488,7 +488,7 @@ ${activeD?.citations && activeD.citations.length > 0
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+              <label className="eyebrow">
                 Custom User Note / Specific Questions for Facilitator (Optional)
               </label>
               <input
@@ -496,16 +496,16 @@ ${activeD?.citations && activeD.citations.length > 0
                 placeholder="e.g., Please evaluate if our bio-enhancer data satisfies Section 3(e) synergistic criteria..."
                 value={userNote}
                 onChange={(e) => setUserNote(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 focus:outline-emerald-500"
+                className="w-full bg-surface border border-line rounded-md px-3 py-2 text-[12.5px] text-ink placeholder:text-faint focus:border-accent focus:outline-none"
               />
             </div>
           </div>
         </div>
 
         {/* 10-Section Structured Dossier Viewer */}
-        <div className="glass-panel rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+        <div className="panel overflow-hidden">
           {/* Navigation Tabs */}
-          <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto bg-slate-50/70 dark:bg-slate-950/70 p-1.5 gap-1">
+          <div className="flex border-b border-line overflow-x-auto bg-sunken p-1.5 gap-1">
             {[
               { id: 'summary', label: '1. Summary & Facts', icon: '📋' },
               { id: 'formulation', label: '2. Formulation & Classification', icon: '🌿' },
@@ -518,10 +518,10 @@ ${activeD?.citations && activeD.citations.length > 0
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                   activeTab === tab.id
-                    ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs border border-slate-200 dark:border-slate-800'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-slate-800'
+                    ? 'bg-surface text-accent-ink shadow-soft border border-line'
+                    : 'text-muted hover:text-ink hover:bg-surface'
                 }`}
               >
                 <span>{tab.icon}</span>
@@ -532,36 +532,36 @@ ${activeD?.citations && activeD.citations.length > 0
 
           <div className="p-6">
             {loading && !caseState && !dossier ? (
-              <div className="py-12 flex flex-col items-center justify-center space-y-3 text-slate-500">
-                <div className="w-8 h-8 rounded-full border-3 border-emerald-500 border-t-transparent animate-spin" />
-                <span className="text-xs font-semibold">Loading authoritative case facts &amp; evidence...</span>
+              <div className="py-12 flex flex-col items-center justify-center space-y-3 text-muted">
+                <div className="w-5 h-5 border-2 border-line-strong border-t-accent rounded-full animate-spin-slow" />
+                <span className="text-[12px]">Loading authoritative case facts &amp; evidence...</span>
               </div>
             ) : (
               <div className="space-y-6">
                 {/* Tab 1: Summary */}
                 {activeTab === 'summary' && (
                   <div className="space-y-4">
-                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
-                      <div className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">
+                    <div className="panel-sunken p-4 space-y-2">
+                      <div className="eyebrow">
                         Case Overview Summary
                       </div>
-                      <p className="text-xs font-medium text-slate-800 dark:text-slate-200 leading-relaxed">
+                      <p className="text-[12.5px] text-ink leading-relaxed">
                         {dossier?.case_summary || caseState?.product_name || 'Ayurvedic formulation case record.'}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-                        <span className="text-slate-500 block text-[10px] uppercase font-bold">Dossier ID</span>
-                        <span className="font-mono font-bold">{dossier?.dossier_id || 'Pending Submission'}</span>
+                      <div className="panel-sunken p-3">
+                        <span className="eyebrow block">Dossier ID</span>
+                        <span className="mono-caps text-ink font-semibold">{dossier?.dossier_id || 'Pending Submission'}</span>
                       </div>
-                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-                        <span className="text-slate-500 block text-[10px] uppercase font-bold">Created At</span>
-                        <span>{dossier?.created_at ? new Date(dossier.created_at).toLocaleString() : new Date().toLocaleString()}</span>
+                      <div className="panel-sunken p-3">
+                        <span className="eyebrow block">Created At</span>
+                        <span className="text-ink">{dossier?.created_at ? new Date(dossier.created_at).toLocaleString() : new Date().toLocaleString()}</span>
                       </div>
-                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-                        <span className="text-slate-500 block text-[10px] uppercase font-bold">Target Jurisdiction</span>
-                        <span className="font-bold">{dossier?.jurisdiction || caseState?.jurisdiction || 'India'} {dossier?.country || caseState?.country ? `(${dossier?.country || caseState?.country})` : ''}</span>
+                      <div className="panel-sunken p-3">
+                        <span className="eyebrow block">Target Jurisdiction</span>
+                        <span className="text-ink font-semibold">{dossier?.jurisdiction || caseState?.jurisdiction || 'India'} {dossier?.country || caseState?.country ? `(${dossier?.country || caseState?.country})` : ''}</span>
                       </div>
                     </div>
                   </div>
@@ -571,9 +571,9 @@ ${activeD?.citations && activeD.citations.length > 0
                 {activeTab === 'formulation' && (
                   <div className="space-y-4 text-xs">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
-                        <span className="text-[10px] font-bold uppercase text-slate-500">Product Identity</span>
-                        <div className="space-y-1">
+                      <div className="panel-sunken p-4 space-y-2">
+                        <span className="eyebrow">Product Identity</span>
+                        <div className="space-y-1 text-ink">
                           <div><strong>Product Name:</strong> {dossier?.product_name || caseState?.product_name || 'N/A'}</div>
                           <div><strong>Product Type:</strong> {dossier?.product_type || caseState?.product_type || 'N/A'}</div>
                           <div><strong>Dosage / Form:</strong> {dossier?.dosage_or_form || caseState?.dosage_or_form || 'N/A'}</div>
@@ -581,31 +581,31 @@ ${activeD?.citations && activeD.citations.length > 0
                         </div>
                       </div>
 
-                      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
-                        <span className="text-[10px] font-bold uppercase text-slate-500">Regulatory Classification</span>
-                        <div className="space-y-1">
-                          <div><strong>Classification:</strong> <span className="capitalize px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold">{dossier?.formulation_classification || caseState?.formulation_classification || 'proprietary'}</span></div>
+                      <div className="panel-sunken p-4 space-y-2">
+                        <span className="eyebrow">Regulatory Classification</span>
+                        <div className="space-y-1 text-ink">
+                          <div><strong>Classification:</strong> <span className="chip chip-accent capitalize">{dossier?.formulation_classification || caseState?.formulation_classification || 'proprietary'}</span></div>
                           <div><strong>Classical Reference:</strong> {dossier?.classical_reference || caseState?.classical_reference || 'None (Proprietary / New)'}</div>
                           <div><strong>Manufacturing Context:</strong> {dossier?.manufacturing_context || caseState?.manufacturing_context || 'Standard GMP'}</div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
-                      <span className="text-[10px] font-bold uppercase text-slate-500">Active Ingredients &amp; Sourcing</span>
+                    <div className="panel-sunken p-4 space-y-2">
+                      <span className="eyebrow">Active Ingredients &amp; Sourcing</span>
                       {(dossier?.ingredients && dossier.ingredients.length > 0) || (caseState?.ingredients && caseState.ingredients.length > 0) ? (
                         <div className="flex flex-wrap gap-2 pt-1">
                           {(dossier?.ingredients || caseState?.ingredients || []).map((ing, iIdx) => (
-                            <span key={iIdx} className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-semibold text-xs">
+                            <span key={iIdx} className="chip chip-ok">
                               🌿 {ing}
                             </span>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-slate-500 italic">No ingredients specified yet.</p>
+                        <p className="text-faint italic">No ingredients specified yet.</p>
                       )}
                       {(dossier?.composition_details || caseState?.composition_details) && (
-                        <p className="mt-2 text-slate-700 dark:text-slate-300">
+                        <p className="mt-2 text-muted">
                           <strong>Composition Details:</strong> {dossier?.composition_details || caseState?.composition_details}
                         </p>
                       )}
@@ -616,11 +616,11 @@ ${activeD?.citations && activeD.citations.length > 0
                 {/* Tab 3: IP Objectives */}
                 {activeTab === 'ip' && (
                   <div className="space-y-4 text-xs">
-                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
-                      <span className="text-[10px] font-bold uppercase text-slate-500">Target IP Types</span>
+                    <div className="panel-sunken p-4 space-y-2">
+                      <span className="eyebrow">Target IP Types</span>
                       <div className="flex flex-wrap gap-2">
                         {(dossier?.intellectual_property_objective || caseState?.intellectual_property_objective || ['patent']).map((obj, oIdx) => (
-                          <span key={oIdx} className="px-2.5 py-1 rounded-lg bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300 font-bold uppercase text-[11px]">
+                          <span key={oIdx} className="chip chip-info uppercase">
                             💡 {obj}
                           </span>
                         ))}
@@ -628,27 +628,27 @@ ${activeD?.citations && activeD.citations.length > 0
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
-                        <span className="text-[10px] font-bold uppercase text-slate-500">Novelty &amp; Inventive Step</span>
-                        <p className="text-slate-800 dark:text-slate-200">
+                      <div className="panel-sunken p-4 space-y-2">
+                        <span className="eyebrow">Novelty &amp; Inventive Step</span>
+                        <p className="text-ink">
                           <strong>Novelty Aspect:</strong> {dossier?.novelty_aspect || caseState?.novelty_aspect || 'None specified'}
                         </p>
-                        <p className="text-slate-800 dark:text-slate-200">
+                        <p className="text-ink">
                           <strong>Technical Improvement:</strong> {dossier?.technical_improvement || caseState?.technical_improvement || 'None specified'}
                         </p>
                       </div>
 
-                      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
-                        <span className="text-[10px] font-bold uppercase text-slate-500">Experimental Evidence &amp; Disclosure</span>
-                        <p className="text-slate-800 dark:text-slate-200">
+                      <div className="panel-sunken p-4 space-y-2">
+                        <span className="eyebrow">Experimental Evidence &amp; Disclosure</span>
+                        <p className="text-ink">
                           <strong>Experimental Data:</strong> {dossier?.experimental_evidence || caseState?.experimental_evidence || 'Preliminary formulation data recorded'}
                         </p>
                         <div className="pt-1">
                           <strong>Public Disclosure:</strong>{' '}
                           {dossier?.public_disclosure || caseState?.public_disclosure ? (
-                            <span className="text-rose-600 dark:text-rose-400 font-bold">⚠️ Warning: Disclosed prior to filing ({dossier?.public_disclosure_details || caseState?.public_disclosure_details || 'Unspecified'})</span>
+                            <span className="text-danger font-semibold">⚠️ Warning: Disclosed prior to filing ({dossier?.public_disclosure_details || caseState?.public_disclosure_details || 'Unspecified'})</span>
                           ) : (
-                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">✓ Confidential (No prior public disclosure)</span>
+                            <span className="text-ok font-semibold">✓ Confidential (No prior public disclosure)</span>
                           )}
                         </div>
                       </div>
@@ -659,29 +659,29 @@ ${activeD?.citations && activeD.citations.length > 0
                 {/* Tab 4: ABS & Biodiversity */}
                 {activeTab === 'abs' && (
                   <div className="space-y-4 text-xs">
-                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
-                      <span className="text-[10px] font-bold uppercase text-slate-500">Biological Diversity Act (NBA) Assessment</span>
+                    <div className="panel-sunken p-4 space-y-3">
+                      <span className="eyebrow">Biological Diversity Act (NBA) Assessment</span>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                          <span className="text-slate-500 block text-[10px]">Biological Resources</span>
-                          <strong className={dossier?.biological_resources_involved || caseState?.biological_resources_involved ? 'text-amber-600' : 'text-slate-700'}>
+                        <div className="rounded-md bg-surface border border-line p-3">
+                          <span className="eyebrow block">Biological Resources</span>
+                          <strong className={dossier?.biological_resources_involved || caseState?.biological_resources_involved ? 'text-warn' : 'text-ink'}>
                             {dossier?.biological_resources_involved || caseState?.biological_resources_involved ? 'Yes (Indian Origin)' : 'Not Declared'}
                           </strong>
                         </div>
-                        <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                          <span className="text-slate-500 block text-[10px]">Traditional Knowledge</span>
-                          <strong className={dossier?.traditional_knowledge_involved || caseState?.traditional_knowledge_involved ? 'text-teal-600' : 'text-slate-700'}>
+                        <div className="rounded-md bg-surface border border-line p-3">
+                          <span className="eyebrow block">Traditional Knowledge</span>
+                          <strong className={dossier?.traditional_knowledge_involved || caseState?.traditional_knowledge_involved ? 'text-info' : 'text-ink'}>
                             {dossier?.traditional_knowledge_involved || caseState?.traditional_knowledge_involved ? 'Yes (Classical AYUSH)' : 'None'}
                           </strong>
                         </div>
-                        <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                          <span className="text-slate-500 block text-[10px]">ABS Approval Required</span>
-                          <strong className={dossier?.access_and_benefit_sharing || caseState?.access_and_benefit_sharing ? 'text-rose-600' : 'text-emerald-600'}>
+                        <div className="rounded-md bg-surface border border-line p-3">
+                          <span className="eyebrow block">ABS Approval Required</span>
+                          <strong className={dossier?.access_and_benefit_sharing || caseState?.access_and_benefit_sharing ? 'text-danger' : 'text-ok'}>
                             {dossier?.access_and_benefit_sharing || caseState?.access_and_benefit_sharing ? 'Yes (Form I / Form III)' : 'No'}
                           </strong>
                         </div>
                       </div>
-                      <p className="text-slate-700 dark:text-slate-300 leading-relaxed bg-amber-50/50 dark:bg-amber-950/30 p-3 rounded-lg border border-amber-200 dark:border-amber-900">
+                      <p className="text-warn leading-relaxed bg-warn-soft border border-warn-line p-3 rounded-md">
                         {dossier?.abs_assessment || 'Biological materials sourced from India require National Biodiversity Authority approval (Form I for commercial utilization or Form III prior to patent grant).'}
                       </p>
                     </div>
@@ -691,23 +691,23 @@ ${activeD?.citations && activeD.citations.length > 0
                 {/* Tab 5: Prior Art & TKDL */}
                 {activeTab === 'prior_art' && (
                   <div className="space-y-4 text-xs">
-                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div className="panel-sunken p-4 space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold uppercase text-slate-500">Indexed Prior-Art Records</span>
-                        <span className="text-[10px] text-slate-400">Preserved official corpus matches</span>
+                        <span className="eyebrow">Indexed Prior-Art Records</span>
+                        <span className="text-[10px] text-faint">Preserved official corpus matches</span>
                       </div>
 
                       {dossier?.prior_art_matches && dossier.prior_art_matches.length > 0 ? (
                         <div className="space-y-2">
                           {dossier.prior_art_matches.map((pa, pIdx) => (
-                            <div key={pIdx} className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                            <div key={pIdx} className="p-3 rounded-md bg-surface border border-line space-y-1">
                               <div className="flex items-center justify-between">
-                                <strong className="text-slate-900 dark:text-slate-100">{pa.title}</strong>
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                                <strong className="text-ink">{pa.title}</strong>
+                                <span className="chip chip-warn">
                                   {pa.match_category}
                                 </span>
                               </div>
-                              <div className="text-[10px] text-slate-500 flex gap-3">
+                              <div className="text-[10px] text-muted flex gap-3">
                                 <span>Jurisdiction: {pa.jurisdiction}</span>
                                 <span>Source: {pa.source_type}</span>
                                 <span>Score: {Math.round(pa.relevance_score * 100)}%</span>
@@ -716,7 +716,7 @@ ${activeD?.citations && activeD.citations.length > 0
                           ))}
                         </div>
                       ) : (
-                        <p className="text-slate-500 italic">No sufficiently relevant verified record was found in the currently available corpus.</p>
+                        <p className="text-faint italic">No sufficiently relevant verified record was found in the currently available corpus.</p>
                       )}
                     </div>
                   </div>
@@ -725,19 +725,19 @@ ${activeD?.citations && activeD.citations.length > 0
                 {/* Tab 6: Citations */}
                 {activeTab === 'citations' && (
                   <div className="space-y-4 text-xs">
-                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
-                      <span className="text-[10px] font-bold uppercase text-slate-500">Authoritative Statutory Citations</span>
+                    <div className="panel-sunken p-4 space-y-3">
+                      <span className="eyebrow">Authoritative Statutory Citations</span>
                       {dossier?.citations && dossier.citations.length > 0 ? (
                         <div className="space-y-2">
                           {dossier.citations.map((c, cIdx) => (
-                            <div key={cIdx} className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                            <div key={cIdx} className="p-3 rounded-md bg-surface border border-line space-y-1">
                               <div className="flex items-center justify-between">
-                                <strong className="text-emerald-700 dark:text-emerald-400">{c.source}</strong>
-                                <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[9px] font-mono">
+                                <strong className="text-accent-ink">{c.source}</strong>
+                                <span className="mono-caps text-faint">
                                   {c.document_id || 'DOC-VERIFIED'}
                                 </span>
                               </div>
-                              <div className="text-[10px] text-slate-500 flex gap-3">
+                              <div className="text-[10px] text-muted flex gap-3">
                                 <span>Authority: {c.authority || 'IPO / Statutory Framework'}</span>
                                 <span>Section: {c.section_or_rule || 'Section 3(p)'}</span>
                               </div>
@@ -746,16 +746,16 @@ ${activeD?.citations && activeD.citations.length > 0
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
-                            <strong className="text-emerald-700 dark:text-emerald-400">The Patents Act, 1970 - Section 3(p)</strong>
-                            <div className="text-[10px] text-slate-500 flex gap-3">
+                          <div className="p-3 rounded-md bg-surface border border-line space-y-1">
+                            <strong className="text-accent-ink">The Patents Act, 1970 - Section 3(p)</strong>
+                            <div className="text-[10px] text-muted flex gap-3">
                               <span>Authority: Indian Patent Office (IPO)</span>
                               <span>Section: Section 3(p) Traditional Knowledge Bar</span>
                             </div>
                           </div>
-                          <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
-                            <strong className="text-emerald-700 dark:text-emerald-400">Biological Diversity Act, 2002 (Amended 2023)</strong>
-                            <div className="text-[10px] text-slate-500 flex gap-3">
+                          <div className="p-3 rounded-md bg-surface border border-line space-y-1">
+                            <strong className="text-accent-ink">Biological Diversity Act, 2002 (Amended 2023)</strong>
+                            <div className="text-[10px] text-muted flex gap-3">
                               <span>Authority: National Biodiversity Authority (NBA)</span>
                               <span>Section: Section 3 &amp; Section 6 (Form I / III Approval)</span>
                             </div>
@@ -769,9 +769,9 @@ ${activeD?.citations && activeD.citations.length > 0
                 {/* Tab 7: Audit & Questions */}
                 {activeTab === 'audit' && (
                   <div className="space-y-4 text-xs">
-                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
-                      <span className="text-[10px] font-bold uppercase text-slate-500">Unresolved Questions for Human Facilitator</span>
-                      <ul className="list-disc pl-5 space-y-1 text-slate-700 dark:text-slate-300">
+                    <div className="panel-sunken p-4 space-y-2">
+                      <span className="eyebrow">Unresolved Questions for Human Facilitator</span>
+                      <ul className="list-disc pl-4 space-y-1 text-[11.5px] text-muted">
                         {dossier?.unresolved_questions && dossier.unresolved_questions.length > 0 ? (
                           dossier.unresolved_questions.map((q, qIdx) => (
                             <li key={qIdx}>{q}</li>
@@ -785,20 +785,20 @@ ${activeD?.citations && activeD.citations.length > 0
                       </ul>
                     </div>
 
-                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
-                      <span className="text-[10px] font-bold uppercase text-slate-500">Immutable Audit Trail</span>
+                    <div className="panel-sunken p-4 space-y-2">
+                      <span className="eyebrow">Immutable Audit Trail</span>
                       <div className="space-y-1.5 font-mono text-[10px]">
                         {dossier?.audit_log && dossier.audit_log.length > 0 ? (
                           dossier.audit_log.map((log, lIdx) => (
-                            <div key={lIdx} className="p-2 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                              <span><strong>{log.action}</strong>: {log.reason || log.note || 'Recorded event'}</span>
-                              <span className="text-slate-400">{log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : ''}</span>
+                            <div key={lIdx} className="p-2 rounded-md bg-surface border border-line flex items-center justify-between">
+                              <span className="text-ink"><strong>{log.action}</strong>: {log.reason || log.note || 'Recorded event'}</span>
+                              <span className="text-faint">{log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : ''}</span>
                             </div>
                           ))
                         ) : (
-                          <div className="p-2 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                            <span><strong>dossier_draft_initialized</strong>: Case facts synced</span>
-                            <span className="text-slate-400">{new Date().toLocaleTimeString()}</span>
+                          <div className="p-2 rounded-md bg-surface border border-line flex items-center justify-between">
+                            <span className="text-ink"><strong>dossier_draft_initialized</strong>: Case facts synced</span>
+                            <span className="text-faint">{new Date().toLocaleTimeString()}</span>
                           </div>
                         )}
                       </div>
@@ -807,7 +807,7 @@ ${activeD?.citations && activeD.citations.length > 0
                 )}
 
                 {/* Safety Disclaimer Banner */}
-                <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-800 text-slate-600 dark:text-slate-400 text-[10px] flex items-center gap-2">
+                <div className="p-3 rounded-md bg-subtle border border-line text-muted text-[10px] flex items-center gap-2">
                   <span>🛡️</span>
                   <span>
                     <strong>Safety Standard:</strong> Informational case dossier for human IP facilitator review — not an AI legal verdict or determination of patentability.
@@ -825,9 +825,9 @@ ${activeD?.citations && activeD.citations.length > 0
 export default function EscalationPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center space-y-3">
-        <div className="w-8 h-8 rounded-full border-3 border-emerald-500 border-t-transparent animate-spin" />
-        <span className="text-xs font-semibold text-slate-500">Loading Escalation Portal...</span>
+      <div className="min-h-screen bg-canvas flex flex-col items-center justify-center space-y-3">
+        <div className="w-5 h-5 border-2 border-line-strong border-t-accent rounded-full animate-spin-slow" />
+        <span className="text-[12px] text-muted">Loading Escalation Portal...</span>
       </div>
     }>
       <EscalationContent />

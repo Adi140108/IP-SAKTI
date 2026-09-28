@@ -1,8 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { ScalesIcon, ScrollIcon, GlobeIcon, ArrowRightIcon } from '@/components/Icons';
+import { useAuth } from '@/components/AuthProvider';
+import AuthModal from '@/components/AuthModal';
 
 const CAPABILITIES = [
   {
@@ -26,6 +30,18 @@ const CAPABILITIES = [
 ];
 
 export default function HomePage() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+
+  const handleLaunchConsultation = () => {
+    if (!user) {
+      setShowAuthModal(true);
+    } else {
+      router.push('/chat');
+    }
+  };
+
   return (
     <div className="pb-12">
       {/* Hero */}
@@ -42,13 +58,28 @@ export default function HomePage() {
             biological resources, and Ayurvedic innovations.
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-3">
-            <Link
-              href="/chat"
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-5 py-3 text-[13.5px] font-medium text-accent-fg transition-colors hover:bg-accent-hover"
+            <button
+              onClick={handleLaunchConsultation}
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-5 py-3 text-[13.5px] font-medium text-accent-fg transition-colors hover:bg-accent-hover cursor-pointer"
             >
               Launch AI Consultation
               <ArrowRightIcon size={15} />
-            </Link>
+            </button>
+            {!user ? (
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="inline-flex items-center gap-2 rounded-md border border-line-strong px-5 py-3 text-[13.5px] font-medium text-ink transition-colors hover:bg-subtle cursor-pointer"
+              >
+                Sign In / Register
+              </button>
+            ) : (
+              <Link
+                href="/case"
+                className="inline-flex items-center gap-2 rounded-md border border-line-strong px-5 py-3 text-[13.5px] font-medium text-ink transition-colors hover:bg-subtle"
+              >
+                My Saved Cases
+              </Link>
+            )}
             <Link
               href="/sources"
               className="inline-flex items-center gap-2 rounded-md border border-line-strong px-5 py-3 text-[13.5px] font-medium text-ink transition-colors hover:bg-subtle"
@@ -106,6 +137,14 @@ export default function HomePage() {
           })}
         </ul>
       </section>
+
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={() => router.push('/chat')}
+        title="Sign In Before Starting Your Consultation"
+        subtitle="Sign in to save your consultations and resume chatting with your cases anytime, or continue as guest."
+      />
     </div>
   );
 }

@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { getCase, updateCase } from '@/lib/api';
-import { CaseState, ConversationHistoryItem } from '@/types';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { getCase, updateCase, listCases } from '@/lib/api';
+import { CaseState, ConversationHistoryItem, ChatResponse } from '@/types';
 import { FORMULATION_TIERS, getTierFromClassification } from '@/lib/formulationTaxonomy';
+import { getPersistedCases, persistCase, mergeAndPersistCases } from '@/lib/caseRegistry';
 import FormulationPathwayModal from '@/components/FormulationPathwayModal';
 import OfficialFormsModal from '@/components/OfficialFormsModal';
 import DossierExportModal from '@/components/DossierExportModal';
@@ -17,7 +20,9 @@ import {
   LeafIcon,
   SearchIcon,
   PencilIcon,
+  PlusIcon,
 } from '@/components/Icons';
+import { useAuth } from '@/components/AuthProvider';
 
 interface ExtendedHistoryItem extends ConversationHistoryItem {
   user_message?: string;
@@ -27,31 +32,64 @@ interface ExtendedHistoryItem extends ConversationHistoryItem {
 }
 
 export default function CaseWorkspacePage() {
+  const router = useRouter();
+  const { user } = useAuth();
+
   const [caseIdInput, setCaseIdInput] = useState<string>('');
   const [caseState, setCaseState] = useState<CaseState | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [localHistory, setLocalHistory] = useState<ExtendedHistoryItem[]>([]);
 
+  // List of all user cases (hydrated from local/remote on mount)
+  const [savedCases, setSavedCases] = useState<CaseState[]>([]);
+  const [loadingCasesList, setLoadingCasesList] = useState<boolean>(false);
+
   // Modals state
   const [showPathwayModal, setShowPathwayModal] = useState<boolean>(false);
   const [showFormsModal, setShowFormsModal] = useState<boolean>(false);
   const [showDossierModal, setShowDossierModal] = useState<boolean>(false);
 
-  const handleFetchCase = async (id: string) => {
+  const fetchUserCases = useCallback(async () => {
+    setLoadingCasesList(true);
+    try {
+      const apiCases = await listCases(user?.uid || undefined);
+      const merged = mergeAndPersistCases(apiCases);
+      setSavedCases(merged);
+    } catch (e) {
+      console.warn('Failed to list user cases from remote API, falling back to local registry:', e);
+      setSavedCases(getPersistedCases());
+    } finally {
+      setLoadingCasesList(false);
+    }
+  }, [user]);
+
+  const handleFetchCase = useCallback(async (id: string) => {
     if (!id.trim()) return;
     setLoading(true);
     setError(null);
     try {
       const data = await getCase(id);
       setCaseState(data);
+      persistCase(data);
+      setSavedCases(getPersistedCases());
     } catch {
-      setError('Case ID not found in Firestore / Local DB repository.');
-      setCaseState(null);
+      // Check if found in local registry
+      const local = getPersistedCases().find((c) => c.case_id === id);
+      if (local) {
+        setCaseState(local);
+      } else {
+        setError('Case ID not found in Firestore / Local DB repository.');
+        setCaseState(null);
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchUserCases();
+  }, [fetchUserCases]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -73,7 +111,48 @@ export default function CaseWorkspacePage() {
     }, 0);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [handleFetchCase]);
+
+  const handleContinueChatting = (targetCase: CaseState) => {
+    // Set active case ID in localStorage
+    localStorage.setItem('ip_sakti_active_case_id', targetCase.case_id);
+
+    // If conversation history exists on the case object, restore it for chat
+    if (targetCase.conversation_history && targetCase.conversation_history.length > 0) {
+      const restoredChat: Array<{ sender: 'user' | 'assistant'; text?: string; data?: ChatResponse }> = [];
+      targetCase.conversation_history.forEach((h, idx) => {
+        if (h.user_message) {
+          restoredChat.push({ sender: 'user', text: h.user_message });
+        } else if (h.sender === 'user') {
+          restoredChat.push({ sender: 'user', text: h.text || h.content || '' });
+        }
+
+        if (h.assistant_answer || h.sender === 'assistant') {
+          const assistantData: ChatResponse = h.data || {
+            case_id: targetCase.case_id,
+            message_id: `restored_msg_${idx}`,
+            answer: h.assistant_answer || h.text || h.content || '',
+            jurisdiction: targetCase.jurisdiction || 'India',
+            country: targetCase.country,
+            relevant_ip_domains: targetCase.intellectual_property_objective || ['patent'],
+            product_classification: targetCase.formulation_classification || 'unknown',
+            citations: h.citations || [],
+            confidence_score: targetCase.confidence || 0.85,
+            confidence_explanation: 'Loaded from previous consultation record.',
+            next_question: h.next_question || undefined,
+            suggested_options: h.suggested_options || undefined,
+            safe_abstention: false,
+            requires_human_escalation: false
+          };
+          restoredChat.push({ sender: 'assistant', data: assistantData });
+        }
+      });
+      localStorage.setItem('ip_sakti_chat_history', JSON.stringify(restoredChat));
+    }
+
+    // Navigate to /chat
+    router.push('/chat');
+  };
 
   const handleUpdateClassification = async (tierId: string) => {
     if (!caseState?.case_id) return;
@@ -83,6 +162,7 @@ export default function CaseWorkspacePage() {
         product_type: FORMULATION_TIERS[tierId]?.shortLabel || tierId,
       });
       setCaseState(updated);
+      fetchUserCases();
     } catch (e) {
       console.error(e);
     }
@@ -120,15 +200,16 @@ export default function CaseWorkspacePage() {
   ];
 
   return (
-    <div className="pb-10">
-      <div className="flex flex-wrap items-end justify-between gap-5 border-b border-line pb-6">
+    <div className="space-y-8 max-w-5xl mx-auto pb-10">
+
+      {/* Header and Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-6">
         <div>
           <h1 className="font-display text-[clamp(1.75rem,3.5vw,2.5rem)] leading-tight text-ink">
             Case State Workspace
           </h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted">
-            Persisted state parameters, 6-tier formulation classification, and official pre-filing
-            dossier.
+            Persisted state parameters, 6-tier formulation classification, previous sessions, and official pre-filing dossier.
           </p>
         </div>
 
@@ -179,6 +260,109 @@ export default function CaseWorkspacePage() {
         </div>
       </div>
 
+      {/* ========================================================================= */}
+      {/* SAVED PREVIOUS CASES SECTION */}
+      {/* ========================================================================= */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FolderIcon size={20} className="text-accent" />
+            <h2 className="text-base font-bold text-ink">
+              {user ? `Saved Consultations (${savedCases.length})` : 'Recent Consultation Cases'}
+            </h2>
+          </div>
+          {!user && (
+            <Link
+              href="/auth?redirect=/case"
+              className="text-xs text-accent-ink hover:underline font-bold"
+            >
+              Sign In to save cases to your account &rarr;
+            </Link>
+          )}
+        </div>
+
+        {loadingCasesList ? (
+          <div className="text-xs text-muted flex items-center gap-2 p-4">
+            <div className="w-3.5 h-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+            <span>Loading previous cases...</span>
+          </div>
+        ) : savedCases.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {savedCases.map((c, idx) => {
+              const tier = getTierFromClassification(c.formulation_classification || c.product_type);
+              const isCurrent = caseState?.case_id === c.case_id;
+              const caseNumber = savedCases.length - idx;
+
+              return (
+                <div
+                  key={c.case_id}
+                  className={`p-4 rounded-xl border transition-all flex flex-col justify-between space-y-3 ${
+                    isCurrent
+                      ? 'bg-accent-soft border-accent shadow-soft'
+                      : 'bg-surface border-line hover:border-accent/50'
+                  }`}
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded bg-accent-soft text-accent-ink font-bold text-[10px] font-mono border border-accent-line">
+                          Case #{caseNumber}
+                        </span>
+                        <span className="font-mono text-[11px] text-muted">
+                          #{c.case_id.slice(0, 8)}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-faint">
+                        {c.updated_at ? new Date(c.updated_at).toLocaleDateString() : 'Active'}
+                      </span>
+                    </div>
+
+                    <div className="font-semibold text-xs text-accent-ink">
+                      {tier.shortLabel || tier.label}
+                    </div>
+
+                    <div className="text-[11px] text-muted flex items-center gap-2">
+                      <span>{c.jurisdiction === 'International' ? '🌐' : '🇮🇳'} {c.jurisdiction} {c.country ? `(${c.country})` : ''}</span>
+                      <span>&bull;</span>
+                      <span>{c.language.toUpperCase()}</span>
+                    </div>
+
+                    {c.ingredients && c.ingredients.length > 0 && (
+                      <div className="text-[10px] text-faint truncate">
+                        🌿 {c.ingredients.slice(0, 3).join(', ')}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-line">
+                    <button
+                      onClick={() => {
+                        setCaseIdInput(c.case_id);
+                        handleFetchCase(c.case_id);
+                      }}
+                      className="flex-1 py-1.5 rounded-lg border border-line bg-surface text-ink text-xs font-semibold transition-all cursor-pointer text-center"
+                    >
+                      Inspect
+                    </button>
+                    <button
+                      onClick={() => handleContinueChatting(c)}
+                      className="flex-1 py-1.5 rounded-lg bg-accent text-accent-fg text-xs font-bold transition-all shadow-xs cursor-pointer text-center"
+                    >
+                      <MessageIcon size={12} className="mr-1" />
+                      Chat &rarr;
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-4 rounded-xl bg-surface border border-line text-xs text-muted text-center">
+            No saved consultations found. Start a consultation in <Link href="/chat" className="text-accent-ink font-bold hover:underline">AI Chat</Link> to create your first case.
+          </div>
+        )}
+      </div>
+
       {loading && <p className="py-6 text-[13px] text-muted">Loading Case State...</p>}
       {error && (
         <p className="mt-6 rounded-md border border-danger-line bg-danger-soft px-3 py-2 text-[12px] text-danger">
@@ -187,12 +371,21 @@ export default function CaseWorkspacePage() {
       )}
 
       {!caseState && !loading && (
-        <div className="mt-10 flex flex-col items-center gap-2 border border-dashed border-line-strong rounded-lg py-16 text-center">
-          <FolderIcon size={22} className="text-faint" />
-          <h2 className="font-display text-[17px] text-ink">No Case Loaded</h2>
-          <p className="max-w-sm text-[12px] leading-relaxed text-muted">
-            Start a chat session to create an active case or load an existing Case ID above.
+        <div className="p-10 text-center text-muted space-y-3 border border-dashed border-line-strong rounded-lg bg-surface">
+          <FolderIcon size={32} className="mx-auto text-faint" />
+          <h3 className="text-lg font-bold text-ink">Select or Load a Case</h3>
+          <p className="text-[12px] leading-relaxed text-muted max-w-sm mx-auto">
+            Choose a case from your saved consultations above, enter a Case ID, or start a new consultation session in AI Chat.
           </p>
+          <div className="pt-2">
+            <Link
+              href="/chat"
+              className="inline-flex px-4 py-2 rounded-xl bg-accent text-accent-fg font-bold text-xs hover:bg-accent-hover transition-all shadow-xs"
+            >
+              <PlusIcon size={12} className="mr-1" />
+              Start New AI Consultation
+            </Link>
+          </div>
         </div>
       )}
 
@@ -366,7 +559,31 @@ export default function CaseWorkspacePage() {
         isOpen={showDossierModal}
         onClose={() => setShowDossierModal(false)}
         caseState={caseState}
-        chatHistory={effectiveRecords}
+        chatHistory={effectiveRecords.flatMap((r, idx) => {
+          const items: Array<{ sender: 'user' | 'assistant'; data?: ChatResponse; text?: string }> = [];
+          if (r.user_message || r.sender === 'user') {
+            items.push({ sender: 'user', text: r.user_message || r.text || r.content || '' });
+          }
+          if (r.assistant_answer || r.sender === 'assistant') {
+            items.push({
+              sender: 'assistant',
+              data: r.data || {
+                case_id: caseState?.case_id || 'IP-SAKTI-SESSION',
+                message_id: `rec_${idx}`,
+                answer: r.assistant_answer || r.text || r.content || '',
+                jurisdiction: caseState?.jurisdiction || 'India',
+                product_classification: caseState?.formulation_classification || 'unknown',
+                relevant_ip_domains: caseState?.intellectual_property_objective || ['patent'],
+                citations: r.citations || [],
+                confidence_score: caseState?.confidence || 0.85,
+                confidence_explanation: 'Historical consultation record',
+                requires_human_escalation: false,
+                safe_abstention: false,
+              },
+            });
+          }
+          return items;
+        })}
         jurisdiction={caseState?.jurisdiction || 'India'}
         country={caseState?.country || undefined}
       />

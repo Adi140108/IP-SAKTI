@@ -1,12 +1,17 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createCase, sendChatMessage, getCase, uploadDocument, updateCase } from '@/lib/api';
+import { createCase, sendChatMessage, getCase, uploadDocument, updateCase, listCases } from '@/lib/api';
 import { ChatResponse, CaseState } from '@/types';
 import { FORMULATION_TIERS, getTierFromClassification } from '@/lib/formulationTaxonomy';
+import { getPersistedCases, persistCase, mergeAndPersistCases } from '@/lib/caseRegistry';
+import { getTranslation } from '@/lib/translations';
+import { findClientMatchingPatents } from '@/lib/patents';
 import FormulationPathwayModal from '@/components/FormulationPathwayModal';
 import OfficialFormsModal from '@/components/OfficialFormsModal';
 import DossierExportModal from '@/components/DossierExportModal';
+import AuthModal from '@/components/AuthModal';
+import { useAuth } from '@/components/AuthProvider';
 import {
   ScalesIcon,
   LandmarkIcon,
@@ -37,6 +42,7 @@ import {
   LeafIcon,
   PillIcon,
   AlertIcon,
+  FolderIcon,
 } from '@/components/Icons';
 
 interface SpeechRecognitionResultItem {
@@ -74,25 +80,37 @@ interface WindowWithSpeech extends Window {
 }
 
 export default function ChatPage() {
+  const { user } = useAuth();
   const [caseId, setCaseId] = useState<string>('');
   const [caseState, setCaseState] = useState<CaseState | null>(null);
   const [jurisdiction, setJurisdiction] = useState<'India' | 'International'>('India');
   const [country, setCountry] = useState<string>('');
-  const [language, setLanguage] = useState<string>('en');
+  const [language, setLanguage] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('ip_sakti_chat_language') || 'en';
+    }
+    return 'en';
+  });
   const [inputMessage, setInputMessage] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [chatHistory, setChatHistory] = useState<Array<{ sender: 'user' | 'assistant'; data?: ChatResponse; text?: string }>>([]);
   const [latestResponse, setLatestResponse] = useState<ChatResponse | null>(null);
 
+  // Saved user cases list for quick switching (hydrated on mount)
+  const [userCases, setUserCases] = useState<CaseState[]>([]);
+  const [casePickerOpen, setCasePickerOpen] = useState<boolean>(false);
+
   // Modals state
   const [showPathwayModal, setShowPathwayModal] = useState<boolean>(false);
   const [showFormsModal, setShowFormsModal] = useState<boolean>(false);
   const [showDossierModal, setShowDossierModal] = useState<boolean>(false);
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
 
   // Actions dropdown & Mobile sidebar toggle
   const [actionsDropdownOpen, setActionsDropdownOpen] = useState<boolean>(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState<boolean>(false);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
+  const casePickerRef = useRef<HTMLDivElement>(null);
 
   // Sidebar Accordions State
   const [isParamsOpen, setIsParamsOpen] = useState<boolean>(false);
@@ -105,11 +123,17 @@ export default function ChatPage() {
 
   // Voice & Speech Controls (Sound ON/OFF, Female Voice, Slower Speed 0.85x)
   const [isListening, setIsListening] = useState<boolean>(false);
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('ip_sakti_sound_enabled') === 'true';
+    }
+    return false;
+  });
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
   const [transcript, setTranscript] = useState<string>('');
 
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
 
   const languages = [
     { code: 'en', name: 'English' },
@@ -136,14 +160,84 @@ export default function ChatPage() {
     { id: 'regulatory', label: 'AYUSH / FSSAI Regulatory', icon: PillIcon },
   ];
 
+  const fetchUserCases = useCallback(async () => {
+    try {
+      const cases = await listCases(user?.uid || undefined);
+      const merged = mergeAndPersistCases(cases);
+      setUserCases(merged);
+    } catch (e) {
+      console.warn('Failed to list user cases from remote API, falling back to local registry:', e);
+      setUserCases(getPersistedCases());
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchUserCases();
+  }, [fetchUserCases]);
+
   const refreshCaseState = useCallback(async (id: string) => {
     try {
       const state = await getCase(id);
       setCaseState(state);
+      persistCase(state);
+      setUserCases(getPersistedCases());
     } catch (e) {
       console.error('Failed to refresh case state:', e);
     }
   }, []);
+
+  const switchActiveCase = (targetCase: CaseState) => {
+    setCaseId(targetCase.case_id);
+    setCaseState(targetCase);
+    persistCase(targetCase);
+    setJurisdiction((targetCase.jurisdiction as 'India' | 'International') || 'India');
+    if (targetCase.country) setCountry(targetCase.country);
+    if (targetCase.language) setLanguage(targetCase.language);
+    localStorage.setItem('ip_sakti_active_case_id', targetCase.case_id);
+
+    if (targetCase.conversation_history && targetCase.conversation_history.length > 0) {
+      const restoredChat: Array<{ sender: 'user' | 'assistant'; text?: string; data?: ChatResponse }> = [];
+      targetCase.conversation_history.forEach((h, idx) => {
+        if (h.user_message) {
+          restoredChat.push({ sender: 'user', text: h.user_message });
+        } else if (h.sender === 'user') {
+          restoredChat.push({ sender: 'user', text: h.text || h.content || '' });
+        }
+
+        if (h.assistant_answer || h.sender === 'assistant') {
+          const assistantData: ChatResponse = h.data || {
+            case_id: targetCase.case_id,
+            message_id: `restored_msg_${idx}`,
+            answer: h.assistant_answer || h.text || h.content || '',
+            jurisdiction: targetCase.jurisdiction || 'India',
+            country: targetCase.country,
+            relevant_ip_domains: targetCase.intellectual_property_objective || ['patent'],
+            product_classification: targetCase.formulation_classification || 'unknown',
+            citations: h.citations || [],
+            confidence_score: targetCase.confidence || 0.85,
+            confidence_explanation: 'Loaded from previous consultation record.',
+            next_question: h.next_question || undefined,
+            suggested_options: h.suggested_options || undefined,
+            safe_abstention: false,
+            requires_human_escalation: false
+          };
+          restoredChat.push({ sender: 'assistant', data: assistantData });
+        }
+      });
+      setChatHistory(restoredChat);
+      localStorage.setItem('ip_sakti_chat_history', JSON.stringify(restoredChat));
+      const lastAssistant = [...restoredChat].reverse().find((m) => m.sender === 'assistant' && m.data);
+      if (lastAssistant && lastAssistant.data) {
+        setLatestResponse(lastAssistant.data);
+      }
+    } else {
+      setChatHistory([]);
+      setLatestResponse(null);
+      localStorage.removeItem('ip_sakti_chat_history');
+    }
+
+    setCasePickerOpen(false);
+  };
 
   const startNewConsultation = useCallback(() => {
     localStorage.removeItem('ip_sakti_active_case_id');
@@ -152,14 +246,16 @@ export default function ChatPage() {
     setLatestResponse(null);
     setCaseState(null);
 
-    createCase({ jurisdiction, country, language })
+    createCase({ jurisdiction, country, language, user_id: user?.uid || undefined })
       .then((res) => {
         setCaseId(res.case_id);
         setCaseState(res);
         localStorage.setItem('ip_sakti_active_case_id', res.case_id);
+        persistCase(res);
+        fetchUserCases();
       })
       .catch((err) => console.error('Failed to init case:', err));
-  }, [jurisdiction, country, language]);
+  }, [jurisdiction, country, language, user, fetchUserCases]);
 
   // Load Persisted Session or Create New Case
   useEffect(() => {
@@ -194,6 +290,9 @@ export default function ChatPage() {
     function handleClickOutside(event: MouseEvent) {
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
         setActionsDropdownOpen(false);
+      }
+      if (casePickerRef.current && !casePickerRef.current.contains(event.target as Node)) {
+        setCasePickerOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -244,23 +343,83 @@ export default function ChatPage() {
     }
   };
 
-  // Helper: Find Natural Female Voice
-  const getFemaleVoice = (): SpeechSynthesisVoice | null => {
+  const LANG_VOICE_MAP: Record<string, string> = {
+    en: 'en-US',
+    hi: 'hi-IN',
+    ta: 'ta-IN',
+    te: 'te-IN',
+    mr: 'mr-IN',
+    bn: 'bn-IN',
+    gu: 'gu-IN',
+    kn: 'kn-IN',
+    ml: 'ml-IN',
+  };
+
+  const handleLanguageChange = (code: string) => {
+    setLanguage(code);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ip_sakti_chat_language', code);
+    }
+  };
+
+  // Helper: Find Natural Female Voice (preferring a voice for the active language)
+  const getFemaleVoice = (targetLangCode?: string): SpeechSynthesisVoice | null => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
     const voices = window.speechSynthesis.getVoices();
     if (!voices || voices.length === 0) return null;
+
+    const prefix = (targetLangCode || language).slice(0, 2);
+    const langVoices = voices.filter((v) => v.lang.toLowerCase().startsWith(prefix));
 
     const femaleKeywords = [
       'female', 'zira', 'samantha', 'google us english', 'victoria', 'karen',
       'veena', 'swara', 'kalpana', 'hazel', 'susan', 'aria', 'jenny', 'heera', 'anita'
     ];
 
-    const found = voices.find((v) => {
+    const foundInLang = langVoices.find((v) => {
+      const n = v.name.toLowerCase();
+      return femaleKeywords.some((k) => n.includes(k));
+    });
+    if (foundInLang) return foundInLang;
+    if (langVoices.length > 0) return langVoices[0];
+
+    const foundGeneral = voices.find((v) => {
       const n = v.name.toLowerCase();
       return femaleKeywords.some((k) => n.includes(k));
     });
 
-    return found || voices[0];
+    return foundGeneral || voices[0];
+  };
+
+  // Extract clean 2-sentence conversational executive summary for speech
+  const extractSpokenSummary = (rawText: string, nextQuestion?: string): string => {
+    if (!rawText) return '';
+    let clean = rawText
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/!\[.*?\]\(.*?\)/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/^#{1,6}\s+.*/gm, '')
+      .replace(/>\s+.*Notice.*/gi, '')
+      .replace(/>/g, '')
+      .replace(/\|.*?\|/g, '')
+      .replace(/[-*•]\s+/g, '')
+      .replace(/\b(Section|Sec\.)\s+\d+[\w()]*/gi, '')
+      .replace(/[*_~`#]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const sentences = clean.split(/(?<=[.?!])\s+/).filter((s) => s.trim().length > 12);
+    let summary = sentences.slice(0, 2).join(' ');
+    if (!summary || summary.length < 20) {
+      summary = clean.slice(0, 180);
+    }
+
+    if (nextQuestion && nextQuestion.trim()) {
+      const cleanQ = nextQuestion.replace(/[*_`#]/g, '').trim();
+      summary += ` Regarding your next step: ${cleanQ}`;
+    }
+
+    return summary;
   };
 
   // Speech Recognition (Speech-to-Text)
@@ -280,7 +439,7 @@ export default function ChatPage() {
     const recognition = new SpeechRecClass();
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.lang = language === 'hi' ? 'hi-IN' : 'en-US';
+    recognition.lang = LANG_VOICE_MAP[language] || 'en-US';
 
     recognition.onstart = () => {
       setIsListening(true);
@@ -308,8 +467,8 @@ export default function ChatPage() {
     recognition.start();
   };
 
-  // Speech Synthesis (Text-to-Speech / Female Voice / Slower Speed 0.85x)
-  const speakText = (text: string, idx?: number) => {
+  // Speech Synthesis (Text-to-Speech / Executive 2-sentence summary / Female Voice)
+  const speakText = (text: string, idx?: number, nextQuestion?: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
     window.speechSynthesis.cancel();
@@ -319,17 +478,17 @@ export default function ChatPage() {
       return;
     }
 
-    const cleanedText = text.replace(/[*#`>_-]/g, ' ').replace(/\s+/g, ' ').trim();
-    const utterance = new SpeechSynthesisUtterance(cleanedText.slice(0, 350));
+    const spokenSummary = extractSpokenSummary(text, nextQuestion);
+    const utterance = new SpeechSynthesisUtterance(spokenSummary);
 
-    utterance.rate = 0.85;
+    utterance.rate = 0.88;
     utterance.pitch = 1.05;
 
-    const femaleVoice = getFemaleVoice();
+    const femaleVoice = getFemaleVoice(language);
     if (femaleVoice) {
       utterance.voice = femaleVoice;
     }
-    utterance.lang = language === 'hi' ? 'hi-IN' : 'en-US';
+    utterance.lang = LANG_VOICE_MAP[language] || 'en-US';
 
     if (idx !== undefined) setSpeakingIdx(idx);
 
@@ -337,6 +496,72 @@ export default function ChatPage() {
     utterance.onerror = () => setSpeakingIdx(null);
 
     window.speechSynthesis.speak(utterance);
+  };
+
+  // Master Global Audio Toggle
+  const toggleGlobalSound = () => {
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ip_sakti_sound_enabled', String(next));
+    }
+    if (!next) {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      setSpeakingIdx(null);
+    } else {
+      // Find the latest assistant message to speak immediately upon unmuting
+      let lastAssistantIdx = -1;
+      for (let i = chatHistory.length - 1; i >= 0; i--) {
+        if (chatHistory[i].sender === 'assistant' && chatHistory[i].data?.answer) {
+          lastAssistantIdx = i;
+          break;
+        }
+      }
+      if (lastAssistantIdx !== -1 && chatHistory[lastAssistantIdx]?.data?.answer) {
+        speakText(
+          chatHistory[lastAssistantIdx].data!.answer,
+          lastAssistantIdx,
+          chatHistory[lastAssistantIdx].data!.next_question
+        );
+      }
+    }
+  };
+
+  const handleOptionChipClick = (option: string) => {
+    const lower = option.toLowerCase();
+    const isTypingAction =
+      lower.includes('type') ||
+      lower.includes('write') ||
+      lower.includes('custom') ||
+      lower.includes('manual') ||
+      lower.includes('list each') ||
+      lower.includes('specify') ||
+      lower.includes('percentage') ||
+      lower.includes('exact weight') ||
+      lower.includes('composition');
+
+    if (isTypingAction) {
+      if (lower.includes('ingredient')) {
+        setInputMessage('Ingredients: ');
+      } else if (lower.includes('test') || lower.includes('lab') || lower.includes('efficacy')) {
+        setInputMessage('Efficacy Lab Data: ');
+      } else if (lower.includes('sourcing') || lower.includes('location')) {
+        setInputMessage('Sourced from: ');
+      } else if (lower.includes('product') || lower.includes('form')) {
+        setInputMessage('Product form: ');
+      } else if (lower.includes('basis') || lower.includes('classical')) {
+        setInputMessage('Classical text / formulation basis: ');
+      } else {
+        setInputMessage('');
+      }
+      setTimeout(() => {
+        chatInputRef.current?.focus();
+      }, 50);
+    } else {
+      handleSendMessage(option);
+    }
   };
 
   const handleSendMessage = async (customMessage?: string) => {
@@ -347,31 +572,44 @@ export default function ChatPage() {
     setChatHistory((prev) => [...prev, { sender: 'user', text: textToSend }]);
     if (!customMessage) setInputMessage('');
 
+    // Ensure a unique dedicated case ID is assigned so previous cases are never overwritten
+    const effectiveCaseId = caseId || `case_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    if (!caseId) {
+      setCaseId(effectiveCaseId);
+    }
+
     try {
       const res = await sendChatMessage({
-        case_id: caseId || 'default_case',
+        case_id: effectiveCaseId,
         message: textToSend,
         language,
         jurisdiction,
-        country: jurisdiction === 'International' ? country : undefined
+        country: jurisdiction === 'International' ? country : undefined,
+        user_id: user?.uid || undefined
       });
+
+      // Resilient fallback: If backend matches are empty or still deploying, check verified client catalog
+      if (!res.prior_art_matches || res.prior_art_matches.length === 0) {
+        const clientMatches = findClientMatchingPatents(textToSend);
+        if (clientMatches.length > 0) {
+          res.prior_art_matches = clientMatches;
+        }
+      }
 
       const newIdx = chatHistory.length + 1;
       setChatHistory((prev) => [...prev, { sender: 'assistant', data: res }]);
       setLatestResponse(res);
-      if (caseId) refreshCaseState(caseId);
+      refreshCaseState(effectiveCaseId);
+      fetchUserCases();
 
       // Auto-open sources if citations returned
       if (res.citations && res.citations.length > 0) {
         setIsSourcesOpen(true);
       }
 
-      // Auto-speak in Female Voice if Sound ON is enabled
+      // Auto-speak natural 2-sentence conversational summary if Sound is enabled
       if (soundEnabled && res.answer) {
-        speakText(
-          res.next_question ? `${res.answer.slice(0, 140)}. Next question: ${res.next_question}` : res.answer,
-          newIdx
-        );
+        speakText(res.answer, newIdx, res.next_question);
       }
     } catch (err) {
       console.error('Chat error:', err);
@@ -439,6 +677,8 @@ export default function ChatPage() {
     return { animationDelay: `${fromEnd * 70}ms` };
   };
 
+  const t = getTranslation(language);
+
   return (
     <div className="app-fill flex flex-col gap-3 sm:gap-4">
 
@@ -500,11 +740,79 @@ export default function ChatPage() {
             />
           )}
 
-          {/* Case ID Badge */}
-          {caseId && (
-            <span className="mono-caps rounded-md border border-line bg-sunken px-2.5 py-1.5 text-faint">
-              Case #{caseId.slice(0, 8)}
-            </span>
+          {/* Case Switcher — lets the user jump between their saved consultations */}
+          {userCases.length > 0 && (
+            <div className="relative" ref={casePickerRef}>
+              <button
+                onClick={() => setCasePickerOpen((v) => !v)}
+                aria-expanded={casePickerOpen}
+                aria-haspopup="true"
+                title="Switch between your saved consultations"
+                className="mono-caps inline-flex items-center gap-1.5 rounded-md border border-line bg-sunken px-2.5 py-1.5 text-faint transition-colors hover:border-accent-line hover:text-ink"
+              >
+                <FolderIcon size={12} />
+                Case #{caseId ? caseId.slice(0, 8) : 'new'}
+                <ChevronDownIcon
+                  size={11}
+                  className={`opacity-50 transition-transform duration-200 ${
+                    casePickerOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {casePickerOpen && (
+                <div className="animate-liftIn absolute left-0 z-50 mt-2 max-h-80 w-[300px] overflow-y-auto rounded-lg border border-line bg-surface p-1.5 shadow-lift">
+                  <div className="eyebrow px-2.5 pb-1 pt-1.5">Your Consultations</div>
+                  {userCases.map((c, idx) => {
+                    const isActive = c.case_id === caseId;
+                    const tierLabel = getTierFromClassification(
+                      c.formulation_classification || c.product_type
+                    ).shortLabel;
+                    return (
+                      <button
+                        key={c.case_id}
+                        onClick={() => switchActiveCase(c)}
+                        className={`flex w-full items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${
+                          isActive ? 'bg-accent-soft' : 'hover:bg-subtle'
+                        }`}
+                      >
+                        <span className="min-w-0">
+                          <span className="mono-caps block text-[11px] text-faint">
+                            #{c.case_id.slice(0, 8)} · {c.jurisdiction}
+                          </span>
+                          <span
+                            className={`block truncate text-[12px] ${
+                              isActive ? 'font-medium text-accent-ink' : 'text-ink'
+                            }`}
+                          >
+                            {tierLabel}
+                          </span>
+                        </span>
+                        {isActive ? (
+                          <CheckIcon size={13} className="shrink-0 text-accent" />
+                        ) : (
+                          <span className="shrink-0 text-[10px] text-faint">
+                            {c.updated_at ? new Date(c.updated_at).toLocaleDateString() : 'Active'}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                  <div className="mt-1 border-t border-line pt-1">
+                    <button
+                      onClick={() => {
+                        setCasePickerOpen(false);
+                        startNewConsultation();
+                      }}
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[12px] font-medium text-accent-ink transition-colors hover:bg-accent-soft"
+                    >
+                      <PlusIcon size={13} />
+                      Start New Consultation
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Formulation Badge with Quick Change Modal Trigger */}
@@ -590,7 +898,7 @@ export default function ChatPage() {
                   <select
                     id="chat-language"
                     value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
+                    onChange={(e) => handleLanguageChange(e.target.value)}
                     className="w-full rounded-md border border-line bg-sunken px-2.5 py-2 text-[12.5px] text-ink"
                   >
                     {languages.map((l) => (
@@ -693,7 +1001,7 @@ export default function ChatPage() {
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-auto flex min-h-full w-full max-w-[860px] flex-col gap-5 px-4 py-5 sm:gap-7 sm:px-6 sm:py-7 xl:max-w-[960px] lg:px-8">
 
-            {/* Clean Minimal Empty State — no duplicate title, the panel
+{/* Clean Minimal Empty State — no duplicate title, the panel
                 header above already says "AI Consultation". */}
             {chatHistory.length === 0 && (
               <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
@@ -701,29 +1009,47 @@ export default function ChatPage() {
                   <ScalesIcon size={20} className="text-accent" />
                 </div>
 
+                {!user && (
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <p className="text-[12.5px] text-muted">
+                      {t.aiConsultationSubtitle || 'Sign in to save & resume AI consultations.'}
+                    </p>
+                    <button
+                      onClick={() => setShowAuthModal(true)}
+                      className="rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-accent-fg transition-colors hover:bg-accent-hover"
+                    >
+                      Sign In
+                    </button>
+                  </div>
+                )}
+
+                <div className="rounded-lg border border-line bg-sunken px-4 py-2 text-[11.5px] font-medium text-muted">
+                  {t.emptyStateTitle || 'Query the 9-language Ayurvedic IP assistant'}
+                </div>
+
                 <p className="max-w-sm text-[13px] leading-relaxed text-muted">
-                  Ask about patents, traditional knowledge, ABS, GI, trademarks, regulatory
-                  classification, or international IP requirements.
+                  {t.emptyStateSubtitle ||
+                    'Ask about patents, traditional knowledge, ABS, GI, trademarks, regulatory classification, or international IP requirements.'}
                 </p>
 
                 {/* Suggested prompts */}
                 <div className="flex w-full max-w-2xl flex-wrap justify-center gap-2">
                   {[
-                    'Can I patent this Ayurvedic formulation?',
-                    'Does this formulation require ABS clearance from NBA?',
-                    'What IP protection is available for our Ayurvedic product?',
-                  ].map((prompt) => (
-                    <button
-                      key={prompt}
-                      onClick={() => handleSendMessage(prompt)}
-                      className="rounded-md border border-line bg-sunken px-3.5 py-2 text-[12px] leading-snug text-muted transition-colors hover:border-accent-line hover:bg-accent-soft hover:text-ink"
-                    >
-                      {prompt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+                    t.starterPrompt1 || 'Can I patent this Ayurvedic formulation?',
+                    t.starterPrompt2 || 'Does this formulation require ABS clearance from NBA?',
+                    t.starterPrompt3 || 'What IP protection is available for our Ayurvedic product?',
+                  ].map((prompt, i) => (
+              <button
+                key={i}
+                onClick={() => handleSendMessage(prompt)}
+                className="rounded-md border border-line bg-sunken px-3.5 py-2 text-[12px] leading-snug text-muted transition-colors hover:border-accent-line hover:bg-accent-soft hover:text-ink"
+              >
+                {prompt}
+              </button>
+            ))}
+        </div>
+      </div>
+    )}
 
             {/* Chat Messages */}
             {chatHistory.map((item, idx) => (
@@ -807,12 +1133,19 @@ export default function ChatPage() {
                             {item.data.suggested_options.map((option, optIdx) => (
                               <button
                                 key={optIdx}
-                                onClick={() => handleSendMessage(option)}
+                                onClick={() => handleOptionChipClick(option)}
                                 className="rounded-md border border-accent-line bg-surface px-3.5 py-2 text-[12px] font-medium text-accent-ink transition-colors hover:border-accent hover:bg-accent hover:text-accent-fg"
                               >
                                 {option}
                               </button>
                             ))}
+                            <button
+                              onClick={() => handleOptionChipClick('✏️ Type Custom Answer')}
+                              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-dashed border-line-strong bg-surface px-3.5 py-2 text-[12px] font-medium text-muted transition-colors hover:border-accent-line hover:bg-accent-soft hover:text-ink"
+                            >
+                              <PencilIcon size={13} />
+                              {t.typeCustomAnswer || 'Type Custom Answer'}
+                            </button>
                           </div>
                         )}
                       </div>
@@ -1192,6 +1525,17 @@ export default function ChatPage() {
         chatHistory={chatHistory}
         jurisdiction={jurisdiction}
         country={country}
+      />
+
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={() => {
+          setShowAuthModal(false);
+          fetchUserCases();
+        }}
+        title="Sign In to Save & Resume Consultations"
+        subtitle="Sign in so your cases and chat history are saved to your account and can be resumed across devices."
       />
     </div>
   );

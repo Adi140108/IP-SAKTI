@@ -12,7 +12,7 @@ export default function Footer() {
 
   return (
     <footer className="mt-auto border-t border-line bg-canvas">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1700px] px-4 py-6 sm:px-6 lg:px-8">
         <p className="mx-auto max-w-3xl text-center text-[11px] leading-relaxed text-faint">
           <strong className="font-semibold text-muted">Legal Informational Disclaimer:</strong>{' '}
           IP-SAKTI Sahayak provides source-cited informational guidance for Ayurvedic IP, Traditional

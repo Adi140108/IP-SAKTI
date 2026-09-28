@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth, UserRole } from './AuthProvider';
+import { ScalesIcon, LeafIcon, AlertIcon, XIcon } from './Icons';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -11,6 +12,8 @@ interface AuthModalProps {
   title?: string;
   subtitle?: string;
 }
+
+const emptySubscribe = () => () => {};
 
 export default function AuthModal({
   isOpen,
@@ -28,17 +31,58 @@ export default function AuthModal({
   const [displayName, setDisplayName] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [mounted, setMounted] = useState<boolean>(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (userRole) {
       setRole(userRole);
     }
   }, [userRole]);
+
+  // Keyboard navigation & body scroll locking
+  useEffect(() => {
+    if (!isOpen) return;
+
+    restoreFocusRef.current = document.activeElement as HTMLElement | null;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusables = panel.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown, true);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      document.body.style.overflow = previousOverflow;
+      restoreFocusRef.current?.focus?.();
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen || !mounted || typeof document === 'undefined') return null;
 
@@ -65,16 +109,22 @@ export default function AuthModal({
       }
       onClose();
       if (onSuccess) onSuccess();
-    } catch (err: any) {
-      let msg = err.message || 'Authentication failed.';
+    } catch (err: unknown) {
+      const errObj = err as { message?: string };
+      let msg = errObj?.message || 'Authentication failed.';
       if (msg.includes('auth/email-already-in-use')) {
         msg = 'This email is already registered. Please switch to Sign In.';
-      } else if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found')) {
+      } else if (
+        msg.includes('auth/invalid-credential') ||
+        msg.includes('auth/wrong-password') ||
+        msg.includes('auth/user-not-found')
+      ) {
         msg = 'Invalid email or password. Please verify your credentials.';
       } else if (msg.includes('auth/popup-closed-by-user')) {
         msg = 'Google sign-in popup was closed before completing.';
       } else if (msg.includes('auth/unauthorized-domain')) {
-        msg = 'This domain is not yet authorized in Firebase Console. Please add your domain to Firebase Console > Authentication > Settings > Authorized Domains.';
+        msg =
+          'This domain is not yet authorized in Firebase Console. Please add your domain to Firebase Console > Authentication > Settings > Authorized Domains.';
       }
       setError(msg);
     } finally {
@@ -89,12 +139,14 @@ export default function AuthModal({
       await signInWithGoogle(role);
       onClose();
       if (onSuccess) onSuccess();
-    } catch (err: any) {
-      let msg = err.message || 'Google sign-in failed.';
+    } catch (err: unknown) {
+      const errObj = err as { message?: string };
+      let msg = errObj?.message || 'Google sign-in failed.';
       if (msg.includes('auth/popup-closed-by-user')) {
         msg = 'Google sign-in popup was closed.';
       } else if (msg.includes('auth/unauthorized-domain')) {
-        msg = 'This domain is not yet authorized in Firebase Console. Please add your domain to Firebase Console > Authentication > Settings > Authorized Domains.';
+        msg =
+          'This domain is not yet authorized in Firebase Console. Please add your domain to Firebase Console > Authentication > Settings > Authorized Domains.';
       }
       setError(msg);
     } finally {
@@ -109,68 +161,89 @@ export default function AuthModal({
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md my-auto max-h-[92vh] overflow-y-auto rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-8 space-y-5">
-        
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-ink/45 backdrop-blur-sm overflow-y-auto animate-fadeIn"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
+        className="relative w-full max-w-[440px] my-auto overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl p-6 sm:p-7 space-y-5 animate-scaleIn"
+      >
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center text-sm font-bold transition-all cursor-pointer"
+          aria-label="Close dialog"
+          className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-xl border border-line bg-surface text-muted transition-colors hover:bg-subtle hover:text-ink cursor-pointer active:scale-95"
         >
-          ✕
+          <XIcon size={14} />
         </button>
 
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 text-2xl mb-1">
-            ⚖️
+        {/* Centered & Evenly Spaced Header */}
+        <div className="flex flex-col items-center text-center pt-1">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-accent-line bg-accent-soft text-accent shadow-xs mb-3">
+            <ScalesIcon size={20} />
           </div>
-          <h2 className="text-2xl font-black text-slate-900 dark:text-white">
+          <h2 id="auth-modal-title" className="font-display text-[22px] leading-tight text-ink font-normal tracking-tight">
             {title}
           </h2>
-          <p className="text-xs text-slate-600 dark:text-slate-400 max-w-xs mx-auto">
+          <p className="mt-1.5 text-[12px] leading-relaxed text-muted max-w-[320px] mx-auto">
             {subtitle}
           </p>
         </div>
 
-        {/* Dual Role Selector */}
+        {/* Role Selector */}
         <div className="space-y-1.5">
-          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-            Select Account Role:
+          <label className="eyebrow block">
+            Select Account Role
           </label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label="Select account role">
             <button
               type="button"
+              role="radio"
+              aria-checked={role === 'practitioner'}
               onClick={() => setRole('practitioner')}
-              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+              className={`rounded-xl border p-3 text-left transition-all cursor-pointer ${
                 role === 'practitioner'
-                  ? 'bg-emerald-50 dark:bg-emerald-950/80 border-emerald-500 text-emerald-900 dark:text-emerald-200 shadow-xs'
-                  : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                  ? 'border-accent bg-accent-soft text-accent-ink shadow-soft ring-1 ring-accent/30'
+                  : 'border-line bg-sunken text-muted hover:border-line-strong hover:text-ink'
               }`}
             >
-              <div className="font-extrabold text-xs flex items-center gap-1.5">
-                <span>🌿</span>
+              <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink">
+                <LeafIcon
+                  size={14}
+                  className={role === 'practitioner' ? 'text-accent' : 'text-faint'}
+                />
                 <span>Practitioner</span>
               </div>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">
+              <p className="mt-1 text-[10.5px] leading-tight text-muted">
                 Ayurvedic Innovator / Formulator
               </p>
             </button>
 
             <button
               type="button"
+              role="radio"
+              aria-checked={role === 'facilitator'}
               onClick={() => setRole('facilitator')}
-              className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+              className={`rounded-xl border p-3 text-left transition-all cursor-pointer ${
                 role === 'facilitator'
-                  ? 'bg-amber-50 dark:bg-amber-950/80 border-amber-500 text-amber-900 dark:text-amber-200 shadow-xs'
-                  : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                  ? 'border-warn bg-warn-soft text-warn shadow-soft ring-1 ring-warn/30'
+                  : 'border-line bg-sunken text-muted hover:border-line-strong hover:text-ink'
               }`}
             >
-              <div className="font-extrabold text-xs flex items-center gap-1.5">
-                <span>⚖️</span>
+              <div className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink">
+                <ScalesIcon
+                  size={14}
+                  className={role === 'facilitator' ? 'text-warn' : 'text-faint'}
+                />
                 <span>IP Facilitator</span>
               </div>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">
+              <p className="mt-1 text-[10.5px] leading-tight text-muted">
                 Reviewer / Regulatory Officer
               </p>
             </button>
@@ -178,31 +251,39 @@ export default function AuthModal({
         </div>
 
         {/* Tab Selector: Sign Up vs Sign In */}
-        <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-bold">
+        <div
+          className="grid grid-cols-2 rounded-xl border border-line bg-sunken p-1"
+          role="tablist"
+          aria-label="Authentication mode"
+        >
           <button
             type="button"
+            role="tab"
+            aria-selected={mode === 'signup'}
             onClick={() => {
               setMode('signup');
               setError(null);
             }}
-            className={`py-2 rounded-lg transition-all cursor-pointer ${
+            className={`rounded-lg py-2 text-[12px] font-medium transition-all cursor-pointer ${
               mode === 'signup'
-                ? 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                ? 'bg-surface text-ink shadow-soft font-semibold'
+                : 'text-muted hover:text-ink'
             }`}
           >
             Create Account
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={mode === 'signin'}
             onClick={() => {
               setMode('signin');
               setError(null);
             }}
-            className={`py-2 rounded-lg transition-all cursor-pointer ${
+            className={`rounded-lg py-2 text-[12px] font-medium transition-all cursor-pointer ${
               mode === 'signin'
-                ? 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                ? 'bg-surface text-ink shadow-soft font-semibold'
+                : 'text-muted hover:text-ink'
             }`}
           >
             Sign In
@@ -211,9 +292,9 @@ export default function AuthModal({
 
         {/* Error Alert */}
         {error && (
-          <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
-            <span>⚠️</span>
-            <span>{error}</span>
+          <div className="flex items-start gap-2.5 rounded-xl border border-danger-line bg-danger-soft p-3 text-[12px] text-danger animate-fadeIn">
+            <AlertIcon size={15} className="mt-0.5 shrink-0" />
+            <span className="leading-snug">{error}</span>
           </div>
         )}
 
@@ -222,9 +303,9 @@ export default function AuthModal({
           type="button"
           onClick={handleGoogleAuth}
           disabled={loading}
-          className="w-full py-2.5 px-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-100 font-bold text-xs flex items-center justify-center gap-2.5 transition-all shadow-xs cursor-pointer disabled:opacity-50"
+          className="w-full inline-flex items-center justify-center gap-2.5 rounded-xl border border-line-strong bg-surface hover:bg-subtle px-4 py-2.5 text-[12.5px] font-medium text-ink transition-all cursor-pointer disabled:opacity-50 active:scale-[0.99] shadow-soft"
         >
-          <svg className="w-4 h-4" viewBox="0 0 24 24">
+          <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
             <path
               fill="#4285F4"
               d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -245,33 +326,34 @@ export default function AuthModal({
           <span>Continue with Google as {role === 'facilitator' ? 'Facilitator' : 'Practitioner'}</span>
         </button>
 
-        <div className="relative flex items-center justify-center">
-          <div className="border-t border-slate-200 dark:border-slate-800 w-full" />
-          <span className="bg-white dark:bg-slate-900 px-3 text-[10px] font-bold text-slate-400 uppercase absolute">
+        {/* Divider */}
+        <div className="relative flex items-center justify-center my-0.5">
+          <div className="border-t border-line w-full" />
+          <span className="bg-surface px-2.5 text-[10px] font-semibold uppercase tracking-wider text-faint absolute">
             or with email
           </span>
         </div>
 
         {/* Email & Password Form */}
-        <form onSubmit={handleEmailAuth} className="space-y-3">
+        <form onSubmit={handleEmailAuth} className="space-y-3.5">
           {mode === 'signup' && (
             <div>
-              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Full Name or Organization (Optional)
+              <label className="block text-[11.5px] font-medium text-ink mb-1">
+                Full Name or Organization <span className="text-faint">(Optional)</span>
               </label>
               <input
                 type="text"
                 placeholder="e.g. Dr. A. Sharma"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors"
+                className="w-full rounded-xl border border-line bg-sunken px-3.5 py-2 text-[12.5px] text-ink placeholder:text-faint focus:border-accent focus:bg-surface focus:ring-2 focus:ring-accent/15 focus:outline-none transition-all"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-              Email Address *
+            <label className="block text-[11.5px] font-medium text-ink mb-1">
+              Email Address <span className="text-accent">*</span>
             </label>
             <input
               type="email"
@@ -279,13 +361,13 @@ export default function AuthModal({
               placeholder="you@domain.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors"
+              className="w-full rounded-xl border border-line bg-sunken px-3.5 py-2 text-[12.5px] text-ink placeholder:text-faint focus:border-accent focus:bg-surface focus:ring-2 focus:ring-accent/15 focus:outline-none transition-all"
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-              Password *
+            <label className="block text-[11.5px] font-medium text-ink mb-1">
+              Password <span className="text-accent">*</span>
             </label>
             <input
               type="password"
@@ -293,34 +375,40 @@ export default function AuthModal({
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors"
+              className="w-full rounded-xl border border-line bg-sunken px-3.5 py-2 text-[12.5px] text-ink placeholder:text-faint focus:border-accent focus:bg-surface focus:ring-2 focus:ring-accent/15 focus:outline-none transition-all"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-extrabold text-xs shadow-md transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full inline-flex items-center justify-center rounded-xl bg-accent px-4 py-2.5 text-[12.5px] font-medium text-accent-fg transition-all hover:bg-accent-hover active:scale-[0.99] disabled:opacity-50 cursor-pointer shadow-soft"
           >
             {loading ? (
-              <div className="w-4 h-4 rounded-full border-2 border-slate-950 border-t-transparent animate-spin" />
+              <>
+                <span className="mr-2 inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent-fg border-t-transparent" />
+                <span>Processing...</span>
+              </>
             ) : (
-              <span>{mode === 'signup' ? `Create ${role === 'facilitator' ? 'Facilitator' : 'Practitioner'} Account` : 'Sign In & Continue'}</span>
+              <span>
+                {mode === 'signup'
+                  ? `Create ${role === 'facilitator' ? 'Facilitator' : 'Practitioner'} Account`
+                  : 'Sign In & Continue'}
+              </span>
             )}
           </button>
         </form>
 
-        {/* Continue as Guest option */}
-        <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 text-center">
+        {/* Guest Option Footer */}
+        <div className="pt-2 text-center border-t border-line/60">
           <button
             type="button"
             onClick={handleContinueAsGuest}
-            className="text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 text-xs font-semibold hover:underline cursor-pointer"
+            className="text-[11.5px] text-muted hover:text-ink transition-colors hover:underline cursor-pointer"
           >
-            Continue as Guest ({role === 'facilitator' ? 'Facilitator' : 'Practitioner'}) without saving →
+            Continue as Guest ({role === 'facilitator' ? 'Facilitator' : 'Practitioner'}) without saving &rarr;
           </button>
         </div>
-
       </div>
     </div>,
     document.body

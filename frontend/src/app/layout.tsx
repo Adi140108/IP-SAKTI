@@ -4,6 +4,7 @@ import './globals.css';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { AuthProvider } from '@/components/AuthProvider';
 
 const sans = Inter({
   subsets: ['latin'],
@@ -51,11 +52,13 @@ export default function RootLayout({
     >
       <body className="flex min-h-screen flex-col antialiased">
         <ThemeProvider>
-          <Navbar />
-          <main className="mx-auto w-full max-w-[1700px] flex-1 px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
-            {children}
-          </main>
-          <Footer />
+          <AuthProvider>
+            <Navbar />
+            <main className="mx-auto w-full max-w-[1700px] flex-1 px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
+              {children}
+            </main>
+            <Footer />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
