@@ -179,11 +179,12 @@ class ConversationPipeline:
         if lang != "en":
             system_prompt += (
                 f"\n5. MANDATORY MULTILINGUAL REQUIREMENT: The user has selected the language '{lang_name}' ({lang}). "
-                f"You MUST write the entire 'answer' field in {lang_name} using natural, authentic Indic script and proper terminology."
+                f"You MUST generate the entire 'answer' text in {lang_name} using natural, authentic Indic script (e.g. Devanagari for Hindi/Marathi, Tamil script for Tamil, Telugu for Telugu, etc.). "
+                f"Do NOT write the 'answer' in English."
             )
 
         task_instruction = (
-            f"Provide concise, high-impact informational guidance in {lang_name} ({lang}) (MAX 5-8 BULLET POINTS TOTAL) using natural Indic script."
+            f"Provide concise, high-impact informational guidance completely written in {lang_name} ({lang}) (MAX 5-8 BULLET POINTS TOTAL) using natural Indic script."
             if lang != "en"
             else "Provide concise, high-impact informational guidance (MAX 5-8 BULLET POINTS TOTAL)."
         )
@@ -207,7 +208,7 @@ List explicit statutory section citations.
 
 Return JSON:
 {{
-  "answer": "Concise guidance formatted in maximum 5-8 bullet points (in {lang_name})",
+  "answer": "Concise guidance formatted in maximum 5-8 bullet points written completely in {lang_name} ({lang}) script",
   "citations": [
     {{
       "source": "Exact Statute Title",

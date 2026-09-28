@@ -398,33 +398,57 @@ export default function ChatPage() {
   };
 
 
-  // Helper: Find Natural Female Voice (preferring a voice for the active language)
-  const getFemaleVoice = (targetLangCode?: string): SpeechSynthesisVoice | null => {
+  // Helper: Find Natural Voice specifically matching the target language
+  const getLanguageVoice = (targetLangCode: string): SpeechSynthesisVoice | null => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
     const voices = window.speechSynthesis.getVoices();
     if (!voices || voices.length === 0) return null;
 
-    const prefix = (targetLangCode || language).slice(0, 2);
-    const langVoices = voices.filter((v) => v.lang.toLowerCase().startsWith(prefix));
+    const langTag = (LANG_VOICE_MAP[targetLangCode] || targetLangCode).toLowerCase();
+    const prefix = targetLangCode.toLowerCase().slice(0, 2);
 
-    const femaleKeywords = [
-      'female', 'zira', 'samantha', 'google us english', 'victoria', 'karen',
-      'veena', 'swara', 'kalpana', 'hazel', 'susan', 'aria', 'jenny', 'heera', 'anita'
-    ];
-
-    const foundInLang = langVoices.find((v) => {
-      const n = v.name.toLowerCase();
-      return femaleKeywords.some((k) => n.includes(k));
-    });
-    if (foundInLang) return foundInLang;
-    if (langVoices.length > 0) return langVoices[0];
-
-    const foundGeneral = voices.find((v) => {
-      const n = v.name.toLowerCase();
-      return femaleKeywords.some((k) => n.includes(k));
+    // 1. Target language exact or prefix match
+    const langVoices = voices.filter((v) => {
+      const vLang = v.lang.toLowerCase().replace('_', '-');
+      return (
+        vLang === langTag ||
+        vLang.startsWith(prefix) ||
+        v.name.toLowerCase().includes(targetLangCode.toLowerCase())
+      );
     });
 
-    return foundGeneral || voices[0];
+    if (langVoices.length > 0) {
+      // Find female / natural / Google / neural voice in this language
+      const preferred = langVoices.find((v) => {
+        const n = v.name.toLowerCase();
+        return (
+          n.includes('natural') ||
+          n.includes('neural') ||
+          n.includes('female') ||
+          n.includes('swara') ||
+          n.includes('kalpana') ||
+          n.includes('veena') ||
+          n.includes('madhur') ||
+          n.includes('valluvar') ||
+          n.includes('google')
+        );
+      });
+      return preferred || langVoices[0];
+    }
+
+    // If English, return a clean English voice
+    if (prefix === 'en') {
+      const enVoices = voices.filter((v) => v.lang.toLowerCase().startsWith('en'));
+      const preferredEn = enVoices.find((v) => {
+        const n = v.name.toLowerCase();
+        return n.includes('natural') || n.includes('zira') || n.includes('samantha') || n.includes('female');
+      });
+      return preferredEn || enVoices[0] || voices[0];
+    }
+
+    // For non-English when no explicit voice object is loaded yet, return null
+    // so the browser does NOT accidentally use an English US voice like Zira!
+    return null;
   };
 
   // Extract clean 2-sentence conversational executive summary for speech
@@ -503,7 +527,7 @@ export default function ChatPage() {
     recognition.start();
   };
 
-  // Speech Synthesis (Text-to-Speech / Executive 2-sentence summary / Female Voice)
+  // Speech Synthesis (Text-to-Speech / Executive 2-sentence summary in target language voice)
   const speakText = (text: string, idx?: number, nextQuestion?: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
@@ -520,11 +544,13 @@ export default function ChatPage() {
     utterance.rate = 0.88;
     utterance.pitch = 1.05;
 
-    const femaleVoice = getFemaleVoice(language);
-    if (femaleVoice) {
-      utterance.voice = femaleVoice;
+    const targetVoice = getLanguageVoice(language);
+    if (targetVoice) {
+      utterance.voice = targetVoice;
+      utterance.lang = targetVoice.lang;
+    } else {
+      utterance.lang = LANG_VOICE_MAP[language] || 'en-US';
     }
-    utterance.lang = LANG_VOICE_MAP[language] || 'en-US';
 
     if (idx !== undefined) setSpeakingIdx(idx);
 
@@ -632,20 +658,42 @@ export default function ChatPage() {
         }
       }
 
+      let processedRes = res;
+      if (language !== 'en' && res.answer) {
+        const hasIndicChars = /[\u0900-\u0D7F]/.test(res.answer);
+        if (!hasIndicChars) {
+          try {
+            const [translatedAnswer, translatedQuestion, translatedOptions] = await Promise.all([
+              translateText(res.answer, language, 'en'),
+              res.next_question ? translateText(res.next_question, language, 'en') : Promise.resolve(res.next_question),
+              res.suggested_options ? Promise.all(res.suggested_options.map(opt => translateText(opt, language, 'en'))) : Promise.resolve(res.suggested_options)
+            ]);
+            processedRes = {
+              ...res,
+              answer: translatedAnswer,
+              next_question: translatedQuestion,
+              suggested_options: translatedOptions
+            };
+          } catch (tErr) {
+            console.warn('Multilingual client auto-translate fallback:', tErr);
+          }
+        }
+      }
+
       const newIdx = chatHistory.length + 1;
-      setChatHistory((prev) => [...prev, { sender: 'assistant', data: res }]);
-      setLatestResponse(res);
+      setChatHistory((prev) => [...prev, { sender: 'assistant', data: processedRes }]);
+      setLatestResponse(processedRes);
       refreshCaseState(effectiveCaseId);
       fetchUserCases();
 
       // Auto-open sources if citations returned
-      if (res.citations && res.citations.length > 0) {
+      if (processedRes.citations && processedRes.citations.length > 0) {
         setIsSourcesOpen(true);
       }
 
-      // Auto-speak natural 2-sentence conversational summary if Sound is enabled
-      if (soundEnabled && res.answer) {
-        speakText(res.answer, newIdx, res.next_question);
+      // Auto-speak natural 2-sentence conversational summary in target voice if Sound is enabled
+      if (soundEnabled && processedRes.answer) {
+        speakText(processedRes.answer, newIdx, processedRes.next_question);
       }
     } catch (err) {
       console.error('Chat error:', err);
@@ -661,6 +709,7 @@ export default function ChatPage() {
       setLoading(false);
     }
   };
+
 
   // Document Upload & Inline OCR Processing
   const handleDocumentSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -15,7 +15,7 @@ class GroqProvider(LLMProvider):
 
     def __init__(self):
         self.api_key = settings.GROQ_API_KEY
-        self.model = settings.GROQ_MODEL or "openai/gpt-oss-120b"
+        self.model = settings.GROQ_MODEL or "llama-3.3-70b-versatile"
         self.base_url = settings.GROQ_BASE_URL.rstrip('/')
 
     async def check_availability(self) -> Dict[str, Any]:
