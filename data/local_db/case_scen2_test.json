@@ -16,27 +16,37 @@
   "dosage_or_form": null,
   "manufacturing_context": null,
   "formulation_classification": "unknown",
-  "classical_reference": null,
+  "classical_reference": "Classical Ayurvedic Text Reference",
   "classical_or_proprietary": null,
   "traditional_knowledge_involved": true,
   "biological_resources_involved": null,
   "access_and_benefit_sharing": null,
-  "intellectual_property_objective": [
-    "patent"
-  ],
+  "synergistic_efficacy_proven": null,
+  "applicant_entity_type": null,
+  "novelty_aspect": null,
+  "composition_details": null,
+  "technical_improvement": null,
+  "experimental_evidence": null,
+  "public_disclosure": null,
+  "public_disclosure_details": null,
+  "prior_art_known": null,
+  "prior_art_details": null,
+  "intellectual_property_objective": [],
   "international_market": [],
+  "questions_asked_count": 0,
   "uploaded_documents": [],
   "previous_answers": [],
   "known_information": [
     "Ingredients: Ashwagandha, Ginger",
-    "Ingredients: Ashwagandha, Ginger",
-    "Traditional Knowledge: Yes (Traditional Knowledge Involved)",
-    "IP Objectives: patent"
+    "Formulation Basis: Classical Ayurvedic Text Reference",
+    "Traditional Knowledge: Yes (Traditional Knowledge Involved)"
   ],
   "missing_information": [
     "product_type",
-    "classical_reference",
-    "biological_resources_involved"
+    "synergistic_efficacy_proven",
+    "biological_resources_involved",
+    "intellectual_property_objective",
+    "intended_use"
   ],
   "classification_confidence": null,
   "jurisdiction_confidence": null,
@@ -46,5 +56,5 @@
   "current_intent": "initial_query",
   "conversation_stage": "intake",
   "created_at": null,
-  "updated_at": "2026-09-26T12:53:57.840915"
+  "updated_at": "2026-09-28T21:58:33.751992"
 }
